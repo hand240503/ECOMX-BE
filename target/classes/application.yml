@@ -1,0 +1,43 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/ShopTechnology?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+    username: root
+    password: 240503
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        enable_lazy_load_no_trans: true
+        format_sql: true
+    show-sql: false
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: dangha24052003@gmail.com
+    password: rjqnjvvlnvkjtelm
+#  data:
+#    redis:
+#      host: localhost
+#      port: 6379
+api:
+  prefix: api/v1
+
+openapi:
+  service:
+    api-docs: api-service
+    title: Shop Technology API
+    version: 1.0.0
+    server: http://localhost:8080
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: alpha
+    doc-expansion: none
+    tagsSorter: alpha
+    tryItOutEnabled: true
