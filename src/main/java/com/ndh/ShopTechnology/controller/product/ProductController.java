@@ -6,7 +6,6 @@ import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductResponse;
 import com.ndh.ShopTechnology.services.product.ProductService;
-import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -26,7 +25,6 @@ public class ProductController {
     this.productService = productService;
   }
 
-  @Operation(summary = "Create product", description = "Create a new product")
   @PostMapping
   public ResponseEntity<APIResponse<ProductResponse>> createProduct(
       @Valid @RequestBody CreateProductRequest request) {
@@ -53,7 +51,6 @@ public class ProductController {
     }
   }
 
-  @Operation(summary = "Get all products", description = "Get all products")
   @GetMapping
   public ResponseEntity<APIResponse<List<ProductResponse>>> getAllProducts() {
     List<ProductResponse> products = productService.getAllProducts();
@@ -66,7 +63,6 @@ public class ProductController {
     return ResponseEntity.ok(response);
   }
 
-  @Operation(summary = "Get product by ID", description = "Get a specific product by ID")
   @GetMapping("/{id}")
   public ResponseEntity<APIResponse<ProductResponse>> getProductById(@PathVariable Long id) {
     try {
@@ -92,7 +88,6 @@ public class ProductController {
     }
   }
 
-  @Operation(summary = "Get products by category", description = "Get all products in a specific category")
   @GetMapping("/category/{categoryId}")
   public ResponseEntity<APIResponse<List<ProductResponse>>> getProductsByCategory(@PathVariable Long categoryId) {
     try {
@@ -118,7 +113,6 @@ public class ProductController {
     }
   }
 
-  @Operation(summary = "Update product", description = "Update an existing product")
   @PutMapping("/{id}")
   public ResponseEntity<APIResponse<ProductResponse>> updateProduct(
       @PathVariable Long id,
@@ -146,7 +140,6 @@ public class ProductController {
     }
   }
 
-  @Operation(summary = "Delete product", description = "Delete a product by ID")
   @DeleteMapping("/{id}")
   public ResponseEntity<APIResponse<Void>> deleteProduct(@PathVariable Long id) {
     try {

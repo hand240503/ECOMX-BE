@@ -6,7 +6,6 @@ import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.rating.UserRatingResponse;
 import com.ndh.ShopTechnology.services.rating.UserRatingService;
-import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -27,7 +26,6 @@ public class UserRatingController {
         this.userRatingService = userRatingService;
     }
 
-    @Operation(summary = "Create user rating", description = "Create a new user rating for a product")
     @PostMapping
     public ResponseEntity<APIResponse<UserRatingResponse>> createRating(
             @Valid @RequestBody CreateUserRatingRequest request) {
@@ -54,7 +52,6 @@ public class UserRatingController {
         }
     }
 
-    @Operation(summary = "Get all user ratings", description = "Get all user ratings")
     @GetMapping
     public ResponseEntity<APIResponse<List<UserRatingResponse>>> getAllRatings() {
         try {
@@ -80,7 +77,6 @@ public class UserRatingController {
         }
     }
 
-    @Operation(summary = "Get user rating by ID", description = "Get a specific user rating by ID")
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<UserRatingResponse>> getRatingById(@PathVariable Long id) {
         try {
@@ -106,7 +102,6 @@ public class UserRatingController {
         }
     }
 
-    @Operation(summary = "Get rating by user and product", description = "Get rating for a specific user and product")
     @GetMapping("/user/{userId}/product/{productId}")
     public ResponseEntity<APIResponse<UserRatingResponse>> getRatingByUserAndProduct(
             @PathVariable Long userId,
@@ -134,7 +129,6 @@ public class UserRatingController {
         }
     }
 
-    @Operation(summary = "Get ratings by user ID", description = "Get all ratings for a specific user")
     @GetMapping("/user/{userId}")
     public ResponseEntity<APIResponse<List<UserRatingResponse>>> getRatingsByUserId(@PathVariable Long userId) {
         try {
@@ -160,7 +154,6 @@ public class UserRatingController {
         }
     }
 
-    @Operation(summary = "Get ratings by product ID", description = "Get all ratings for a specific product")
     @GetMapping("/product/{productId}")
     public ResponseEntity<APIResponse<List<UserRatingResponse>>> getRatingsByProductId(@PathVariable Long productId) {
         try {
@@ -193,7 +186,6 @@ public class UserRatingController {
         }
     }
 
-    @Operation(summary = "Get average rating by product ID", description = "Get average rating for a specific product")
     @GetMapping("/product/{productId}/average")
     public ResponseEntity<APIResponse<Map<String, Object>>> getAverageRatingByProductId(@PathVariable Long productId) {
         try {
@@ -224,7 +216,6 @@ public class UserRatingController {
         }
     }
 
-    @Operation(summary = "Update user rating", description = "Update an existing user rating")
     @PutMapping("/{id}")
     public ResponseEntity<APIResponse<UserRatingResponse>> updateRating(
             @PathVariable Long id,
@@ -252,7 +243,6 @@ public class UserRatingController {
         }
     }
 
-    @Operation(summary = "Delete user rating", description = "Delete a user rating by ID")
     @DeleteMapping("/{id}")
     public ResponseEntity<APIResponse<Void>> deleteRating(@PathVariable Long id) {
         try {

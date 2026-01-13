@@ -6,7 +6,6 @@ import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.log.CollectorLogResponse;
 import com.ndh.ShopTechnology.services.log.CollectorLogService;
-import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -29,7 +28,6 @@ public class CollectorLogController {
         this.collectorLogService = collectorLogService;
     }
 
-    @Operation(summary = "Create collector log", description = "Create a new collector log entry")
     @PostMapping
     public ResponseEntity<APIResponse<CollectorLogResponse>> createLog(
             @Valid @RequestBody CreateCollectorLogRequest request) {
@@ -56,7 +54,6 @@ public class CollectorLogController {
         }
     }
 
-    @Operation(summary = "Get all collector logs", description = "Get all collector logs")
     @GetMapping
     public ResponseEntity<APIResponse<List<CollectorLogResponse>>> getAllLogs() {
         try {
@@ -82,7 +79,6 @@ public class CollectorLogController {
         }
     }
 
-    @Operation(summary = "Get collector log by ID", description = "Get a specific collector log by ID")
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<CollectorLogResponse>> getLogById(@PathVariable Long id) {
         try {
@@ -108,7 +104,6 @@ public class CollectorLogController {
         }
     }
 
-    @Operation(summary = "Get logs by user ID", description = "Get all collector logs for a specific user")
     @GetMapping("/user/{userId}")
     public ResponseEntity<APIResponse<List<CollectorLogResponse>>> getLogsByUserId(@PathVariable Long userId) {
         try {
@@ -134,7 +129,6 @@ public class CollectorLogController {
         }
     }
 
-    @Operation(summary = "Get logs by product ID", description = "Get all collector logs for a specific product")
     @GetMapping("/product/{productId}")
     public ResponseEntity<APIResponse<List<CollectorLogResponse>>> getLogsByProductId(@PathVariable Long productId) {
         try {
@@ -160,7 +154,6 @@ public class CollectorLogController {
         }
     }
 
-    @Operation(summary = "Get logs by event", description = "Get all collector logs for a specific event")
     @GetMapping("/event/{event}")
     public ResponseEntity<APIResponse<List<CollectorLogResponse>>> getLogsByEvent(@PathVariable String event) {
         try {
@@ -186,7 +179,6 @@ public class CollectorLogController {
         }
     }
 
-    @Operation(summary = "Get logs by session ID", description = "Get all collector logs for a specific session")
     @GetMapping("/session/{sessionId}")
     public ResponseEntity<APIResponse<List<CollectorLogResponse>>> getLogsBySessionId(@PathVariable String sessionId) {
         try {
@@ -212,7 +204,6 @@ public class CollectorLogController {
         }
     }
 
-    @Operation(summary = "Get logs by date range", description = "Get all collector logs within a date range")
     @GetMapping("/date-range")
     public ResponseEntity<APIResponse<List<CollectorLogResponse>>> getLogsByDateRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date startDate,
@@ -240,7 +231,6 @@ public class CollectorLogController {
         }
     }
 
-    @Operation(summary = "Filter collector logs", description = "Filter collector logs with multiple criteria")
     @PostMapping("/filter")
     public ResponseEntity<APIResponse<List<CollectorLogResponse>>> filterLogs(
             @RequestBody FilterCollectorLogRequest request) {
@@ -267,7 +257,6 @@ public class CollectorLogController {
         }
     }
 
-    @Operation(summary = "Delete collector log", description = "Delete a collector log by ID")
     @DeleteMapping("/{id}")
     public ResponseEntity<APIResponse<Void>> deleteLog(@PathVariable Long id) {
         try {

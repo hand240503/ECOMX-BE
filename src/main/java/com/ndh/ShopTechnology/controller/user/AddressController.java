@@ -6,7 +6,6 @@ import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.user.UserAddressResponse;
 import com.ndh.ShopTechnology.services.user.AddressService;
-import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -26,7 +25,6 @@ public class AddressController {
     this.addressService = addressService;
   }
 
-  @Operation(summary = "Create new address", description = "Create a new address for the current user")
   @PostMapping
   public ResponseEntity<APIResponse<UserAddressResponse>> createAddress(
       @Valid @RequestBody CreateAddressRequest request) {
@@ -53,7 +51,6 @@ public class AddressController {
     }
   }
 
-  @Operation(summary = "Get all addresses", description = "Get all addresses of the current user")
   @GetMapping
   public ResponseEntity<APIResponse<List<UserAddressResponse>>> getAllAddresses() {
     List<UserAddressResponse> addresses = addressService.getAllAddresses();
@@ -66,7 +63,6 @@ public class AddressController {
     return ResponseEntity.ok(response);
   }
 
-  @Operation(summary = "Get address by ID", description = "Get a specific address by ID")
   @GetMapping("/{id}")
   public ResponseEntity<APIResponse<UserAddressResponse>> getAddressById(@PathVariable Long id) {
     try {
@@ -92,7 +88,6 @@ public class AddressController {
     }
   }
 
-  @Operation(summary = "Update address", description = "Update an existing address")
   @PutMapping("/{id}")
   public ResponseEntity<APIResponse<UserAddressResponse>> updateAddress(
       @PathVariable Long id,
@@ -120,7 +115,6 @@ public class AddressController {
     }
   }
 
-  @Operation(summary = "Delete address", description = "Delete an address by ID")
   @DeleteMapping("/{id}")
   public ResponseEntity<APIResponse<Void>> deleteAddress(@PathVariable Long id) {
     try {
@@ -146,7 +140,6 @@ public class AddressController {
     }
   }
 
-  @Operation(summary = "Set default address", description = "Set an address as default")
   @PutMapping("/{id}/default")
   public ResponseEntity<APIResponse<UserAddressResponse>> setDefaultAddress(@PathVariable Long id) {
     try {

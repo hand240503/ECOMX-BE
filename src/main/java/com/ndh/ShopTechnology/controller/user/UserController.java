@@ -6,7 +6,6 @@ import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.user.UserResponse;
 import com.ndh.ShopTechnology.services.user.UserService;
-import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +24,6 @@ public class UserController {
         this.userService = userService;
     }
 
-    @Operation(summary = "Get user profile information", description = "Retrieve the profile information of the user")
     @GetMapping("/profile")
     public ResponseEntity<APIResponse<UserResponse>> getUserProfile() {
         UserResponse entity = userService.getProfile();
@@ -59,7 +57,6 @@ public class UserController {
                 .body(response);
     }
 
-    @Operation(summary = "Update user profile", description = "Modify the profile information of the current user.")
     @PutMapping("/profile")
     public ResponseEntity<APIResponse<UserResponse>> updateUserProfile(
             @RequestBody ModUserInfoRequest request) {

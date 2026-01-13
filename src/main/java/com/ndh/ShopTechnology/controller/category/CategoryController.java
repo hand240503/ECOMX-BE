@@ -7,7 +7,6 @@ import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.category.CategoryResponse;
 import com.ndh.ShopTechnology.services.category.CategoryService;
-import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -27,7 +26,6 @@ public class CategoryController {
     this.categoryService = categoryService;
   }
 
-  @Operation(summary = "Create category", description = "Create a new category (parent or child)")
   @PostMapping
   public ResponseEntity<APIResponse<CategoryResponse>> createCategory(
       @Valid @RequestBody CreateCategoryRequest req) {
@@ -54,7 +52,6 @@ public class CategoryController {
     }
   }
 
-  @Operation(summary = "Get all categories", description = "Get all categories")
   @GetMapping
   public ResponseEntity<APIResponse<List<CategoryResponse>>> getAllCategories() {
     List<CategoryResponse> categories = categoryService.getAllCategories();
@@ -67,7 +64,6 @@ public class CategoryController {
     return ResponseEntity.ok(response);
   }
 
-  @Operation(summary = "Get root categories", description = "Get only parent categories (no parent)")
   @GetMapping("/roots")
   public ResponseEntity<APIResponse<List<CategoryResponse>>> getRootCategories() {
     List<CategoryResponse> categories = categoryService.getRootCategories();
@@ -80,7 +76,6 @@ public class CategoryController {
     return ResponseEntity.ok(response);
   }
 
-  @Operation(summary = "Get child categories", description = "Get all child categories of a parent")
   @GetMapping("/parent/{parentId}/children")
   public ResponseEntity<APIResponse<List<CategoryResponse>>> getChildCategories(@PathVariable Long parentId) {
     try {
@@ -106,7 +101,6 @@ public class CategoryController {
     }
   }
 
-  @Operation(summary = "Get category by ID", description = "Get a specific category by ID")
   @GetMapping("/{id}")
   public ResponseEntity<APIResponse<CategoryResponse>> getCategoryById(@PathVariable Long id) {
     try {
@@ -132,7 +126,6 @@ public class CategoryController {
     }
   }
 
-  @Operation(summary = "Update category", description = "Update an existing category")
   @PutMapping("/{id}")
   public ResponseEntity<APIResponse<CategoryResponse>> updateCategory(
       @PathVariable Long id,
@@ -160,7 +153,6 @@ public class CategoryController {
     }
   }
 
-  @Operation(summary = "Delete category", description = "Delete a category by ID")
   @DeleteMapping("/{id}")
   public ResponseEntity<APIResponse<Void>> deleteCategory(@PathVariable Long id) {
     try {
