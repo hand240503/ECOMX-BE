@@ -1,0 +1,10 @@
+# Default ignored files
+/target/
+/src/main/resources/application-local.yml
+/.vscode/
+/.idea/
+/shelf/
+/workspace.xml
+/httpRequests/
+/dataSources/
+/dataSources.local.xml
