@@ -13,17 +13,17 @@ import lombok.*;
 @Entity(name = "products")
 public class ProductEntity extends BaseEntity {
 
-    public static final String COL_PRODUCT_NAME     = "product_name";
-    public static final String COL_STATUS           = "status";
-    public static final String COL_DESCRIPTION      = "description";
-    public static final String COL_CATEGORY_ID      = "category_id";
-    public static final String COL_PRODUCT_ID       = "product_id";
+    public static final String COL_PRODUCT_NAME = "product_name";
+    public static final String COL_STATUS = "status";
+    public static final String COL_DESCRIPTION = "description";
+    public static final String COL_CATEGORY_ID = "category_id";
+    public static final String COL_PRODUCT_ID = "product_id";
 
     @Column(name = COL_PRODUCT_NAME, nullable = true)
     private String productName;
 
     @Column(name = COL_STATUS, nullable = true)
-    private String status;
+    private Integer status;
 
     @Column(name = COL_DESCRIPTION, nullable = true)
     private String description;
@@ -32,4 +32,6 @@ public class ProductEntity extends BaseEntity {
     @JoinColumn(name = COL_CATEGORY_ID, nullable = false)
     private CategoryEntity category;
 
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.List<PriceEntity> prices = new java.util.ArrayList<>();
 }

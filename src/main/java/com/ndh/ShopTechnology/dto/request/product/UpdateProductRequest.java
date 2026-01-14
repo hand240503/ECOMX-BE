@@ -11,6 +11,6 @@ public class UpdateProductRequest {
 
   private String productName;
   private String description;
-  private String status;
+  private Integer status;
   private Long categoryId;
 }

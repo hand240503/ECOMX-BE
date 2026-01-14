@@ -13,7 +13,7 @@ public class ProductResponse {
   private Long id;
   private String productName;
   private String description;
-  private String status;
+  private Integer status;
   private Long categoryId;
   private String categoryName;
   private String categoryCode;

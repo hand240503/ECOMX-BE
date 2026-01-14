@@ -9,6 +9,11 @@ import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.CategoryRepository;
 import com.ndh.ShopTechnology.repository.ProductRepository;
 import com.ndh.ShopTechnology.services.product.ProductService;
+import com.ndh.ShopTechnology.repository.PriceRepository;
+import com.ndh.ShopTechnology.repository.UnitRepository;
+import com.ndh.ShopTechnology.entities.product.PriceEntity;
+import com.ndh.ShopTechnology.entities.product.UnitEntity;
+import com.ndh.ShopTechnology.dto.request.product.CreatePriceRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,11 +25,17 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final UnitRepository unitRepository;
+    private final PriceRepository priceRepository;
 
-    public ProductServiceImpl(ProductRepository productRepository, 
-                              CategoryRepository categoryRepository) {
+    public ProductServiceImpl(ProductRepository productRepository,
+            CategoryRepository categoryRepository,
+            UnitRepository unitRepository,
+            PriceRepository priceRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.unitRepository = unitRepository;
+        this.priceRepository = priceRepository;
     }
 
     @Override
@@ -32,7 +43,8 @@ public class ProductServiceImpl implements ProductService {
     public ProductResponse createProduct(CreateProductRequest request) {
         // Verify category exists
         CategoryEntity category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new NotFoundEntityException("Category not found with id: " + request.getCategoryId()));
+                .orElseThrow(
+                        () -> new NotFoundEntityException("Category not found with id: " + request.getCategoryId()));
 
         ProductEntity product = ProductEntity.builder()
                 .productName(request.getProductName())
@@ -40,6 +52,24 @@ public class ProductServiceImpl implements ProductService {
                 .status(request.getStatus())
                 .category(category)
                 .build();
+
+        // Handle prices
+        if (request.getPrices() != null && !request.getPrices().isEmpty()) {
+            for (CreatePriceRequest priceRequest : request.getPrices()) {
+                UnitEntity unit = unitRepository.findById(priceRequest.getUnitId())
+                        .orElseThrow(() -> new NotFoundEntityException(
+                                "Unit not found with id: " + priceRequest.getUnitId()));
+
+                PriceEntity price = PriceEntity.builder()
+                        .unit(unit)
+                        .product(product)
+                        .currentValue(priceRequest.getCurrentValue())
+                        .oldValue(priceRequest.getOldValue() != null ? priceRequest.getOldValue() : 0.0)
+                        .build();
+
+                product.getPrices().add(price);
+            }
+        }
 
         product = productRepository.save(product);
         return ProductResponse.fromEntity(product);
@@ -95,7 +125,8 @@ public class ProductServiceImpl implements ProductService {
         // Handle category change
         if (request.getCategoryId() != null) {
             CategoryEntity category = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new NotFoundEntityException("Category not found with id: " + request.getCategoryId()));
+                    .orElseThrow(() -> new NotFoundEntityException(
+                            "Category not found with id: " + request.getCategoryId()));
             product.setCategory(category);
         }
 

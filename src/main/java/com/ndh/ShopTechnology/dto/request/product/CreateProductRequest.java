@@ -16,8 +16,10 @@ public class CreateProductRequest {
 
   private String description;
 
-  private String status;
+  private Integer status;
 
   @NotNull(message = "Category ID is required")
   private Long categoryId;
+
+  private java.util.List<CreatePriceRequest> prices;
 }
