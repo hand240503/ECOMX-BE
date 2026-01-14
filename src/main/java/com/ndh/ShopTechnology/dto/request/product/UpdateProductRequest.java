@@ -13,4 +13,5 @@ public class UpdateProductRequest {
   private String description;
   private Integer status;
   private Long categoryId;
+  private Boolean isFeatured;
 }

@@ -20,4 +20,13 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
     Optional<ProductEntity> findByProductName(String productName);
 
     List<ProductEntity> findByStatus(Integer status);
+
+    // Cursor Pagination: Get products with ID < lastId, ordered by ID desc
+    List<ProductEntity> findByIdLessThanOrderByIdDesc(Long id, org.springframework.data.domain.Pageable pageable);
+
+    // Get Featured Products
+    List<ProductEntity> findByIsFeaturedTrue(org.springframework.data.domain.Pageable pageable);
+
+    // Get Best Sellers (Top N by sold_count)
+    List<ProductEntity> findTopNByOrderBySoldCountDesc(org.springframework.data.domain.Pageable pageable);
 }

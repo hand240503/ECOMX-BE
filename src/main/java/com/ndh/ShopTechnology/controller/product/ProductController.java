@@ -52,11 +52,39 @@ public class ProductController {
   }
 
   @GetMapping
-  public ResponseEntity<APIResponse<List<ProductResponse>>> getAllProducts() {
-    List<ProductResponse> products = productService.getAllProducts();
+  public ResponseEntity<APIResponse<List<ProductResponse>>> getAllProducts(
+      @RequestParam(required = false) Long lastId,
+      @RequestParam(defaultValue = "10") int limit) {
+    List<ProductResponse> products = productService.getProducts(lastId, limit);
     APIResponse<List<ProductResponse>> response = APIResponse.of(
         true,
         "Products retrieved successfully",
+        products,
+        null,
+        null);
+    return ResponseEntity.ok(response);
+  }
+
+  @GetMapping("/featured")
+  public ResponseEntity<APIResponse<List<ProductResponse>>> getFeaturedProducts(
+      @RequestParam(defaultValue = "10") int limit) {
+    List<ProductResponse> products = productService.getFeaturedProducts(limit);
+    APIResponse<List<ProductResponse>> response = APIResponse.of(
+        true,
+        "Featured products retrieved successfully",
+        products,
+        null,
+        null);
+    return ResponseEntity.ok(response);
+  }
+
+  @GetMapping("/best-sellers")
+  public ResponseEntity<APIResponse<List<ProductResponse>>> getBestSellingProducts(
+      @RequestParam(defaultValue = "10") int limit) {
+    List<ProductResponse> products = productService.getBestSellingProducts(limit);
+    APIResponse<List<ProductResponse>> response = APIResponse.of(
+        true,
+        "Best selling products retrieved successfully",
         products,
         null,
         null);

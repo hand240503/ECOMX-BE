@@ -17,6 +17,8 @@ public class ProductResponse {
   private Long categoryId;
   private String categoryName;
   private String categoryCode;
+  private Boolean isFeatured;
+  private Long soldCount;
 
   public static ProductResponse fromEntity(ProductEntity entity) {
     if (entity == null)
@@ -26,7 +28,9 @@ public class ProductResponse {
         .id(entity.getId())
         .productName(entity.getProductName())
         .description(entity.getDescription())
-        .status(entity.getStatus());
+        .status(entity.getStatus())
+        .isFeatured(entity.getIsFeatured())
+        .soldCount(entity.getSoldCount());
 
     if (entity.getCategory() != null) {
       builder.categoryId(entity.getCategory().getId())

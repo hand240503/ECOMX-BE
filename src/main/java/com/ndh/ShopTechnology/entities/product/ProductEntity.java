@@ -18,6 +18,8 @@ public class ProductEntity extends BaseEntity {
     public static final String COL_DESCRIPTION = "description";
     public static final String COL_CATEGORY_ID = "category_id";
     public static final String COL_PRODUCT_ID = "product_id";
+    public static final String COL_IS_FEATURED = "is_featured";
+    public static final String COL_SOLD_COUNT = "sold_count";
 
     @Column(name = COL_PRODUCT_NAME, nullable = true)
     private String productName;
@@ -31,6 +33,14 @@ public class ProductEntity extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = COL_CATEGORY_ID, nullable = false)
     private CategoryEntity category;
+
+    @Column(name = COL_IS_FEATURED)
+    @Builder.Default
+    private Boolean isFeatured = false;
+
+    @Column(name = COL_SOLD_COUNT)
+    @Builder.Default
+    private Long soldCount = 0L;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     private java.util.List<PriceEntity> prices = new java.util.ArrayList<>();

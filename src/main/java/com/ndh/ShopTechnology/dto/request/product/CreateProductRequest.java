@@ -22,4 +22,6 @@ public class CreateProductRequest {
   private Long categoryId;
 
   private java.util.List<CreatePriceRequest> prices;
+
+  private Boolean isFeatured;
 }

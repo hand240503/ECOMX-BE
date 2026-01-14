@@ -50,6 +50,9 @@ public class ProductServiceImpl implements ProductService {
                 .productName(request.getProductName())
                 .description(request.getDescription())
                 .status(request.getStatus())
+                .description(request.getDescription())
+                .status(request.getStatus())
+                .isFeatured(request.getIsFeatured() != null ? request.getIsFeatured() : false)
                 .category(category)
                 .build();
 
@@ -78,6 +81,47 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public List<ProductResponse> getAllProducts() {
         List<ProductEntity> products = productRepository.findAll();
+        return products.stream()
+                .map(ProductResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ProductResponse> getProducts(Long lastId, int limit) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit);
+        List<ProductEntity> products;
+
+        if (lastId == null) {
+            // First page, query order by ID desc
+            products = productRepository.findAll(
+                    org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"));
+            if (products.size() > limit) {
+                products = products.subList(0, limit);
+            }
+        } else {
+            // Next pages
+            products = productRepository.findByIdLessThanOrderByIdDesc(lastId, pageable);
+        }
+
+        return products.stream()
+                .map(ProductResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ProductResponse> getFeaturedProducts(int limit) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"));
+        List<ProductEntity> products = productRepository.findByIsFeaturedTrue(pageable);
+        return products.stream()
+                .map(ProductResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ProductResponse> getBestSellingProducts(int limit) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit);
+        List<ProductEntity> products = productRepository.findTopNByOrderBySoldCountDesc(pageable);
         return products.stream()
                 .map(ProductResponse::fromEntity)
                 .collect(Collectors.toList());
@@ -120,6 +164,10 @@ public class ProductServiceImpl implements ProductService {
 
         if (request.getStatus() != null) {
             product.setStatus(request.getStatus());
+        }
+
+        if (request.getIsFeatured() != null) {
+            product.setIsFeatured(request.getIsFeatured());
         }
 
         // Handle category change
