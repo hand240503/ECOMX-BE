@@ -14,6 +14,11 @@ import com.ndh.ShopTechnology.repository.UnitRepository;
 import com.ndh.ShopTechnology.entities.product.PriceEntity;
 import com.ndh.ShopTechnology.entities.product.UnitEntity;
 import com.ndh.ShopTechnology.dto.request.product.CreatePriceRequest;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -87,31 +92,16 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public List<ProductResponse> getProducts(Long lastId, int limit) {
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit);
-        List<ProductEntity> products;
+    public Page<ProductResponse> getProducts(int page, int limit) {
+        Pageable pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "id"));
+        Page<ProductEntity> productPage = productRepository.findAll(pageable);
 
-        if (lastId == null) {
-            // First page, query order by ID desc
-            products = productRepository.findAll(
-                    org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"));
-            if (products.size() > limit) {
-                products = products.subList(0, limit);
-            }
-        } else {
-            // Next pages
-            products = productRepository.findByIdLessThanOrderByIdDesc(lastId, pageable);
-        }
-
-        return products.stream()
-                .map(ProductResponse::fromEntity)
-                .collect(Collectors.toList());
+        return productPage.map(ProductResponse::fromEntity);
     }
 
     @Override
     public List<ProductResponse> getFeaturedProducts(int limit) {
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit,
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"));
+        Pageable pageable = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "id"));
         List<ProductEntity> products = productRepository.findByIsFeaturedTrue(pageable);
         return products.stream()
                 .map(ProductResponse::fromEntity)
@@ -120,7 +110,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<ProductResponse> getBestSellingProducts(int limit) {
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit);
+        Pageable pageable = PageRequest.of(0, limit);
         List<ProductEntity> products = productRepository.findTopNByOrderBySoldCountDesc(pageable);
         return products.stream()
                 .map(ProductResponse::fromEntity)

@@ -2,14 +2,14 @@ package com.ndh.ShopTechnology.services.user;
 
 import com.ndh.ShopTechnology.dto.request.PaginationRequest;
 import com.ndh.ShopTechnology.dto.request.user.CreateUserRequest;
-import com.ndh.ShopTechnology.dto.response.ResultPagination;
 import com.ndh.ShopTechnology.dto.request.user.ModUserInfoRequest;
 import com.ndh.ShopTechnology.dto.response.user.UserResponse;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 
+import org.springframework.data.domain.Page;
 
 public interface UserService {
-    ResultPagination getAllUsers(PaginationRequest request);
+    Page<UserResponse> getAllUsers(PaginationRequest request);
 
     UserEntity getCurrentUser();
 

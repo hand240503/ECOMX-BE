@@ -4,6 +4,8 @@ import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
 import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
 import com.ndh.ShopTechnology.dto.response.product.ProductResponse;
 
+import org.springframework.data.domain.Page;
+
 import java.util.List;
 
 public interface ProductService {
@@ -11,7 +13,7 @@ public interface ProductService {
 
     List<ProductResponse> getAllProducts();
 
-    List<ProductResponse> getProducts(Long lastId, int limit);
+    Page<ProductResponse> getProducts(int page, int limit);
 
     List<ProductResponse> getFeaturedProducts(int limit);
 

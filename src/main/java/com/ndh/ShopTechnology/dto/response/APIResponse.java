@@ -21,7 +21,7 @@ public class APIResponse<T> {
     private String message;
     private T data;
     private List<ErrorResponse> errors;
-    private Map<String, Object> metadata;
+    private Object metadata;
     private String timestamp;
 
     // ==================== STATIC FACTORY METHOD ====================
@@ -38,7 +38,7 @@ public class APIResponse<T> {
             String message,
             T data,
             List<ErrorResponse> errors,
-            Map<String, Object> metadata) {
+            Object metadata) {
 
         return APIResponse.<T>builder()
                 .success(success)
@@ -59,11 +59,16 @@ public class APIResponse<T> {
     /**
      * Add single metadata field
      */
+    /**
+     * Add single metadata field
+     */
     public APIResponse<T> withMetadata(String key, Object value) {
         if (this.metadata == null) {
-            this.metadata = new HashMap<>();
+            this.metadata = new HashMap<String, Object>();
         }
-        this.metadata.put(key, value);
+        if (this.metadata instanceof Map) {
+            ((Map<String, Object>) this.metadata).put(key, value);
+        }
         return this;
     }
 
@@ -72,9 +77,11 @@ public class APIResponse<T> {
      */
     public APIResponse<T> withMetadata(Map<String, Object> metadata) {
         if (this.metadata == null) {
-            this.metadata = new HashMap<>();
+            this.metadata = new HashMap<String, Object>();
         }
-        this.metadata.putAll(metadata);
+        if (this.metadata instanceof Map) {
+            ((Map<String, Object>) this.metadata).putAll(metadata);
+        }
         return this;
     }
 

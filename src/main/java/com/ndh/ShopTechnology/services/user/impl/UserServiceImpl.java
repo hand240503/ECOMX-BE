@@ -5,7 +5,7 @@ import com.ndh.ShopTechnology.constant.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.PaginationRequest;
 import com.ndh.ShopTechnology.dto.request.user.CreateUserRequest;
 import com.ndh.ShopTechnology.dto.request.user.ModUserInfoRequest;
-import com.ndh.ShopTechnology.dto.response.ResultPagination;
+
 import com.ndh.ShopTechnology.dto.response.user.UserResponse;
 import com.ndh.ShopTechnology.entities.role.RoleEntity;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
@@ -81,23 +81,28 @@ public class UserServiceImpl implements UserService {
                     return user;
                 })
                 .orElseThrow(() -> new NotFoundEntityException(
-                        String.format(MessageConstant.USER_NOT_FOUND_BY_ID, id)
-                ));
+                        String.format(MessageConstant.USER_NOT_FOUND_BY_ID, id)));
     }
 
     protected UserResponse toResponse(UserEntity user) {
-        if (user == null) return null;
+        if (user == null)
+            return null;
         return UserResponse.fromEntity(user);
     }
 
     protected void applyUpdateToUser(UserEntity user, ModUserInfoRequest req) {
-        if (req == null || user == null) return;
+        if (req == null || user == null)
+            return;
 
         // Update core user fields
-        if (req.getEmail() != null) user.setEmail(req.getEmail());
-        if (req.getPhoneNumber() != null) user.setPhoneNumber(req.getPhoneNumber());
-        if (req.getStatus() != null) user.setStatus(req.getStatus());
-        if (req.getType() != null) user.setType(req.getType());
+        if (req.getEmail() != null)
+            user.setEmail(req.getEmail());
+        if (req.getPhoneNumber() != null)
+            user.setPhoneNumber(req.getPhoneNumber());
+        if (req.getStatus() != null)
+            user.setStatus(req.getStatus());
+        if (req.getType() != null)
+            user.setType(req.getType());
 
         if (StringUtils.hasText(req.getPassword())) {
             user.setPassword(passwordEncoder.encode(req.getPassword()));
@@ -111,41 +116,35 @@ public class UserServiceImpl implements UserService {
             user.setUserInfo(userInfo);
         }
 
-        if (req.getFirstName() != null) userInfo.setFirstName(req.getFirstName());
-        if (req.getLastName() != null) userInfo.setLastName(req.getLastName());
-        if (req.getAvatar() != null) userInfo.setAvatar(req.getAvatar());
-        if (req.getManagerId() != null) userInfo.setManagerId(req.getManagerId());
-        if (req.getInfo01() != null) userInfo.setInfo01(req.getInfo01());
-        if (req.getInfo02() != null) userInfo.setInfo02(req.getInfo02());
-        if (req.getInfo03() != null) userInfo.setInfo03(req.getInfo03());
-        if (req.getInfo04() != null) userInfo.setInfo04(req.getInfo04());
+        if (req.getFirstName() != null)
+            userInfo.setFirstName(req.getFirstName());
+        if (req.getLastName() != null)
+            userInfo.setLastName(req.getLastName());
+        if (req.getAvatar() != null)
+            userInfo.setAvatar(req.getAvatar());
+        if (req.getManagerId() != null)
+            userInfo.setManagerId(req.getManagerId());
+        if (req.getInfo01() != null)
+            userInfo.setInfo01(req.getInfo01());
+        if (req.getInfo02() != null)
+            userInfo.setInfo02(req.getInfo02());
+        if (req.getInfo03() != null)
+            userInfo.setInfo03(req.getInfo03());
+        if (req.getInfo04() != null)
+            userInfo.setInfo04(req.getInfo04());
     }
 
     /* ================== Services ================== */
 
     @Override
-    @Transactional(readOnly = true)
-    public ResultPagination getAllUsers(PaginationRequest request) {
-        UserEntity currentUser = getCurrentUserEntity();
-
-        if (!currentUser.hasAnyPermission("user:read", "admin:all")) {
-            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
-        }
-
+    public Page<UserResponse> getAllUsers(PaginationRequest request) {
         int page = (request.getPage() == null) ? 0 : request.getPage();
         int size = (request.getSize() == null) ? 10 : request.getSize();
 
         Pageable pageable = PageRequest.of(page, size);
         Page<UserEntity> userPage = userRepository.findAll(pageable);
 
-        List<UserResponse> responses = UserResponse.fromListEntity(userPage.getContent());
-
-        return new ResultPagination(
-                responses,
-                (int) userPage.getTotalElements(),
-                page,
-                size
-        );
+        return userPage.map(UserResponse::fromEntity);
     }
 
     @Override
@@ -174,7 +173,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    @CacheEvict(value = {"users", "userPermissions"}, key = "#req.id")
+    @CacheEvict(value = { "users", "userPermissions" }, key = "#req.id")
     public UserResponse updateUserInfo(ModUserInfoRequest req) {
         if (req == null || req.getId() == null) {
             throw new NotFoundEntityException(MessageConstant.USER_NOT_FOUND);
