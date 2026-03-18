@@ -19,7 +19,7 @@ public interface UserAuthService {
     /**
      * Refresh access token using refresh token
      */
-    LoginResponse refreshToken(String refreshToken);
+    LoginResponse refreshToken(String refreshToken, String deviceId, String ipAddress, String userAgent);
 
     /**
      * Logout user and revoke tokens

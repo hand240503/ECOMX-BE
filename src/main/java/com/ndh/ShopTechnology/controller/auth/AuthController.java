@@ -6,7 +6,9 @@ import com.ndh.ShopTechnology.dto.request.auth.RefreshTokenRequest;
 import com.ndh.ShopTechnology.dto.request.auth.RegisterUserRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.user.LoginResponse;
+import com.ndh.ShopTechnology.services.auth.AuthService;
 import com.ndh.ShopTechnology.services.user.UserAuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,8 +20,9 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("${api.prefix}/auth")
 @RequiredArgsConstructor
-public class UserAuthController {
+public class AuthController {
 
+    private final AuthService authService;
     private final UserAuthService userAuthService;
 
     /**
@@ -51,7 +54,7 @@ public class UserAuthController {
     public ResponseEntity<APIResponse<LoginResponse>> login(
             @RequestBody @Valid LoginRequest request) {
 
-        LoginResponse loginResponse = userAuthService.login(request);
+        LoginResponse loginResponse = authService.login(request);
 
         APIResponse<LoginResponse> response = APIResponse.of(
                 true,
@@ -68,13 +71,18 @@ public class UserAuthController {
 
     /**
      * POST /api/v1/auth/refresh
-     * Refresh access token using refresh token
+     * Access token using refresh token
      */
     @PostMapping("/refresh")
     public ResponseEntity<APIResponse<LoginResponse>> refreshToken(
-            @RequestBody @Valid RefreshTokenRequest request) {
+            @RequestBody @Valid RefreshTokenRequest request,
+            HttpServletRequest httpServletRequest) {
 
-        LoginResponse loginResponse = userAuthService.refreshToken(request.getRefreshToken());
+        LoginResponse loginResponse = authService.refreshToken(
+                request,
+                httpServletRequest.getRemoteAddr(),
+                httpServletRequest.getHeader("User-Agent")
+        );
 
         APIResponse<LoginResponse> response = APIResponse.of(
                 true,
@@ -96,9 +104,20 @@ public class UserAuthController {
     @PostMapping("/logout")
     public ResponseEntity<APIResponse<Void>> logout() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            APIResponse<Void> response = APIResponse.of(
+                    false,
+                    "Bạn chưa đăng nhập",
+                    null,
+                    null,
+                    null
+            );
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+
         String username = authentication.getName();
 
-        userAuthService.logout(username);
+        authService.logout(username);
 
         APIResponse<Void> response = APIResponse.of(
                 true,

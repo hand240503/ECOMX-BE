@@ -1,6 +1,5 @@
 package com.ndh.ShopTechnology.services.user.impl;
 
-import com.ndh.ShopTechnology.config.TokenProvider;
 import com.ndh.ShopTechnology.constant.MessageConstant;
 import com.ndh.ShopTechnology.constant.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.auth.LoginRequest;
@@ -17,7 +16,9 @@ import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.RoleRepository;
 import com.ndh.ShopTechnology.repository.UserRepository;
 import com.ndh.ShopTechnology.services.otp.OTPService;
+import com.ndh.ShopTechnology.services.auth.JwtService;
 import com.ndh.ShopTechnology.services.token.RefreshTokenService;
+import com.ndh.ShopTechnology.services.user.CustomUserDetailsService;
 import com.ndh.ShopTechnology.services.user.UserAuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,9 +45,10 @@ public class UserAuthServiceImpl implements UserAuthService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
-    private final TokenProvider jwtTokenUtil;
     private final OTPService otpService;
-    private final RefreshTokenService  refreshTokenService;
+    private final RefreshTokenService refreshTokenService;
+    private final CustomUserDetailsService customUserDetailsService;
+    private final JwtService jwtService;
 
     @Override
     @Transactional
@@ -123,9 +126,6 @@ public class UserAuthServiceImpl implements UserAuthService {
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        // Generate JWT token
-        String token = jwtTokenUtil.generateToken(authentication);
-
         // ==================== BUILD RESPONSE ====================
         UserResponse userResponse = UserResponse.fromEntity(user);
 
@@ -154,10 +154,10 @@ public class UserAuthServiceImpl implements UserAuthService {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         // ✅ Generate Access Token
-        String accessToken = jwtTokenUtil.generateAccessToken(authentication);
+        String accessToken = jwtService.generateAccessToken(authentication.getName());
 
         // ✅ Generate Refresh Token và lưu vào DB
-        RefreshTokenEntity refreshToken = refreshTokenService.createRefreshToken(user.getUsername());
+        RefreshTokenEntity refreshToken = refreshTokenService.createInitialRefreshToken(user.getUsername(), null);
 
         UserResponse userResponse = UserResponse.fromEntity(user);
 
@@ -168,7 +168,7 @@ public class UserAuthServiceImpl implements UserAuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken.getToken())
                 .tokenType("Bearer")
-                .expiresIn(900L) // 15 minutes in seconds
+                .expiresIn(jwtService.getAccessTokenExpirationSeconds())
                 .build();
     }
 
@@ -291,17 +291,24 @@ public class UserAuthServiceImpl implements UserAuthService {
 
     @Override
     @Transactional
-    public LoginResponse refreshToken(String refreshTokenValue) {
-        // Verify refresh token
-        RefreshTokenEntity refreshToken = refreshTokenService.verifyRefreshToken(refreshTokenValue);
+    public LoginResponse refreshToken(String refreshTokenValue, String deviceId, String ipAddress, String userAgent) {
+        RefreshTokenEntity newRefreshToken = refreshTokenService.rotateRefreshToken(
+                refreshTokenValue,
+                deviceId,
+                ipAddress,
+                userAgent
+        );
 
-        UserEntity user = refreshToken.getUser();
+        UserEntity user = newRefreshToken.getUser();
 
-        // Generate new access token
-        String newAccessToken = jwtTokenUtil.generateAccessToken(user.getUsername());
+        UserDetails userDetails = customUserDetailsService.loadUserByUsername(user.getUsername());
+        Authentication refreshAuthentication = new UsernamePasswordAuthenticationToken(
+                userDetails,
+                null,
+                userDetails.getAuthorities()
+        );
 
-        // Optional: Generate new refresh token (rotate)
-        RefreshTokenEntity newRefreshToken = refreshTokenService.createRefreshToken(user.getUsername());
+        String newAccessToken = jwtService.generateAccessToken(refreshAuthentication.getName());
 
         UserResponse userResponse = UserResponse.fromEntity(user);
 
@@ -312,7 +319,7 @@ public class UserAuthServiceImpl implements UserAuthService {
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken.getToken())
                 .tokenType("Bearer")
-                .expiresIn(900L)
+                .expiresIn(jwtService.getAccessTokenExpirationSeconds())
                 .build();
     }
 

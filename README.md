@@ -1,4 +1,4 @@
-﻿# Shop Technology API
+# Shop Technology API
 
 Backend API cho hệ thống Shop Technology được xây dựng bằng Spring Boot.
 
@@ -492,8 +492,8 @@ Quản lý sản phẩm với tính năng **Multi-Unit Pricing** (Đa đơn vị
 - **Endpoint**: `GET /api/v1/products`
 - **Description**: Lấy danh sách sản phẩm (Hỗ trợ phân trang theo con trỏ - Cursor Pagination).
 - **Query Parameters**:
-  - `limit`: Số lượng sản phẩm (mặc định 10).
-  - `lastId`: ID của sản phẩm cuối cùng trong trang trước (để lấy trang tiếp theo). Nếu không truyền, sẽ lấy trang đầu tiên (mới nhất).
+    - `limit`: Số lượng sản phẩm (mặc định 10).
+    - `lastId`: ID của sản phẩm cuối cùng trong trang trước (để lấy trang tiếp theo). Nếu không truyền, sẽ lấy trang đầu tiên (mới nhất).
 - **Response** (200 OK):
 ```json
 {
@@ -579,14 +579,14 @@ Quản lý sản phẩm với tính năng **Multi-Unit Pricing** (Đa đơn vị
 - **Endpoint**: `GET /api/v1/products/featured`
 - **Description**: Lấy danh sách các sản phẩm được đánh dấu là nổi bật (`isFeatured = true`).
 - **Query Parameters**:
-  - `limit`: Số lượng sản phẩm (mặc định 10).
+    - `limit`: Số lượng sản phẩm (mặc định 10).
 - **Response** (200 OK): Tương tự 3.2
 
 ##### 3.8. Lấy danh sách sản phẩm bán chạy
 - **Endpoint**: `GET /api/v1/products/best-sellers`
 - **Description**: Lấy danh sách sản phẩm bán chạy nhất (dựa trên `soldCount`).
 - **Query Parameters**:
-  - `limit`: Số lượng sản phẩm (mặc định 10).
+    - `limit`: Số lượng sản phẩm (mặc định 10).
 - **Response** (200 OK): Tương tự 3.2
 
 ---
@@ -715,8 +715,8 @@ Theo dõi và ghi lại các hành vi của người dùng trên hệ thống.
 - **Endpoint**: `GET /api/v1/collector-logs/date-range?startDate=2024-01-01T00:00:00&endDate=2024-01-31T23:59:59`
 - **Description**: Lấy tất cả logs trong một khoảng thời gian
 - **Query Parameters**:
-  - `startDate`: Ngày bắt đầu (ISO 8601 format)
-  - `endDate`: Ngày kết thúc (ISO 8601 format)
+    - `startDate`: Ngày bắt đầu (ISO 8601 format)
+    - `endDate`: Ngày kết thúc (ISO 8601 format)
 - **Response** (200 OK):
 ```json
 {
