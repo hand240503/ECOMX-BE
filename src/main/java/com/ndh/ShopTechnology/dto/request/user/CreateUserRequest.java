@@ -19,8 +19,8 @@ public class CreateUserRequest {
     private String phoneNumber;
 
     // User info fields
-    private String firstName;
-    private String lastName;
+    private String fullName;
+    private String telephone;
     private String avatar;
     private Long managerId;
 

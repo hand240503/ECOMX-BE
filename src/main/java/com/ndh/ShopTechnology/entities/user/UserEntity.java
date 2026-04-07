@@ -30,7 +30,7 @@ public class UserEntity extends BaseEntity {
     @JsonIgnore
     private String password;
 
-    @Column(name = "email")
+    @Column(name = "email", unique = true)
     private String email;
 
     @Column(name = "telephone", unique = true)
@@ -47,11 +47,7 @@ public class UserEntity extends BaseEntity {
     private UserInfoEntity userInfo;
 
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "user_roles",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
+    @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
     @JsonIgnore
     private Set<RoleEntity> roles = new HashSet<>();
 
@@ -95,8 +91,7 @@ public class UserEntity extends BaseEntity {
                     permissions.addAll(
                             role.getPermissions().stream()
                                     .map(PermissionEntity::getCode)
-                                    .collect(Collectors.toSet())
-                    );
+                                    .collect(Collectors.toSet()));
                 }
             });
         }
@@ -116,32 +111,39 @@ public class UserEntity extends BaseEntity {
     }
 
     public boolean hasAnyPermission(String... permissions) {
-        if (permissions == null || permissions.length == 0) return false;
+        if (permissions == null || permissions.length == 0)
+            return false;
         Set<String> userPerms = getAllPermissions();
         for (String perm : permissions) {
-            if (userPerms.contains(perm)) return true;
+            if (userPerms.contains(perm))
+                return true;
         }
         return false;
     }
 
     public boolean hasAllPermissions(String... permissions) {
-        if (permissions == null || permissions.length == 0) return false;
+        if (permissions == null || permissions.length == 0)
+            return false;
         Set<String> userPerms = getAllPermissions();
         for (String perm : permissions) {
-            if (!userPerms.contains(perm)) return false;
+            if (!userPerms.contains(perm))
+                return false;
         }
         return true;
     }
 
     public boolean hasRole(String roleCode) {
-        if (roles == null) return false;
+        if (roles == null)
+            return false;
         return roles.stream().anyMatch(r -> r.getCode().equals(roleCode));
     }
 
     public boolean hasAnyRole(String... roleCodes) {
-        if (roleCodes == null || roleCodes.length == 0) return false;
+        if (roleCodes == null || roleCodes.length == 0)
+            return false;
         for (String roleCode : roleCodes) {
-            if (hasRole(roleCode)) return true;
+            if (hasRole(roleCode))
+                return true;
         }
         return false;
     }

@@ -32,6 +32,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -50,11 +51,16 @@ public class UserAuthServiceImpl implements UserAuthService {
     private final CustomUserDetailsService customUserDetailsService;
     private final JwtService jwtService;
 
+    private static final int RANDOM_USERNAME_LENGTH = 10;
+    private static final String USERNAME_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
+    private static final String PHONE_USERNAME_SUFFIX_CHARS = "#$@_";
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     @Override
     @Transactional
     public LoginResponse registerUser(RegisterUserRequest request) {
         // ==================== VALIDATION ====================
-        String email = validateAndNormalizeEmail(request.getEmail());
+        String login = validateAndNormalizeLogin(request.getEmail());
         String password = validatePassword(request.getPassword());
         String confirmPassword = request.getConfirmPassword();
         String verificationCode = request.getVerificationCode();
@@ -68,7 +74,7 @@ public class UserAuthServiceImpl implements UserAuthService {
         }
 
         // ==================== VERIFY OTP ====================
-        boolean verified = otpService.verifyOTPForRegister(email, verificationCode);
+        boolean verified = otpService.verifyOTPForRegister(login, verificationCode);
 
         if (!verified) {
             throw new CustomApiException(
@@ -78,15 +84,30 @@ public class UserAuthServiceImpl implements UserAuthService {
         }
 
         // ==================== CHECK USER EXISTS ====================
-        checkUserNotExists(email);
+        checkUserNotExists(login);
 
         // ==================== LOAD DEFAULT ROLE ====================
         RoleEntity role = loadRole("CUSTOMER");
 
-        // ==================== DETERMINE USERNAME & PHONE ====================
-        String username = email;
-        String phone = isValidPhone(email) ? email : null;
-        String emailValue = isValidEmail(email) ? email : null;
+        // ==================== DETERMINE USERNAME / EMAIL / PHONE ====================
+        boolean isPhone = isValidPhone(login);
+        boolean isEmail = isValidEmail(login);
+
+        String emailValue = isEmail ? login : null;
+        String phone = isPhone ? login : null;
+
+        // Rules:
+        // 1) If user registers by username (not email/phone): keep username as-is
+        // 2) If user registers by email: generate random username (10 chars), derived from local-part before '@'
+        // 3) Phone case: keep current behavior (username = phone) until you define another rule
+        final String username;
+        if (!isEmail && !isPhone) {
+            username = login;
+        } else if (isEmail) {
+            username = generateUniqueUsernameFromEmail(login);
+        } else {
+            username = generateUniqueUsernameForPhone();
+        }
 
         // ==================== BUILD USER ENTITY ====================
         UserEntity user = UserEntity.builder()
@@ -100,8 +121,7 @@ public class UserAuthServiceImpl implements UserAuthService {
         // ==================== BUILD USER INFO ENTITY ====================
         UserInfoEntity userInfo = UserInfoEntity.builder()
                 .user(user)
-                .firstName(null)
-                .lastName(null)
+                .fullName(null)
                 .build();
 
         user.setUserInfo(userInfo);
@@ -115,7 +135,7 @@ public class UserAuthServiceImpl implements UserAuthService {
         user = userRepository.save(user);
 
         // ==================== CLEAR OTP ====================
-        otpService.clearOTP(email);
+        otpService.clearOTP(login);
 
         log.info("User registered successfully: username={}, email={}", username, emailValue);
 
@@ -153,10 +173,8 @@ public class UserAuthServiceImpl implements UserAuthService {
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        // ✅ Generate Access Token
         String accessToken = jwtService.generateAccessToken(authentication.getName());
 
-        // ✅ Generate Refresh Token và lưu vào DB
         RefreshTokenEntity refreshToken = refreshTokenService.createInitialRefreshToken(user.getUsername(), null);
 
         UserResponse userResponse = UserResponse.fromEntity(user);
@@ -174,24 +192,15 @@ public class UserAuthServiceImpl implements UserAuthService {
 
     // ==================== HELPER METHODS - VALIDATION ====================
 
-    private String validateAndNormalizeEmail(String email) {
-        if (email == null || email.trim().isEmpty()) {
+    private String validateAndNormalizeLogin(String login) {
+        if (login == null || login.trim().isEmpty()) {
             throw new CustomApiException(
                     HttpStatus.BAD_REQUEST,
-                    "Email hoặc số điện thoại không được để trống"
+                    "Email / số điện thoại / username không được để trống"
             );
         }
 
-        String normalized = email.trim().toLowerCase();
-
-        if (!isValidEmail(normalized) && !isValidPhone(normalized)) {
-            throw new CustomApiException(
-                    HttpStatus.BAD_REQUEST,
-                    "Email hoặc số điện thoại không hợp lệ"
-            );
-        }
-
-        return normalized;
+        return login.trim().toLowerCase();
     }
 
     private String validatePassword(String password) {
@@ -235,16 +244,26 @@ public class UserAuthServiceImpl implements UserAuthService {
     // ==================== HELPER METHODS - DATABASE ====================
 
     private void checkUserNotExists(String email) {
-        boolean exists = isValidEmail(email)
-                ? userRepository.existsByUsername(email)
-                : userRepository.existsByPhoneNumber(email);
+        boolean isEmail = isValidEmail(email);
+        boolean isPhone = isValidPhone(email);
+
+        boolean exists;
+        if (isEmail) {
+            exists = userRepository.existsByEmail(email);
+        } else if (isPhone) {
+            exists = userRepository.existsByPhoneNumber(email);
+        } else {
+            exists = userRepository.existsByUsername(email);
+        }
 
         if (exists) {
             throw new CustomApiException(
                     HttpStatus.CONFLICT,
-                    isValidEmail(email)
+                    isEmail
                             ? "Email này đã được đăng ký"
-                            : "Số điện thoại này đã được đăng ký"
+                            : isPhone
+                            ? "Số điện thoại này đã được đăng ký"
+                            : "Username này đã được đăng ký"
             );
         }
     }
@@ -260,10 +279,17 @@ public class UserAuthServiceImpl implements UserAuthService {
     private UserEntity loadUserForLogin(String login) {
 
         boolean isPhone = isPhoneNumber(login);
+        boolean isEmail = isValidEmail(login);
 
-        Optional<UserEntity> userOpt = isPhone
-                ? userRepository.findOneByPhoneNumber(login)
-                : userRepository.findOneByUsername(login.toLowerCase());
+        Optional<UserEntity> userOpt;
+        if (isPhone) {
+            userOpt = userRepository.findOneByPhoneNumber(login);
+        } else if (isEmail) {
+            userOpt = userRepository.findOneByEmail(login.toLowerCase());
+        } else {
+            // Username/internal login (không phải email/phone)
+            userOpt = userRepository.findOneByUsername(login.toLowerCase());
+        }
 
         if (userOpt.isPresent()) {
             UserEntity basicUser = userOpt.get();
@@ -276,13 +302,68 @@ public class UserAuthServiceImpl implements UserAuthService {
         throw new AuthenticationFailedException(MessageConstant.AUTH_FAILED);
     }
 
-    // ✅ THÊM: Helper methods để validate email và phone
     private boolean isValidEmail(String input) {
         return input != null && input.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
     }
 
     private boolean isValidPhone(String input) {
         return input != null && input.matches("\\d{10,15}");
+    }
+
+    private String generateUniqueUsernameFromEmail(String email) {
+        String localPart = email.substring(0, email.indexOf('@'));
+        String base = localPart.replaceAll("[^a-z0-9]", "");
+        if (base.isBlank()) {
+            base = "user";
+        }
+
+        // Keep base short to make room for random suffix
+        if (base.length() > 6) {
+            base = base.substring(0, 6);
+        }
+
+        for (int i = 0; i < 50; i++) {
+            String candidate = base + randomString(RANDOM_USERNAME_LENGTH - base.length());
+            if (!userRepository.existsByUsername(candidate)) {
+                return candidate;
+            }
+        }
+
+        // Fallback: fully random
+        for (int i = 0; i < 50; i++) {
+            String candidate = randomString(RANDOM_USERNAME_LENGTH);
+            if (!userRepository.existsByUsername(candidate)) {
+                return candidate;
+            }
+        }
+
+        throw new CustomApiException(HttpStatus.CONFLICT, "Không thể tạo username hợp lệ. Vui lòng thử lại.");
+    }
+
+    private String randomString(int length) {
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            sb.append(USERNAME_CHARS.charAt(SECURE_RANDOM.nextInt(USERNAME_CHARS.length())));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Phone registration rule:
+     * - Username length = 11
+     * - First 10 chars: [a-z0-9] random
+     * - 11th char: one of "#$@_"
+     */
+    private String generateUniqueUsernameForPhone() {
+        for (int i = 0; i < 100; i++) {
+            String candidate = randomString(RANDOM_USERNAME_LENGTH)
+                    + PHONE_USERNAME_SUFFIX_CHARS.charAt(SECURE_RANDOM.nextInt(PHONE_USERNAME_SUFFIX_CHARS.length()));
+            if (!userRepository.existsByUsername(candidate)) {
+                return candidate;
+            }
+        }
+
+        throw new CustomApiException(HttpStatus.CONFLICT, "Không thể tạo username hợp lệ. Vui lòng thử lại.");
     }
 
     private boolean isPhoneNumber(String input) {

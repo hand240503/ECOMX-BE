@@ -25,7 +25,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     @Override
-    @Transactional(readOnly = true)  // ✅ Thêm transaction để load lazy relationships
+    @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
 
         UserEntity userEntity = userRepository.findByUsernameWithRolesAndPermissions(username)

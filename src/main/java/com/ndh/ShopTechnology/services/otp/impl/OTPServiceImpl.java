@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.Optional;
 
 @Slf4j
@@ -42,9 +43,13 @@ public class OTPServiceImpl implements OTPService {
 
         String otpCode = generateOTPCode();
         saveOrUpdateOTP(login, otpCode);
-        sendOTPToEmail(login, otpCode);
 
-        log.info("OTP sent successfully to: {}", maskLogin(login));
+        if (isValidEmail(login)) {
+            sendOTPToEmail(login, otpCode);
+        } else {
+            // TODO: send OTP via SMS
+            log.info("OTP generated for phone (SMS not implemented yet): {}", maskLogin(login));
+        }
     }
 
     @Transactional
@@ -67,15 +72,11 @@ public class OTPServiceImpl implements OTPService {
             return false;
         }
 
-        // ✅ THAY ĐỔI: Cho phép verify nhiều lần (không check isVerified)
-        // Vì user cần verify ở step 2, sau đó gửi lại OTP ở step 3
-
         if (otpEntity.getAttemptCount() >= MAX_ATTEMPTS) {
             log.warn("Maximum OTP attempts exceeded for login: {}", maskLogin(normalizedLogin));
             throw new CustomApiException(
                     HttpStatus.TOO_MANY_REQUESTS,
-                    "Bạn đã nhập sai quá nhiều lần. Vui lòng yêu cầu mã mới."
-            );
+                    "Bạn đã nhập sai quá nhiều lần. Vui lòng yêu cầu mã mới.");
         }
 
         if (!otpEntity.getOtpCode().equals(normalizedOtp)) {
@@ -84,14 +85,12 @@ public class OTPServiceImpl implements OTPService {
             return false;
         }
 
-        // ✅ Đánh dấu đã verify (nhưng chưa used)
         markAsVerified(otpEntity);
         log.info("OTP verified successfully for login: {}", maskLogin(normalizedLogin));
 
         return true;
     }
 
-    // ✅ THÊM: Method mới để verify OTP khi register (chỉ dùng 1 lần)
     @Transactional
     @Override
     public boolean verifyOTPForRegister(String login, String otp) {
@@ -107,13 +106,11 @@ public class OTPServiceImpl implements OTPService {
 
         OTPEntity otpEntity = otpEntityOpt.get();
 
-        // ✅ CHECK: OTP đã được dùng để register chưa?
         if (otpEntity.isUsed()) {
             log.warn("OTP already used for registration: {}", maskLogin(normalizedLogin));
             throw new CustomApiException(
                     HttpStatus.BAD_REQUEST,
-                    "Mã xác thực này đã được sử dụng"
-            );
+                    "Mã xác thực này đã được sử dụng");
         }
 
         // Check expired
@@ -128,7 +125,6 @@ public class OTPServiceImpl implements OTPService {
             return false;
         }
 
-        // ✅ MARK AS USED - Chỉ cho phép dùng 1 lần cho register
         otpEntity.setUsed(true);
         otpEntity.setVerified(true);
         otpRepository.saveAndFlush(otpEntity); // Flush ngay để commit
@@ -151,8 +147,7 @@ public class OTPServiceImpl implements OTPService {
         if (login == null || login.trim().isEmpty()) {
             throw new CustomApiException(
                     HttpStatus.BAD_REQUEST,
-                    "Email hoặc số điện thoại không được để trống"
-            );
+                    "Email hoặc số điện thoại không được để trống");
         }
 
         String normalized = login.trim();
@@ -160,8 +155,7 @@ public class OTPServiceImpl implements OTPService {
         if (!isValidEmail(normalized) && !isValidPhone(normalized)) {
             throw new CustomApiException(
                     HttpStatus.BAD_REQUEST,
-                    "Email hoặc số điện thoại không hợp lệ"
-            );
+                    "Email hoặc số điện thoại không hợp lệ");
         }
 
         return normalized.toLowerCase();
@@ -171,8 +165,7 @@ public class OTPServiceImpl implements OTPService {
         if (otp == null || otp.trim().isEmpty()) {
             throw new CustomApiException(
                     HttpStatus.BAD_REQUEST,
-                    "Mã OTP không được để trống"
-            );
+                    "Mã OTP không được để trống");
         }
 
         String normalized = otp.trim();
@@ -180,8 +173,7 @@ public class OTPServiceImpl implements OTPService {
         if (!normalized.matches("\\d{6}")) {
             throw new CustomApiException(
                     HttpStatus.BAD_REQUEST,
-                    "Mã OTP phải là 6 chữ số"
-            );
+                    "Mã OTP phải là 6 chữ số");
         }
 
         return normalized;
@@ -197,8 +189,7 @@ public class OTPServiceImpl implements OTPService {
                     HttpStatus.CONFLICT,
                     isValidEmail(login)
                             ? "Email này đã được đăng ký"
-                            : "Số điện thoại này đã được đăng ký"
-            );
+                            : "Số điện thoại này đã được đăng ký");
         }
     }
 
@@ -212,13 +203,11 @@ public class OTPServiceImpl implements OTPService {
             if (LocalDateTime.now().isBefore(cooldownEnd)) {
                 long secondsLeft = java.time.Duration.between(
                         LocalDateTime.now(),
-                        cooldownEnd
-                ).getSeconds();
+                        cooldownEnd).getSeconds();
 
                 throw new CustomApiException(
                         HttpStatus.TOO_MANY_REQUESTS,
-                        "Vui lòng đợi " + secondsLeft + " giây trước khi gửi lại mã"
-                );
+                        "Vui lòng đợi " + secondsLeft + " giây trước khi gửi lại mã");
             }
         }
     }
@@ -241,7 +230,7 @@ public class OTPServiceImpl implements OTPService {
             otpEntity.setCreatedAt(LocalDateTime.now());
             otpEntity.setExpiredAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
             otpEntity.setVerified(false);
-            otpEntity.setUsed(false); // ✅ Reset used flag
+            otpEntity.setUsed(false);
             otpEntity.setAttemptCount(0);
         } else {
             otpEntity = OTPEntity.builder()
@@ -250,12 +239,12 @@ public class OTPServiceImpl implements OTPService {
                     .createdAt(LocalDateTime.now())
                     .expiredAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES))
                     .verified(false)
-                    .used(false) // ✅ Set used = false
+                    .used(false)
                     .attemptCount(0)
                     .build();
         }
 
-        otpRepository.save(otpEntity);
+        otpRepository.save(Objects.requireNonNull(otpEntity));
     }
 
     private void sendOTPToEmail(String email, String otpCode) {
@@ -265,8 +254,7 @@ public class OTPServiceImpl implements OTPService {
             log.error("Failed to send OTP email to: {}", maskLogin(email), e);
             throw new CustomApiException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Không thể gửi email xác thực. Vui lòng thử lại sau."
-            );
+                    "Không thể gửi email xác thực. Vui lòng thử lại sau.");
         }
     }
 

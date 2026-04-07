@@ -10,9 +10,8 @@ import lombok.*;
 @Builder
 public class UserInfoResponse {
 
-    private String firstName;
-    private String lastName;
     private String fullName;
+    private String telephone;
     private String avatar;
     private Long managerId;
     private String info01;
@@ -24,9 +23,8 @@ public class UserInfoResponse {
         if (entity == null) return null;
 
         return UserInfoResponse.builder()
-                .firstName(entity.getFirstName())
-                .lastName(entity.getLastName())
                 .fullName(entity.getFullName())
+                .telephone(entity.getTelephone())
                 .avatar(entity.getAvatar())
                 .managerId(entity.getManagerId())
                 .info01(entity.getInfo01())

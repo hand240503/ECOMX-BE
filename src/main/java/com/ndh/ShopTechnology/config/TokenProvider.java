@@ -40,10 +40,10 @@ public class TokenProvider implements Serializable {
     @Value("${jwt.issuer:ecomx-be}")
     private String issuer;
 
-    @Value("${jwt.access-token-expiration-ms:30000}")
+    @Value("${jwt.access-token-expiration-ms:900000}")
     private long accessTokenExpirationMs;
 
-    @Value("${jwt.refresh-token-expiration-ms:30000}")
+    @Value("${jwt.refresh-token-expiration-ms:604800000}")
     private long refreshTokenExpirationMs;
 
     public String generateAccessToken(Authentication authentication) {

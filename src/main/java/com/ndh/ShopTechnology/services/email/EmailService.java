@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import jakarta.mail.internet.MimeMessage;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
@@ -28,11 +29,11 @@ public class EmailService {
                 MimeMessage message = mailSender.createMimeMessage();
                 MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-                helper.setTo(toEmail);
+                helper.setTo(Objects.requireNonNull(toEmail));
                 helper.setSubject("Mã xác thực đăng ký tài khoản ECOMX");
 
                 String htmlContent = buildOTPEmailContent(otpCode);
-                helper.setText(htmlContent, true);
+                helper.setText(Objects.requireNonNull(htmlContent), true);
 
                 mailSender.send(message);
                 log.info("OTP email sent successfully to: {}", toEmail);
@@ -107,7 +108,7 @@ public class EmailService {
                 "                <li>Nếu bạn không yêu cầu mã này, vui lòng bỏ qua email</li>" +
                 "            </ul>" +
                 "            <div class='warning'>" +
-                "                <strong>⚠️ Cảnh báo bảo mật:</strong> ECOMX sẽ không bao giờ yêu cầu mã xác thực của bạn qua điện thoại hoặc email." +
+                "                <strong>Cảnh báo bảo mật:</strong> ECOMX sẽ không bao giờ yêu cầu mã xác thực của bạn qua điện thoại hoặc email." +
                 "            </div>" +
                 "        </div>" +
                 "        <div class='footer'>" +

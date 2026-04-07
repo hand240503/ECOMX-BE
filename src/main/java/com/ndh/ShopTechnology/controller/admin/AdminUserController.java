@@ -2,7 +2,7 @@ package com.ndh.ShopTechnology.controller.admin;
 
 import com.ndh.ShopTechnology.dto.request.PaginationRequest;
 import com.ndh.ShopTechnology.dto.request.user.CreateUserRequest;
-import com.ndh.ShopTechnology.dto.request.user.ModUserInfoRequest;
+import com.ndh.ShopTechnology.dto.request.user.AdminModUserInfoRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.PaginationMetadata;
 import com.ndh.ShopTechnology.dto.response.user.UserResponse;
@@ -85,7 +85,7 @@ public class AdminUserController {
    * PUT /api/v1/admin/users
    */
   @PutMapping("")
-  public ResponseEntity<APIResponse<UserResponse>> modUserInfo(@RequestBody ModUserInfoRequest request) {
+  public ResponseEntity<APIResponse<UserResponse>> modUserInfo(@RequestBody AdminModUserInfoRequest request) {
 
     UserResponse userResponse = userService.updateUserInfo(request);
 

@@ -14,7 +14,7 @@ public interface UserAuthService {
     /**
      * Login user
      */
-    LoginResponse login(LoginRequest request); // ✅ Bỏ throws Exception
+    LoginResponse login(LoginRequest request);
 
     /**
      * Refresh access token using refresh token
