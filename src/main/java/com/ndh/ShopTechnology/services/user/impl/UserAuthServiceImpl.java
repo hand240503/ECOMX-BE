@@ -2,8 +2,11 @@ package com.ndh.ShopTechnology.services.user.impl;
 
 import com.ndh.ShopTechnology.constant.MessageConstant;
 import com.ndh.ShopTechnology.constant.SystemConstant;
+import com.ndh.ShopTechnology.dto.request.auth.ForgotPasswordRequest;
 import com.ndh.ShopTechnology.dto.request.auth.LoginRequest;
+import com.ndh.ShopTechnology.dto.request.auth.ResetPasswordByTokenRequest;
 import com.ndh.ShopTechnology.dto.request.auth.RegisterUserRequest;
+import com.ndh.ShopTechnology.dto.request.auth.VerifyForgotPasswordOTPRequest;
 import com.ndh.ShopTechnology.dto.response.user.LoginResponse;
 import com.ndh.ShopTechnology.dto.response.user.UserResponse;
 import com.ndh.ShopTechnology.entities.role.RoleEntity;
@@ -17,12 +20,15 @@ import com.ndh.ShopTechnology.repository.RoleRepository;
 import com.ndh.ShopTechnology.repository.UserRepository;
 import com.ndh.ShopTechnology.services.otp.OTPService;
 import com.ndh.ShopTechnology.services.auth.JwtService;
+import com.ndh.ShopTechnology.services.email.EmailService;
+import com.ndh.ShopTechnology.services.token.PasswordResetTokenService;
 import com.ndh.ShopTechnology.services.token.RefreshTokenService;
 import com.ndh.ShopTechnology.services.user.CustomUserDetailsService;
 import com.ndh.ShopTechnology.services.user.UserAuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -47,6 +53,8 @@ public class UserAuthServiceImpl implements UserAuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final OTPService otpService;
+    private final EmailService emailService;
+    private final PasswordResetTokenService passwordResetTokenService;
     private final RefreshTokenService refreshTokenService;
     private final CustomUserDetailsService customUserDetailsService;
     private final JwtService jwtService;
@@ -55,6 +63,11 @@ public class UserAuthServiceImpl implements UserAuthService {
     private static final String USERNAME_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
     private static final String PHONE_USERNAME_SUFFIX_CHARS = "#$@_";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final String EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
+    private static final String PHONE_REGEX = "\\d{10,15}";
+
+    @Value("${app.password-reset.base-url:http://localhost:5173/reset-password}")
+    private String passwordResetBaseUrl;
 
     @Override
     @Transactional
@@ -303,11 +316,11 @@ public class UserAuthServiceImpl implements UserAuthService {
     }
 
     private boolean isValidEmail(String input) {
-        return input != null && input.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+        return input != null && input.matches(EMAIL_REGEX);
     }
 
     private boolean isValidPhone(String input) {
-        return input != null && input.matches("\\d{10,15}");
+        return input != null && input.matches(PHONE_REGEX);
     }
 
     private String generateUniqueUsernameFromEmail(String email) {
@@ -402,6 +415,117 @@ public class UserAuthServiceImpl implements UserAuthService {
                 .tokenType("Bearer")
                 .expiresIn(jwtService.getAccessTokenExpirationSeconds())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void requestForgotPassword(ForgotPasswordRequest request) {
+        if (request == null || !org.springframework.util.StringUtils.hasText(request.getLogin())) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Email hoặc số điện thoại không được để trống");
+        }
+
+        String login = request.getLogin().trim().toLowerCase();
+        if (!isValidEmail(login) && !isValidPhone(login)) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Email hoặc số điện thoại không hợp lệ");
+        }
+
+        Optional<UserEntity> userOpt = findUserByLogin(login);
+        if (userOpt.isEmpty()) {
+            log.info("Forgot-password requested for unknown login: {}", login);
+            return;
+        }
+
+        UserEntity user = userOpt.get();
+        String destinationEmail = user.getEmail();
+        if (!isValidEmail(destinationEmail)) {
+            log.warn("Forgot-password requested but user has no valid email: userId={}, login={}", user.getId(), login);
+            return;
+        }
+
+        otpService.sendForgotPasswordOTP(login, destinationEmail);
+    }
+
+    @Override
+    @Transactional
+    public boolean verifyForgotPasswordOtpAndSendResetLink(VerifyForgotPasswordOTPRequest request) {
+        if (request == null) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Yêu cầu xác thực OTP không hợp lệ");
+        }
+        String login = Optional.ofNullable(request.getLogin())
+                .map(String::trim)
+                .map(String::toLowerCase)
+                .orElseThrow(() -> new CustomApiException(HttpStatus.BAD_REQUEST, "Email hoặc số điện thoại không được để trống"));
+
+        Optional<UserEntity> userOpt = findUserByLogin(login);
+        if (userOpt.isEmpty()) {
+            return false;
+        }
+
+        boolean verified = otpService.verifyOTPForForgotPassword(login, request.getOtp());
+        if (!verified) {
+            return false;
+        }
+
+        UserEntity user = userOpt.get();
+        String destinationEmail = user.getEmail();
+        if (!isValidEmail(destinationEmail)) {
+            return false;
+        }
+
+        String rawResetToken = passwordResetTokenService.issueResetToken(user);
+        String resetLink = buildResetLink(rawResetToken);
+        emailService.sendPasswordResetLinkEmail(destinationEmail, resetLink)
+                .exceptionally(ex -> {
+                    log.error("Failed to send forgot-password reset link email: userId={}, email={}",
+                            user.getId(), destinationEmail, ex);
+                    return null;
+                });
+        otpService.clearForgotPasswordOTP(login);
+        return true;
+    }
+
+    @Override
+    @Transactional
+    public void resetPasswordByToken(ResetPasswordByTokenRequest request) {
+        if (request == null) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Yêu cầu đặt lại mật khẩu không hợp lệ");
+        }
+
+        String password = Optional.ofNullable(request.getPassword()).map(String::trim).orElse("");
+        String confirmPassword = Optional.ofNullable(request.getConfirmPassword()).map(String::trim).orElse("");
+        if (password.isEmpty() || confirmPassword.isEmpty()) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Mật khẩu không được để trống");
+        }
+        if (!password.equals(confirmPassword)) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Mật khẩu xác nhận không khớp");
+        }
+        if (password.length() < 6) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Mật khẩu mới phải có ít nhất 6 ký tự");
+        }
+
+        UserEntity user = passwordResetTokenService.consumeToken(request.getToken());
+        user.setPassword(passwordEncoder.encode(password));
+        userRepository.save(user);
+        refreshTokenService.revokeUserTokens(user);
+    }
+
+    private Optional<UserEntity> findUserByLogin(String login) {
+        if (isValidEmail(login)) {
+            return userRepository.findOneByEmail(login);
+        }
+        if (isValidPhone(login)) {
+            return userRepository.findOneByPhoneNumber(login);
+        }
+        return Optional.empty();
+    }
+
+    private String buildResetLink(String rawResetToken) {
+        String baseUrl = Optional.ofNullable(passwordResetBaseUrl).map(String::trim).orElse("");
+        if (baseUrl.isEmpty()) {
+            throw new IllegalStateException("Password reset base URL is not configured");
+        }
+        String delimiter = baseUrl.contains("?") ? "&" : "?";
+        return baseUrl + delimiter + "token=" + rawResetToken;
     }
 
     @Override

@@ -9,6 +9,7 @@ import com.ndh.ShopTechnology.dto.request.user.ChangeContactRequest;
 import com.ndh.ShopTechnology.dto.request.user.AdminModUserInfoRequest;
 import com.ndh.ShopTechnology.dto.request.user.ModUserInfoRequest;
 
+import com.ndh.ShopTechnology.dto.response.user.ChangePasswordResponse;
 import com.ndh.ShopTechnology.dto.response.user.LoginResponse;
 import com.ndh.ShopTechnology.dto.response.user.UserResponse;
 import com.ndh.ShopTechnology.entities.role.RoleEntity;
@@ -19,11 +20,11 @@ import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.RoleRepository;
 import com.ndh.ShopTechnology.repository.UserRepository;
-import com.ndh.ShopTechnology.services.auth.JwtService;
+import com.ndh.ShopTechnology.services.auth.TokenFacade;
 import com.ndh.ShopTechnology.services.permission.PermissionService;
-import com.ndh.ShopTechnology.services.storage.CloudinaryService;
-import com.ndh.ShopTechnology.services.token.RefreshTokenService;
+import com.ndh.ShopTechnology.services.user.RoleAssignmentService;
 import com.ndh.ShopTechnology.services.user.UserService;
+import com.ndh.ShopTechnology.services.user.helper.UserValidationHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -55,9 +56,9 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final RoleRepository roleRepository;
     private final PermissionService permissionService;
-    private final JwtService jwtService;
-    private final RefreshTokenService refreshTokenService;
-    private final CloudinaryService cloudinaryService;
+    private final UserValidationHelper userValidationHelper;
+    private final RoleAssignmentService roleAssignmentService;
+    private final TokenFacade tokenFacade;
 
     private static final String EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
     private static final String PHONE_REGEX = "\\d{10,15}";
@@ -80,9 +81,8 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Load user trực tiếp từ DB — dùng cho các luồng write để tránh detached entity
-     * khi save.
-     * KHÔNG dùng cache ở đây vì object cần được JPA quản lý trong session hiện tại.
+     * Load user directly from database for write flows to avoid detached entities.
+     * Cache is intentionally skipped because JPA must track this entity in current session.
      */
     @Transactional(readOnly = true)
     protected UserEntity loadUserForWrite(Long id) {
@@ -95,7 +95,7 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Load user từ cache — chỉ dùng cho các luồng read-only.
+     * Load user from cache for read-only flows.
      */
     @Cacheable(value = "users", key = "#id")
     @Transactional(readOnly = true)
@@ -109,13 +109,11 @@ public class UserServiceImpl implements UserService {
     }
 
     protected UserResponse toResponse(UserEntity user) {
-        if (user == null)
-            return null;
         return UserResponse.fromEntity(user);
     }
 
     /**
-     * Cập nhật các trường UserInfo — dùng chung cho cả user lẫn admin.
+     * Update profile fields shared by both normal users and admins.
      */
     protected void applyProfileFields(UserEntity user, AdminModUserInfoRequest req) {
         if (req == null || user == null)
@@ -147,7 +145,7 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Cập nhật các trường nhạy cảm — chỉ dành cho admin.
+     * Update sensitive fields for admin-only flows.
      */
     protected void applyAdminFields(UserEntity user, AdminModUserInfoRequest req) {
         if (req == null || user == null)
@@ -178,13 +176,9 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Method trung tâm xử lý cập nhật thông tin user.
-     *
-     * Quy tắc:
-     * - Admin: cập nhật bất kỳ user nào, toàn bộ trường (profile + admin fields).
-     * - User thường: chỉ cập nhật chính mình, chỉ các trường profile.
-     *
-     * FIX: dùng loadUserForWrite (không cache) để tránh detached entity khi save.
+     * Core method for user update.
+     * Admin can update any user and all fields.
+     * Non-admin can only update profile fields of their own account.
      */
     @Transactional
     protected UserResponse doUpdateUser(AdminModUserInfoRequest req, UserEntity actor) {
@@ -198,16 +192,16 @@ public class UserServiceImpl implements UserService {
         final UserEntity target;
 
         if (isAdmin(actor)) {
-            // FIX: load trực tiếp từ DB, không qua cache, để JPA track entity trong session
+            // Load directly from DB so JPA tracks entity in current session.
             target = loadUserForWrite(req.getId());
             applyProfileFields(target, req);
             applyAdminFields(target, req);
         } else {
-            // User thường chỉ được sửa chính mình
+            // Non-admin can update only their own profile.
             if (!req.getId().equals(actor.getId())) {
                 throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
             }
-            // actor đã được load trong session hiện tại — dùng luôn, không cần load lại
+            // Actor is already managed in current session.
             target = actor;
             applyProfileFields(target, req);
         }
@@ -221,7 +215,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> getAllUsers(PaginationRequest request) {
-        // FIX: thêm permission check — trước đây ai cũng gọi được
+        // Permission check must run before paging query.
         UserEntity currentUser = getCurrentUserEntity();
         if (!currentUser.hasAnyPermission("user:read", "admin:all")) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
@@ -270,10 +264,7 @@ public class UserServiceImpl implements UserService {
 
         UserEntity actor = getCurrentUserEntity();
 
-        // FIX: lấy targetUsername TRƯỚC khi doUpdateUser để không gọi loadUser sau
-        // CacheEvict.
-        // Gọi loadUser sau CacheEvict sẽ tạo lại cache ngay với data chưa được flush —
-        // sai.
+        // Read target username before update to avoid repopulating evicted cache.
         boolean isTargetDifferentFromActor = isAdmin(actor) && !req.getId().equals(actor.getId());
         String targetUsername = null;
         if (isTargetDifferentFromActor) {
@@ -284,10 +275,10 @@ public class UserServiceImpl implements UserService {
 
         UserResponse response = doUpdateUser(req, actor);
 
-        // Clear cache cho actor
+        // Clear permission cache for actor.
         permissionService.clearUserPermissionsCache(actor.getUsername());
 
-        // Clear cache cho target nếu khác actor
+        // Clear permission cache for target user when different from actor.
         if (isTargetDifferentFromActor && targetUsername != null) {
             permissionService.clearUserPermissionsCache(targetUsername);
         }
@@ -301,8 +292,7 @@ public class UserServiceImpl implements UserService {
     public UserResponse updateProfileInfo(ModUserInfoRequest req) {
         UserEntity currentUser = getCurrentUserEntity();
 
-        // Wrap sang AdminModUserInfoRequest để đi qua doUpdateUser
-        // doUpdateUser sẽ kiểm tra không phải admin → chỉ apply profile fields
+        // Reuse central update flow by converting to admin request shape.
         AdminModUserInfoRequest adminReq = AdminModUserInfoRequest.builder()
                 .id(currentUser.getId())
                 .fullName(req != null ? req.getFullName() : null)
@@ -324,13 +314,20 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional
-    public void changePassword(ChangePasswordRequest request) {
+    public ChangePasswordResponse changePassword(ChangePasswordRequest request) {
         if (request == null) {
-            throw new IllegalArgumentException("ChangePasswordRequest cannot be null");
+            return ChangePasswordResponse.of(false, HttpStatus.BAD_REQUEST, "Yêu cầu đổi mật khẩu không hợp lệ");
         }
 
-        UserEntity currentUser = getCurrentUserEntity();
+        UserEntity currentUser;
+        try {
+            currentUser = getCurrentUserEntity();
+        } catch (AuthenticationFailedException ex) {
+            return ChangePasswordResponse.of(false, HttpStatus.UNAUTHORIZED, MessageConstant.AUTH_FAILED);
+        } catch (Exception ex) {
+            log.error("Cannot resolve current user for password change", ex);
+            return ChangePasswordResponse.of(false, HttpStatus.INTERNAL_SERVER_ERROR, "Không thể xác định người dùng hiện tại");
+        }
 
         String currentPassword = request.getCurrentPassword();
         String newPassword = request.getNewPassword();
@@ -338,30 +335,40 @@ public class UserServiceImpl implements UserService {
 
         if (!StringUtils.hasText(currentPassword) || !StringUtils.hasText(newPassword)
                 || !StringUtils.hasText(confirmPassword)) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Thông tin mật khẩu không hợp lệ");
+            return ChangePasswordResponse.of(false, HttpStatus.BAD_REQUEST, "Thông tin mật khẩu không hợp lệ");
         }
 
         if (!passwordEncoder.matches(currentPassword, currentUser.getPassword())) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Mật khẩu hiện tại không đúng");
+            return ChangePasswordResponse.of(false, HttpStatus.BAD_REQUEST, "Mật khẩu hiện tại không đúng");
         }
 
         if (!newPassword.equals(confirmPassword)) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Mật khẩu xác nhận không khớp");
+            return ChangePasswordResponse.of(false, HttpStatus.BAD_REQUEST, "Mật khẩu xác nhận không khớp");
         }
 
-        // FIX: trim trước rồi mới check length
-        // Tránh " ab " (6 ký tự với khoảng trắng) pass check nhưng sau trim chỉ còn
-        // "ab"
-        String trimmedNewPassword = newPassword.trim();
-        if (trimmedNewPassword.length() < 6) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Mật khẩu mới phải có ít nhất 6 ký tự");
+        if (!newPassword.equals(newPassword.trim()) || !confirmPassword.equals(confirmPassword.trim())) {
+            return ChangePasswordResponse.of(false, HttpStatus.BAD_REQUEST, "Mật khẩu mới không được có khoảng trắng ở đầu hoặc cuối");
         }
 
-        currentUser.setPassword(passwordEncoder.encode(trimmedNewPassword));
-        userRepository.save(currentUser);
+        if (newPassword.length() < 6) {
+            return ChangePasswordResponse.of(false, HttpStatus.BAD_REQUEST, "Mật khẩu mới phải có ít nhất 6 ký tự");
+        }
 
-        permissionService.clearUserPermissionsCache(currentUser.getUsername());
-        log.info("Password changed: username={}", currentUser.getUsername());
+        if (passwordEncoder.matches(newPassword, currentUser.getPassword())) {
+            return ChangePasswordResponse.of(false, HttpStatus.BAD_REQUEST, "Mật khẩu mới không được trùng với mật khẩu hiện tại");
+        }
+
+        try {
+            currentUser.setPassword(passwordEncoder.encode(newPassword));
+            userRepository.save(currentUser);
+
+            permissionService.clearUserPermissionsCache(currentUser.getUsername());
+            log.info("Password changed: username={}", currentUser.getUsername());
+            return ChangePasswordResponse.of(true, HttpStatus.OK, "Đổi mật khẩu thành công");
+        } catch (Exception ex) {
+            log.error("Change password failed: username={}", currentUser.getUsername(), ex);
+            return ChangePasswordResponse.of(false, HttpStatus.INTERNAL_SERVER_ERROR, "Đổi mật khẩu thất bại");
+        }
     }
 
     @Override
@@ -419,67 +426,11 @@ public class UserServiceImpl implements UserService {
 
         UserEntity saved = userRepository.save(currentUser);
 
-        // Issue token mới cho FE (single-session behavior: createInitialRefreshToken sẽ revoke token cũ)
-        var newRefresh = refreshTokenService.createInitialRefreshToken(saved.getUsername(), null);
-        String newAccessToken = jwtService.generateAccessToken(saved.getUsername());
-
-        // Clear cache quyền theo username hiện tại
+        // Clear permission cache before returning refreshed login tokens.
         permissionService.clearUserPermissionsCache(saved.getUsername());
 
         log.info("Contact changed: userId={}, username={}", saved.getId(), saved.getUsername());
-
-        return LoginResponse.builder()
-                .userInfo(toResponse(saved))
-                .accessToken(newAccessToken)
-                .refreshToken(newRefresh.getToken())
-                .tokenType("Bearer")
-                .expiresIn(jwtService.getAccessTokenExpirationSeconds())
-                .build();
-    }
-
-    @Override
-    @Transactional
-    public UserResponse uploadAvatar(org.springframework.web.multipart.MultipartFile file) {
-        UserEntity currentUser = getCurrentUserEntity();
-        UserInfoEntity info = currentUser.getOrCreateUserInfo();
-
-        String oldPublicId = info.getAvatarPublicId();
-        CloudinaryService.UploadResult uploaded = cloudinaryService.uploadAvatar(file);
-
-        if (oldPublicId != null && !oldPublicId.isBlank()) {
-            cloudinaryService.deleteByPublicId(oldPublicId);
-        }
-
-        info.setAvatar(uploaded.url());
-        info.setAvatarPublicId(uploaded.publicId());
-        currentUser.setUserInfo(info);
-
-        UserEntity saved = userRepository.save(currentUser);
-        permissionService.clearUserPermissionsCache(saved.getUsername());
-        return toResponse(saved);
-    }
-
-    @Override
-    @Transactional
-    public UserResponse deleteAvatar() {
-        UserEntity currentUser = getCurrentUserEntity();
-        UserInfoEntity info = currentUser.getUserInfo();
-        if (info == null) {
-            return toResponse(currentUser);
-        }
-
-        String oldPublicId = info.getAvatarPublicId();
-        if (oldPublicId != null && !oldPublicId.isBlank()) {
-            cloudinaryService.deleteByPublicId(oldPublicId);
-        }
-
-        info.setAvatar(null);
-        info.setAvatarPublicId(null);
-        currentUser.setUserInfo(info);
-
-        UserEntity saved = userRepository.save(currentUser);
-        permissionService.clearUserPermissionsCache(saved.getUsername());
-        return toResponse(saved);
+        return tokenFacade.issueLoginResponse(saved);
     }
 
     @Override
@@ -494,9 +445,9 @@ public class UserServiceImpl implements UserService {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
 
-        String username = validateAndNormalizeUsername(request.getUsername());
-        String phone = validateAndNormalizePhone(request.getPhoneNumber());
-        String password = validatePassword(request.getPassword());
+        String username = userValidationHelper.validateAndNormalizeUsername(request.getUsername());
+        String phone = userValidationHelper.validateAndNormalizePhone(request.getPhoneNumber());
+        String password = userValidationHelper.validatePassword(request.getPassword());
 
         if (userRepository.existsByUsername(username)) {
             throw new CustomApiException(HttpStatus.CONFLICT, "Username already exists: " + username);
@@ -527,7 +478,7 @@ public class UserServiceImpl implements UserService {
 
         user.setUserInfo(userInfo);
 
-        Set<RoleEntity> roles = assignRoles(request.getRoleIds());
+        Set<RoleEntity> roles = roleAssignmentService.assignRoles(request.getRoleIds());
         user.setRoles(roles);
 
         user = userRepository.save(user);
@@ -536,51 +487,5 @@ public class UserServiceImpl implements UserService {
                 user.getId(), user.getUsername(), roles.stream().map(RoleEntity::getCode).toList());
 
         return toResponse(user);
-    }
-
-    protected String validateAndNormalizeUsername(String username) {
-        if (username == null || username.trim().isEmpty()) {
-            throw new IllegalArgumentException("Username cannot be empty");
-        }
-        return username.toLowerCase().trim();
-    }
-
-    protected String validateAndNormalizePhone(String phone) {
-        if (phone == null || phone.trim().isEmpty()) {
-            throw new IllegalArgumentException("Phone number cannot be empty");
-        }
-        return phone.trim();
-    }
-
-    protected String validatePassword(String password) {
-        if (password == null || password.trim().isEmpty()) {
-            throw new IllegalArgumentException("Password cannot be empty");
-        }
-        // FIX: trim trước, check length sau — tránh đếm nhầm khoảng trắng vào độ dài
-        String trimmed = password.trim();
-        if (trimmed.length() < 6) {
-            throw new IllegalArgumentException("Password must be at least 6 characters");
-        }
-        return trimmed;
-    }
-
-    protected Set<RoleEntity> assignRoles(Set<Long> roleIds) {
-        Set<RoleEntity> roles = new HashSet<>();
-
-        if (roleIds != null && !roleIds.isEmpty()) {
-            // FIX: batch query thay vì loop từng ID một
-            List<RoleEntity> roleList = roleRepository.findAllById(roleIds);
-            roles.addAll(roleList);
-        }
-
-        if (roles.isEmpty()) {
-            roleRepository.findByCode("ROLE_USER").ifPresent(roles::add);
-        }
-
-        if (roles.isEmpty()) {
-            throw new NotFoundEntityException("No valid roles found. Please check role configuration.");
-        }
-
-        return roles;
     }
 }

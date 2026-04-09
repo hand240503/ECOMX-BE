@@ -10,5 +10,11 @@ public interface OTPService {
 
     boolean verifyOTPForRegister(String login, String otp);
 
+    void sendForgotPasswordOTP(String login, String destinationEmail);
+
+    boolean verifyOTPForForgotPassword(String login, String otp);
+
     void clearOTP(String login);
+
+    void clearForgotPasswordOTP(String login);
 }

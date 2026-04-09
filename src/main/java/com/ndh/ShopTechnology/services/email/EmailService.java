@@ -22,55 +22,80 @@ public class EmailService {
     /**
      * Gửi email OTP với HTML template (Async)
      */
-    @Async
+    @Async("mailTaskExecutor")
     public CompletableFuture<Void> sendOTPEmail(String toEmail, String otpCode) {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                MimeMessage message = mailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-                helper.setTo(Objects.requireNonNull(toEmail));
-                helper.setSubject("Mã xác thực đăng ký tài khoản ECOMX");
+            helper.setTo(Objects.requireNonNull(toEmail));
+            helper.setSubject("Mã xác thực đăng ký tài khoản ECOMX");
 
-                String htmlContent = buildOTPEmailContent(otpCode);
-                helper.setText(Objects.requireNonNull(htmlContent), true);
+            String htmlContent = buildOTPEmailContent(otpCode);
+            helper.setText(Objects.requireNonNull(htmlContent), true);
 
-                mailSender.send(message);
-                log.info("OTP email sent successfully to: {}", toEmail);
-
-            } catch (Exception e) {
-                log.error("Failed to send OTP email to: {}", toEmail, e);
-                throw new RuntimeException("Không thể gửi email. Vui lòng thử lại sau.");
-            }
-        });
+            mailSender.send(message);
+            log.info("OTP email sent successfully to: {}", toEmail);
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            log.error("Failed to send OTP email to: {}", toEmail, e);
+            return CompletableFuture.failedFuture(new RuntimeException("Không thể gửi email. Vui lòng thử lại sau.", e));
+        }
     }
 
     /**
      * Gửi email đơn giản (không dùng HTML) - Async
      */
-    @Async
+    @Async("mailTaskExecutor")
     public CompletableFuture<Void> sendSimpleOTPEmail(String toEmail, String otpCode) {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                SimpleMailMessage message = new SimpleMailMessage();
-                message.setTo(toEmail);
-                message.setSubject("Mã xác thực đăng ký tài khoản ECOMX");
-                message.setText(
-                        "Mã xác thực của bạn là: " + otpCode + "\n\n" +
-                                "Mã này có hiệu lực trong 5 phút.\n" +
-                                "Vui lòng không chia sẻ mã này với bất kỳ ai.\n\n" +
-                                "Trân trọng,\n" +
-                                "Đội ngũ ECOMX"
-                );
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(toEmail);
+            message.setSubject("Mã xác thực đăng ký tài khoản ECOMX");
+            message.setText(
+                    "Mã xác thực của bạn là: " + otpCode + "\n\n" +
+                            "Mã này có hiệu lực trong 5 phút.\n" +
+                            "Vui lòng không chia sẻ mã này với bất kỳ ai.\n\n" +
+                            "Trân trọng,\n" +
+                            "Đội ngũ ECOMX"
+            );
 
-                mailSender.send(message);
-                log.info("Simple OTP email sent successfully to: {}", toEmail);
+            mailSender.send(message);
+            log.info("Simple OTP email sent successfully to: {}", toEmail);
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            log.error("Failed to send simple OTP email to: {}", toEmail, e);
+            return CompletableFuture.failedFuture(new RuntimeException("Không thể gửi email. Vui lòng thử lại sau.", e));
+        }
+    }
 
-            } catch (Exception e) {
-                log.error("Failed to send simple OTP email to: {}", toEmail, e);
-                throw new RuntimeException("Không thể gửi email. Vui lòng thử lại sau.");
-            }
-        });
+    @Async("mailTaskExecutor")
+    public CompletableFuture<Void> sendPasswordResetLinkEmail(String toEmail, String resetLink) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setTo(Objects.requireNonNull(toEmail));
+            helper.setSubject("Liên kết đặt lại mật khẩu ECOMX");
+
+            String htmlContent = "<!DOCTYPE html>" +
+                    "<html><body style='font-family:Arial,sans-serif;color:#333;'>" +
+                    "<h2>Đặt lại mật khẩu</h2>" +
+                    "<p>Bạn vừa yêu cầu đặt lại mật khẩu cho tài khoản ECOMX.</p>" +
+                    "<p>Nhấn vào liên kết bên dưới để tạo mật khẩu mới:</p>" +
+                    "<p><a href='" + resetLink + "'>" + resetLink + "</a></p>" +
+                    "<p>Liên kết có hiệu lực trong 15 phút và chỉ dùng được 1 lần.</p>" +
+                    "<p>Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>" +
+                    "</body></html>";
+
+            helper.setText(htmlContent, true);
+            mailSender.send(message);
+            log.info("Password reset link email sent successfully to: {}", toEmail);
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            log.error("Failed to send password reset link email to: {}", toEmail, e);
+            return CompletableFuture.failedFuture(new RuntimeException("Không thể gửi email đặt lại mật khẩu. Vui lòng thử lại sau.", e));
+        }
     }
 
     private String buildOTPEmailContent(String otpCode) {

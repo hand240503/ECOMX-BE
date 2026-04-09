@@ -74,7 +74,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         userDetails.getAuthorities()
                 );
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                logger.info(String.format(MessageConstant.AUTH_SUCCESS_PREFIX, username));
+                String method = request.getMethod();
+                String uri = request.getRequestURI();
+                String query = request.getQueryString();
+                String fullPath = query != null && !query.isBlank() ? uri + "?" + query : uri;
+                logger.info(String.format("%s | method=%s | uri=%s",
+                        String.format(MessageConstant.AUTH_SUCCESS_PREFIX, username),
+                        method,
+                        fullPath));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         }

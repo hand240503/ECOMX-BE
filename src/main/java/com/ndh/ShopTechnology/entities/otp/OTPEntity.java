@@ -6,7 +6,12 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "otp_verification")
+@Table(
+        name = "otp_verification",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_otp_login_purpose", columnNames = {"login", "purpose"})
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,8 +23,12 @@ public class OTPEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String login;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private OTPPurpose purpose;
 
     @Column(nullable = false)
     private String otpCode;

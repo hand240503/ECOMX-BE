@@ -2,6 +2,7 @@ package com.ndh.ShopTechnology.services.otp.impl;
 
 import com.ndh.ShopTechnology.dto.request.auth.SendOTPRequest;
 import com.ndh.ShopTechnology.entities.otp.OTPEntity;
+import com.ndh.ShopTechnology.entities.otp.OTPPurpose;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.repository.OTPRepository;
 import com.ndh.ShopTechnology.repository.UserRepository;
@@ -39,10 +40,10 @@ public class OTPServiceImpl implements OTPService {
     public void sendOTP(SendOTPRequest request) {
         String login = validateAndNormalizeLogin(request.getLogin());
         checkUserNotExists(login);
-        checkResendCooldown(login);
+        checkResendCooldown(login, OTPPurpose.REGISTER);
 
         String otpCode = generateOTPCode();
-        saveOrUpdateOTP(login, otpCode);
+        saveOrUpdateOTP(login, otpCode, OTPPurpose.REGISTER);
 
         if (isValidEmail(login)) {
             sendOTPToEmail(login, otpCode);
@@ -55,90 +56,46 @@ public class OTPServiceImpl implements OTPService {
     @Transactional
     @Override
     public boolean verifyOTP(String login, String otp) {
-        String normalizedLogin = validateAndNormalizeLogin(login);
-        String normalizedOtp = validateOTPFormat(otp);
-
-        Optional<OTPEntity> otpEntityOpt = otpRepository.findByLogin(normalizedLogin);
-
-        if (otpEntityOpt.isEmpty()) {
-            log.warn("OTP not found for login: {}", maskLogin(normalizedLogin));
-            return false;
-        }
-
-        OTPEntity otpEntity = otpEntityOpt.get();
-
-        if (LocalDateTime.now().isAfter(otpEntity.getExpiredAt())) {
-            log.warn("OTP expired for login: {}", maskLogin(normalizedLogin));
-            return false;
-        }
-
-        if (otpEntity.getAttemptCount() >= MAX_ATTEMPTS) {
-            log.warn("Maximum OTP attempts exceeded for login: {}", maskLogin(normalizedLogin));
-            throw new CustomApiException(
-                    HttpStatus.TOO_MANY_REQUESTS,
-                    "Bạn đã nhập sai quá nhiều lần. Vui lòng yêu cầu mã mới.");
-        }
-
-        if (!otpEntity.getOtpCode().equals(normalizedOtp)) {
-            incrementAttemptCount(otpEntity);
-            log.warn("Invalid OTP attempt for login: {}", maskLogin(normalizedLogin));
-            return false;
-        }
-
-        markAsVerified(otpEntity);
-        log.info("OTP verified successfully for login: {}", maskLogin(normalizedLogin));
-
-        return true;
+        return verifyOTPByPurpose(login, otp, OTPPurpose.REGISTER, false);
     }
 
     @Transactional
     @Override
     public boolean verifyOTPForRegister(String login, String otp) {
+        return verifyOTPByPurpose(login, otp, OTPPurpose.REGISTER, true);
+    }
+
+    @Transactional
+    @Override
+    public void sendForgotPasswordOTP(String login, String destinationEmail) {
         String normalizedLogin = validateAndNormalizeLogin(login);
-        String normalizedOtp = validateOTPFormat(otp);
-
-        Optional<OTPEntity> otpEntityOpt = otpRepository.findByLoginForUpdate(normalizedLogin);
-
-        if (otpEntityOpt.isEmpty()) {
-            log.warn("OTP not found for login: {}", maskLogin(normalizedLogin));
-            return false;
+        if (!isValidEmail(destinationEmail)) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Email nhận OTP không hợp lệ");
         }
+        checkResendCooldown(normalizedLogin, OTPPurpose.FORGOT_PASSWORD);
+        String otpCode = generateOTPCode();
+        saveOrUpdateOTP(normalizedLogin, otpCode, OTPPurpose.FORGOT_PASSWORD);
+        sendOTPToEmail(destinationEmail.toLowerCase(), otpCode);
+    }
 
-        OTPEntity otpEntity = otpEntityOpt.get();
-
-        if (otpEntity.isUsed()) {
-            log.warn("OTP already used for registration: {}", maskLogin(normalizedLogin));
-            throw new CustomApiException(
-                    HttpStatus.BAD_REQUEST,
-                    "Mã xác thực này đã được sử dụng");
-        }
-
-        // Check expired
-        if (LocalDateTime.now().isAfter(otpEntity.getExpiredAt())) {
-            log.warn("OTP expired for login: {}", maskLogin(normalizedLogin));
-            return false;
-        }
-
-        // Check OTP code
-        if (!otpEntity.getOtpCode().equals(normalizedOtp)) {
-            log.warn("Invalid OTP for registration: {}", maskLogin(normalizedLogin));
-            return false;
-        }
-
-        otpEntity.setUsed(true);
-        otpEntity.setVerified(true);
-        otpRepository.saveAndFlush(otpEntity); // Flush ngay để commit
-
-        log.info("OTP verified and marked as used for registration: {}", maskLogin(normalizedLogin));
-
-        return true;
+    @Transactional
+    @Override
+    public boolean verifyOTPForForgotPassword(String login, String otp) {
+        return verifyOTPByPurpose(login, otp, OTPPurpose.FORGOT_PASSWORD, true);
     }
 
     @Override
     public void clearOTP(String login) {
         String normalizedLogin = validateAndNormalizeLogin(login);
-        otpRepository.deleteByLogin(normalizedLogin);
+        otpRepository.deleteByLoginAndPurpose(normalizedLogin, OTPPurpose.REGISTER);
         log.info("OTP cleared for login: {}", maskLogin(normalizedLogin));
+    }
+
+    @Override
+    public void clearForgotPasswordOTP(String login) {
+        String normalizedLogin = validateAndNormalizeLogin(login);
+        otpRepository.deleteByLoginAndPurpose(normalizedLogin, OTPPurpose.FORGOT_PASSWORD);
+        log.info("Forgot-password OTP cleared for login: {}", maskLogin(normalizedLogin));
     }
 
     // ==================== HELPER METHODS ====================
@@ -181,7 +138,7 @@ public class OTPServiceImpl implements OTPService {
 
     private void checkUserNotExists(String login) {
         boolean exists = isValidEmail(login)
-                ? userRepository.existsByUsername(login)
+                ? userRepository.existsByEmail(login)
                 : userRepository.existsByPhoneNumber(login);
 
         if (exists) {
@@ -193,8 +150,8 @@ public class OTPServiceImpl implements OTPService {
         }
     }
 
-    private void checkResendCooldown(String login) {
-        Optional<OTPEntity> existingOtp = otpRepository.findByLogin(login);
+    private void checkResendCooldown(String login, OTPPurpose purpose) {
+        Optional<OTPEntity> existingOtp = otpRepository.findByLoginAndPurpose(login, purpose);
 
         if (existingOtp.isPresent()) {
             LocalDateTime lastSent = existingOtp.get().getCreatedAt();
@@ -220,13 +177,14 @@ public class OTPServiceImpl implements OTPService {
         return otp.toString();
     }
 
-    private void saveOrUpdateOTP(String login, String otpCode) {
-        Optional<OTPEntity> existingOtp = otpRepository.findByLogin(login);
+    private void saveOrUpdateOTP(String login, String otpCode, OTPPurpose purpose) {
+        Optional<OTPEntity> existingOtp = otpRepository.findByLoginAndPurpose(login, purpose);
 
         OTPEntity otpEntity;
         if (existingOtp.isPresent()) {
             otpEntity = existingOtp.get();
             otpEntity.setOtpCode(otpCode);
+            otpEntity.setPurpose(purpose);
             otpEntity.setCreatedAt(LocalDateTime.now());
             otpEntity.setExpiredAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
             otpEntity.setVerified(false);
@@ -235,6 +193,7 @@ public class OTPServiceImpl implements OTPService {
         } else {
             otpEntity = OTPEntity.builder()
                     .login(login)
+                    .purpose(purpose)
                     .otpCode(otpCode)
                     .createdAt(LocalDateTime.now())
                     .expiredAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES))
@@ -245,6 +204,46 @@ public class OTPServiceImpl implements OTPService {
         }
 
         otpRepository.save(Objects.requireNonNull(otpEntity));
+    }
+
+    private boolean verifyOTPByPurpose(String login, String otp, OTPPurpose purpose, boolean markUsedWhenSuccess) {
+        String normalizedLogin = validateAndNormalizeLogin(login);
+        String normalizedOtp = validateOTPFormat(otp);
+
+        Optional<OTPEntity> otpEntityOpt = otpRepository.findByLoginAndPurposeForUpdate(normalizedLogin, purpose);
+        if (otpEntityOpt.isEmpty()) {
+            log.warn("OTP not found for login: {}, purpose={}", maskLogin(normalizedLogin), purpose);
+            return false;
+        }
+
+        OTPEntity otpEntity = otpEntityOpt.get();
+        if (otpEntity.isUsed()) {
+            log.warn("OTP already used: login={}, purpose={}", maskLogin(normalizedLogin), purpose);
+            return false;
+        }
+        if (LocalDateTime.now().isAfter(otpEntity.getExpiredAt())) {
+            log.warn("OTP expired for login: {}, purpose={}", maskLogin(normalizedLogin), purpose);
+            return false;
+        }
+        if (otpEntity.getAttemptCount() >= MAX_ATTEMPTS) {
+            log.warn("Maximum OTP attempts exceeded for login: {}, purpose={}", maskLogin(normalizedLogin), purpose);
+            throw new CustomApiException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "Bạn đã nhập sai quá nhiều lần. Vui lòng yêu cầu mã mới.");
+        }
+        if (!otpEntity.getOtpCode().equals(normalizedOtp)) {
+            incrementAttemptCount(otpEntity);
+            log.warn("Invalid OTP attempt for login: {}, purpose={}", maskLogin(normalizedLogin), purpose);
+            return false;
+        }
+
+        otpEntity.setVerified(true);
+        if (markUsedWhenSuccess) {
+            otpEntity.setUsed(true);
+        }
+        otpRepository.saveAndFlush(otpEntity);
+        log.info("OTP verified successfully for login: {}, purpose={}", maskLogin(normalizedLogin), purpose);
+        return true;
     }
 
     private void sendOTPToEmail(String email, String otpCode) {
@@ -260,11 +259,6 @@ public class OTPServiceImpl implements OTPService {
 
     private void incrementAttemptCount(OTPEntity otpEntity) {
         otpEntity.setAttemptCount(otpEntity.getAttemptCount() + 1);
-        otpRepository.save(otpEntity);
-    }
-
-    private void markAsVerified(OTPEntity otpEntity) {
-        otpEntity.setVerified(true);
         otpRepository.save(otpEntity);
     }
 

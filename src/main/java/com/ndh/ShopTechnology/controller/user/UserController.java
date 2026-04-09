@@ -6,8 +6,10 @@ import com.ndh.ShopTechnology.dto.request.user.ChangePasswordRequest;
 import com.ndh.ShopTechnology.dto.request.user.ModUserInfoRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
+import com.ndh.ShopTechnology.dto.response.user.ChangePasswordResponse;
 import com.ndh.ShopTechnology.dto.response.user.LoginResponse;
 import com.ndh.ShopTechnology.dto.response.user.UserResponse;
+import com.ndh.ShopTechnology.services.user.UserAvatarService;
 import com.ndh.ShopTechnology.services.user.UserService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,10 +25,12 @@ import java.util.List;
 public class UserController {
 
         private final UserService userService;
+        private final UserAvatarService userAvatarService;
 
         @Autowired
-        public UserController(UserService userService) {
+        public UserController(UserService userService, UserAvatarService userAvatarService) {
                 this.userService = userService;
+                this.userAvatarService = userAvatarService;
         }
 
         @GetMapping("/profile")
@@ -66,7 +70,7 @@ public class UserController {
                         @RequestPart(value = "file", required = false) MultipartFile file) {
 
                 if (file != null && !file.isEmpty()) {
-                        userService.uploadAvatar(file);
+                        userAvatarService.uploadAvatar(file);
                         if (request != null && request.getAvatar() != null) {
                                 request = ModUserInfoRequest.builder()
                                                 .fullName(request.getFullName())
@@ -111,17 +115,21 @@ public class UserController {
         }
 
         @PostMapping("/profile/password")
-        public ResponseEntity<APIResponse<Void>> changePassword(@RequestBody @Valid ChangePasswordRequest request) {
-                userService.changePassword(request);
+        public ResponseEntity<APIResponse<ChangePasswordResponse>> changePassword(
+                        @RequestBody @Valid ChangePasswordRequest request) {
+                ChangePasswordResponse result = userService.changePassword(request);
+                HttpStatus httpStatus = HttpStatus.resolve(result.getStatus());
+                if (httpStatus == null) {
+                        httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
+                }
 
-                APIResponse<Void> response = APIResponse.of(
-                                true,
-                                "Đổi mật khẩu thành công",
-                                null,
+                APIResponse<ChangePasswordResponse> response = APIResponse.of(
+                                result.isSuccess(),
+                                result.getMessage(),
+                                result,
                                 null,
                                 null);
-
-                return ResponseEntity.status(HttpStatus.OK).body(response);
+                return ResponseEntity.status(httpStatus).body(response);
         }
 
         @PostMapping("/profile/contact")

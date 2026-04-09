@@ -33,7 +33,7 @@ public class UserResponse {
 
         UserResponseBuilder builder = UserResponse.builder()
                 .id(entity.getId())
-//                .username(entity.getUsername())
+                .username(entity.getUsername())
                 .email(entity.getEmail())
                 .phoneNumber(entity.getPhoneNumber())
                 .status(entity.getStatus())
