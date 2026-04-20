@@ -1,8 +1,8 @@
 package com.ndh.ShopTechnology.filters;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ndh.ShopTechnology.constant.MessageConstant;
-import com.ndh.ShopTechnology.constant.SystemConstant;
+import com.ndh.ShopTechnology.constants.MessageConstant;
+import com.ndh.ShopTechnology.constants.SystemConstant;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.services.auth.JwtService;

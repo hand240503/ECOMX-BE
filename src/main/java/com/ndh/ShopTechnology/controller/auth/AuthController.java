@@ -1,6 +1,6 @@
 package com.ndh.ShopTechnology.controller.auth;
 
-import com.ndh.ShopTechnology.constant.MessageConstant;
+import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.dto.request.auth.ForgotPasswordRequest;
 import com.ndh.ShopTechnology.dto.request.auth.LoginRequest;
 import com.ndh.ShopTechnology.dto.request.auth.RefreshTokenRequest;

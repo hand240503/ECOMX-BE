@@ -1,6 +1,6 @@
 package com.ndh.ShopTechnology.controller.user;
 
-import com.ndh.ShopTechnology.constant.MessageConstant;
+import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.dto.request.user.ChangeContactRequest;
 import com.ndh.ShopTechnology.dto.request.user.ChangePasswordRequest;
 import com.ndh.ShopTechnology.dto.request.user.ModUserInfoRequest;

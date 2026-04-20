@@ -1,6 +1,6 @@
 package com.ndh.ShopTechnology.controller.category;
 
-import com.ndh.ShopTechnology.constant.MessageConstant;
+import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.dto.request.category.CreateCategoryRequest;
 import com.ndh.ShopTechnology.dto.request.category.UpdateCategoryRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;

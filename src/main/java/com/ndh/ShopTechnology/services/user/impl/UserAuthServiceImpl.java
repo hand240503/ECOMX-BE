@@ -1,7 +1,7 @@
 package com.ndh.ShopTechnology.services.user.impl;
 
-import com.ndh.ShopTechnology.constant.MessageConstant;
-import com.ndh.ShopTechnology.constant.SystemConstant;
+import com.ndh.ShopTechnology.constants.MessageConstant;
+import com.ndh.ShopTechnology.constants.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.auth.ForgotPasswordRequest;
 import com.ndh.ShopTechnology.dto.request.auth.LoginRequest;
 import com.ndh.ShopTechnology.dto.request.auth.ResetPasswordByTokenRequest;

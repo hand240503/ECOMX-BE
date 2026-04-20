@@ -1,6 +1,6 @@
 package com.ndh.ShopTechnology.config;
 
-import com.ndh.ShopTechnology.constant.SystemConstant;
+import com.ndh.ShopTechnology.constants.SystemConstant;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtParser;

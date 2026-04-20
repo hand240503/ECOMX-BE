@@ -2,28 +2,28 @@ package com.ndh.ShopTechnology.services.product;
 
 import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
 import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
-import com.ndh.ShopTechnology.dto.response.product.ProductResponse;
+import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 
 import org.springframework.data.domain.Page;
 
 import java.util.List;
 
 public interface ProductService {
-    ProductResponse createProduct(CreateProductRequest request);
+    ProductFullResponse createProduct(CreateProductRequest request);
 
-    List<ProductResponse> getAllProducts();
+    List<ProductFullResponse> getAllProducts();
 
-    Page<ProductResponse> getProducts(int page, int limit);
+    Page<ProductFullResponse> getProducts(int page, int limit);
 
-    List<ProductResponse> getFeaturedProducts(int limit);
+    List<ProductFullResponse> getFeaturedProducts(int limit);
 
-    List<ProductResponse> getBestSellingProducts(int limit);
+    List<ProductFullResponse> getBestSellingProducts(int limit);
 
-    ProductResponse getProductById(Long id);
+    ProductFullResponse getProductById(Long id);
 
-    List<ProductResponse> getProductsByCategoryId(Long categoryId);
+    List<ProductFullResponse> getProductsByCategoryId(Long categoryId);
 
-    ProductResponse updateProduct(Long id, UpdateProductRequest request);
+    ProductFullResponse updateProduct(Long id, UpdateProductRequest request);
 
     void deleteProduct(Long id);
 }

@@ -1,6 +1,6 @@
 package com.ndh.ShopTechnology.services.user;
 
-import com.ndh.ShopTechnology.constant.MessageConstant;
+import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.dto.response.user.UserResponse;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 import com.ndh.ShopTechnology.entities.user.UserInfoEntity;

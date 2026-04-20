@@ -17,7 +17,7 @@ public class UserRatingResponse {
     private String username;
     private Long productId;
     private String productName;
-    private Integer rating;
+    private Double rating;
     private String comment;
     private Date createdDate;
     private Date modifiedDate;

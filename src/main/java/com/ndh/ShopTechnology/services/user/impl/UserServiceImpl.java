@@ -1,7 +1,7 @@
 package com.ndh.ShopTechnology.services.user.impl;
 
-import com.ndh.ShopTechnology.constant.MessageConstant;
-import com.ndh.ShopTechnology.constant.SystemConstant;
+import com.ndh.ShopTechnology.constants.MessageConstant;
+import com.ndh.ShopTechnology.constants.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.PaginationRequest;
 import com.ndh.ShopTechnology.dto.request.user.CreateUserRequest;
 import com.ndh.ShopTechnology.dto.request.user.ChangePasswordRequest;

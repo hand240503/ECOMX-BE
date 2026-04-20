@@ -1,6 +1,6 @@
 package com.ndh.ShopTechnology.services.job.impl;
 
-import com.ndh.ShopTechnology.constant.SystemConstant;
+import com.ndh.ShopTechnology.constants.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.job.CreateJobReportRequest;
 import com.ndh.ShopTechnology.dto.request.job.GetJobReportRequest;
 import com.ndh.ShopTechnology.dto.request.job.ModJobReportRequest;

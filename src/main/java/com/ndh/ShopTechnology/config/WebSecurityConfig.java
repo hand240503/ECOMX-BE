@@ -1,6 +1,6 @@
 package com.ndh.ShopTechnology.config;
 
-import com.ndh.ShopTechnology.constant.RoleConstant;
+import com.ndh.ShopTechnology.constants.RoleConstant;
 import com.ndh.ShopTechnology.filters.JwtAuthenticationFilter;
 import com.ndh.ShopTechnology.services.user.CustomUserDetailsService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,6 +94,8 @@ public class WebSecurityConfig {
                             .permitAll()
 
 
+                            .requestMatchers(String.format("/%s/recommendations/**", apiPrefix))
+                            .permitAll()
 
                             .anyRequest()
                             .authenticated();

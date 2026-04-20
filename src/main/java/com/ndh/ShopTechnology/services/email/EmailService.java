@@ -43,31 +43,6 @@ public class EmailService {
         }
     }
 
-    /**
-     * Gửi email đơn giản (không dùng HTML) - Async
-     */
-    @Async("mailTaskExecutor")
-    public CompletableFuture<Void> sendSimpleOTPEmail(String toEmail, String otpCode) {
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setTo(toEmail);
-            message.setSubject("Mã xác thực đăng ký tài khoản ECOMX");
-            message.setText(
-                    "Mã xác thực của bạn là: " + otpCode + "\n\n" +
-                            "Mã này có hiệu lực trong 5 phút.\n" +
-                            "Vui lòng không chia sẻ mã này với bất kỳ ai.\n\n" +
-                            "Trân trọng,\n" +
-                            "Đội ngũ ECOMX"
-            );
-
-            mailSender.send(message);
-            log.info("Simple OTP email sent successfully to: {}", toEmail);
-            return CompletableFuture.completedFuture(null);
-        } catch (Exception e) {
-            log.error("Failed to send simple OTP email to: {}", toEmail, e);
-            return CompletableFuture.failedFuture(new RuntimeException("Không thể gửi email. Vui lòng thử lại sau.", e));
-        }
-    }
 
     @Async("mailTaskExecutor")
     public CompletableFuture<Void> sendPasswordResetLinkEmail(String toEmail, String resetLink) {

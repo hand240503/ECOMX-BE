@@ -5,7 +5,7 @@ import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.PaginationMetadata;
-import com.ndh.ShopTechnology.dto.response.product.ProductResponse;
+import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 import com.ndh.ShopTechnology.services.product.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,11 +28,11 @@ public class ProductController {
   }
 
   @PostMapping
-  public ResponseEntity<APIResponse<ProductResponse>> createProduct(
+  public ResponseEntity<APIResponse<ProductFullResponse>> createProduct(
       @Valid @RequestBody CreateProductRequest request) {
     try {
-      ProductResponse product = productService.createProduct(request);
-      APIResponse<ProductResponse> response = APIResponse.of(
+      ProductFullResponse product = productService.createProduct(request);
+      APIResponse<ProductFullResponse> response = APIResponse.of(
           true,
           "Product created successfully",
           product,
@@ -40,7 +40,7 @@ public class ProductController {
           null);
       return ResponseEntity.status(HttpStatus.CREATED).body(response);
     } catch (Exception e) {
-      APIResponse<ProductResponse> response = APIResponse.of(
+      APIResponse<ProductFullResponse> response = APIResponse.of(
           false,
           "Failed to create product: " + e.getMessage(),
           null,
@@ -54,15 +54,15 @@ public class ProductController {
   }
 
   @GetMapping
-  public ResponseEntity<APIResponse<List<ProductResponse>>> getAllProducts(
+  public ResponseEntity<APIResponse<List<ProductFullResponse>>> getAllProducts(
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int limit) {
-    Page<ProductResponse> productPage = productService.getProducts(page, limit);
+    Page<ProductFullResponse> productPage = productService.getProducts(page, limit);
 
-    List<ProductResponse> products = productPage.getContent();
+    List<ProductFullResponse> products = productPage.getContent();
     PaginationMetadata metadata = PaginationMetadata.fromPage(productPage);
 
-    APIResponse<List<ProductResponse>> response = APIResponse.<List<ProductResponse>>builder()
+    APIResponse<List<ProductFullResponse>> response = APIResponse.<List<ProductFullResponse>>builder()
         .success(true)
         .message("Products retrieved successfully")
         .data(products)
@@ -73,10 +73,10 @@ public class ProductController {
   }
 
   @GetMapping("/featured")
-  public ResponseEntity<APIResponse<List<ProductResponse>>> getFeaturedProducts(
+  public ResponseEntity<APIResponse<List<ProductFullResponse>>> getFeaturedProducts(
       @RequestParam(defaultValue = "10") int limit) {
-    List<ProductResponse> products = productService.getFeaturedProducts(limit);
-    APIResponse<List<ProductResponse>> response = APIResponse.of(
+    List<ProductFullResponse> products = productService.getFeaturedProducts(limit);
+    APIResponse<List<ProductFullResponse>> response = APIResponse.of(
         true,
         "Featured products retrieved successfully",
         products,
@@ -86,10 +86,10 @@ public class ProductController {
   }
 
   @GetMapping("/best-sellers")
-  public ResponseEntity<APIResponse<List<ProductResponse>>> getBestSellingProducts(
+  public ResponseEntity<APIResponse<List<ProductFullResponse>>> getBestSellingProducts(
       @RequestParam(defaultValue = "10") int limit) {
-    List<ProductResponse> products = productService.getBestSellingProducts(limit);
-    APIResponse<List<ProductResponse>> response = APIResponse.of(
+    List<ProductFullResponse> products = productService.getBestSellingProducts(limit);
+    APIResponse<List<ProductFullResponse>> response = APIResponse.of(
         true,
         "Best selling products retrieved successfully",
         products,
@@ -99,10 +99,10 @@ public class ProductController {
   }
 
   @GetMapping("/{id}")
-  public ResponseEntity<APIResponse<ProductResponse>> getProductById(@PathVariable Long id) {
+  public ResponseEntity<APIResponse<ProductFullResponse>> getProductById(@PathVariable Long id) {
     try {
-      ProductResponse product = productService.getProductById(id);
-      APIResponse<ProductResponse> response = APIResponse.of(
+      ProductFullResponse product = productService.getProductById(id);
+      APIResponse<ProductFullResponse> response = APIResponse.of(
           true,
           "Product retrieved successfully",
           product,
@@ -110,7 +110,7 @@ public class ProductController {
           null);
       return ResponseEntity.ok(response);
     } catch (Exception e) {
-      APIResponse<ProductResponse> response = APIResponse.of(
+      APIResponse<ProductFullResponse> response = APIResponse.of(
           false,
           "Product not found",
           null,
@@ -124,10 +124,10 @@ public class ProductController {
   }
 
   @GetMapping("/category/{categoryId}")
-  public ResponseEntity<APIResponse<List<ProductResponse>>> getProductsByCategory(@PathVariable Long categoryId) {
+  public ResponseEntity<APIResponse<List<ProductFullResponse>>> getProductsByCategory(@PathVariable Long categoryId) {
     try {
-      List<ProductResponse> products = productService.getProductsByCategoryId(categoryId);
-      APIResponse<List<ProductResponse>> response = APIResponse.of(
+      List<ProductFullResponse> products = productService.getProductsByCategoryId(categoryId);
+      APIResponse<List<ProductFullResponse>> response = APIResponse.of(
           true,
           "Products retrieved successfully",
           products,
@@ -135,7 +135,7 @@ public class ProductController {
           null);
       return ResponseEntity.ok(response);
     } catch (Exception e) {
-      APIResponse<List<ProductResponse>> response = APIResponse.of(
+      APIResponse<List<ProductFullResponse>> response = APIResponse.of(
           false,
           "Failed to get products: " + e.getMessage(),
           null,
@@ -149,12 +149,12 @@ public class ProductController {
   }
 
   @PutMapping("/{id}")
-  public ResponseEntity<APIResponse<ProductResponse>> updateProduct(
+  public ResponseEntity<APIResponse<ProductFullResponse>> updateProduct(
       @PathVariable Long id,
       @Valid @RequestBody UpdateProductRequest request) {
     try {
-      ProductResponse product = productService.updateProduct(id, request);
-      APIResponse<ProductResponse> response = APIResponse.of(
+      ProductFullResponse product = productService.updateProduct(id, request);
+      APIResponse<ProductFullResponse> response = APIResponse.of(
           true,
           "Product updated successfully",
           product,
@@ -162,7 +162,7 @@ public class ProductController {
           null);
       return ResponseEntity.ok(response);
     } catch (Exception e) {
-      APIResponse<ProductResponse> response = APIResponse.of(
+      APIResponse<ProductFullResponse> response = APIResponse.of(
           false,
           "Failed to update product: " + e.getMessage(),
           null,

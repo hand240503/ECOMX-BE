@@ -1,6 +1,6 @@
 package com.ndh.ShopTechnology.controller.job;
 
-import com.ndh.ShopTechnology.constant.MessageConstant;
+import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.dto.request.job.CreateJobReportRequest;
 import com.ndh.ShopTechnology.dto.request.job.GetJobReportRequest;
 import com.ndh.ShopTechnology.dto.request.job.ModJobReportRequest;

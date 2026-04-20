@@ -2,17 +2,18 @@ package com.ndh.ShopTechnology.services.product.impl;
 
 import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
 import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
-import com.ndh.ShopTechnology.dto.response.product.ProductResponse;
+import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 import com.ndh.ShopTechnology.entities.product.CategoryEntity;
+import com.ndh.ShopTechnology.entities.product.PriceEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
+import com.ndh.ShopTechnology.entities.product.UnitEntity;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.CategoryRepository;
 import com.ndh.ShopTechnology.repository.ProductRepository;
-import com.ndh.ShopTechnology.services.product.ProductService;
-import com.ndh.ShopTechnology.repository.PriceRepository;
 import com.ndh.ShopTechnology.repository.UnitRepository;
-import com.ndh.ShopTechnology.entities.product.PriceEntity;
-import com.ndh.ShopTechnology.entities.product.UnitEntity;
+import com.ndh.ShopTechnology.repository.UserRatingRepository;
+import com.ndh.ShopTechnology.repository.projection.ProductRatingAggregate;
+import com.ndh.ShopTechnology.services.product.ProductService;
 import com.ndh.ShopTechnology.dto.request.product.CreatePriceRequest;
 
 import org.springframework.data.domain.Page;
@@ -22,7 +23,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,22 +35,21 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final UnitRepository unitRepository;
-    private final PriceRepository priceRepository;
+    private final UserRatingRepository userRatingRepository;
 
     public ProductServiceImpl(ProductRepository productRepository,
             CategoryRepository categoryRepository,
             UnitRepository unitRepository,
-            PriceRepository priceRepository) {
+            UserRatingRepository userRatingRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.unitRepository = unitRepository;
-        this.priceRepository = priceRepository;
+        this.userRatingRepository = userRatingRepository;
     }
 
     @Override
     @Transactional
-    public ProductResponse createProduct(CreateProductRequest request) {
-        // Verify category exists
+    public ProductFullResponse createProduct(CreateProductRequest request) {
         CategoryEntity category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(
                         () -> new NotFoundEntityException("Category not found with id: " + request.getCategoryId()));
@@ -55,13 +58,10 @@ public class ProductServiceImpl implements ProductService {
                 .productName(request.getProductName())
                 .description(request.getDescription())
                 .status(request.getStatus())
-                .description(request.getDescription())
-                .status(request.getStatus())
                 .isFeatured(request.getIsFeatured() != null ? request.getIsFeatured() : false)
                 .category(category)
                 .build();
 
-        // Handle prices
         if (request.getPrices() != null && !request.getPrices().isEmpty()) {
             for (CreatePriceRequest priceRequest : request.getPrices()) {
                 UnitEntity unit = unitRepository.findById(priceRequest.getUnitId())
@@ -80,70 +80,68 @@ public class ProductServiceImpl implements ProductService {
         }
 
         product = productRepository.save(product);
-        return ProductResponse.fromEntity(product);
+        ProductEntity full = productRepository.findWithFullRelationsById(product.getId())
+                .orElse(product);
+        return toFullWithRatings(full);
     }
 
     @Override
-    public List<ProductResponse> getAllProducts() {
-        List<ProductEntity> products = productRepository.findAll();
-        return products.stream()
-                .map(ProductResponse::fromEntity)
-                .collect(Collectors.toList());
+    @Transactional(readOnly = true)
+    public List<ProductFullResponse> getAllProducts() {
+        List<ProductEntity> products = productRepository.findAllWithListRelations();
+        return mapWithRatings(products);
     }
 
     @Override
-    public Page<ProductResponse> getProducts(int page, int limit) {
+    @Transactional(readOnly = true)
+    public Page<ProductFullResponse> getProducts(int page, int limit) {
         Pageable pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "id"));
-        Page<ProductEntity> productPage = productRepository.findAll(pageable);
-
-        return productPage.map(ProductResponse::fromEntity);
+        Page<ProductEntity> productPage = productRepository.findPageWithListRelations(pageable);
+        Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
+                productPage.getContent().stream().map(ProductEntity::getId).toList());
+        return productPage.map(p -> toFull(p, ratings));
     }
 
     @Override
-    public List<ProductResponse> getFeaturedProducts(int limit) {
+    @Transactional(readOnly = true)
+    public List<ProductFullResponse> getFeaturedProducts(int limit) {
         Pageable pageable = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "id"));
         List<ProductEntity> products = productRepository.findByIsFeaturedTrue(pageable);
-        return products.stream()
-                .map(ProductResponse::fromEntity)
-                .collect(Collectors.toList());
+        return mapWithRatings(products);
     }
 
     @Override
-    public List<ProductResponse> getBestSellingProducts(int limit) {
+    @Transactional(readOnly = true)
+    public List<ProductFullResponse> getBestSellingProducts(int limit) {
         Pageable pageable = PageRequest.of(0, limit);
         List<ProductEntity> products = productRepository.findTopNByOrderBySoldCountDesc(pageable);
-        return products.stream()
-                .map(ProductResponse::fromEntity)
-                .collect(Collectors.toList());
+        return mapWithRatings(products);
     }
 
     @Override
-    public ProductResponse getProductById(Long id) {
-        ProductEntity product = productRepository.findById(id)
+    @Transactional(readOnly = true)
+    public ProductFullResponse getProductById(Long id) {
+        ProductEntity product = productRepository.findWithFullRelationsById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + id));
-        return ProductResponse.fromEntity(product);
+        return toFullWithRatings(product);
     }
 
     @Override
-    public List<ProductResponse> getProductsByCategoryId(Long categoryId) {
-        // Verify category exists
+    @Transactional(readOnly = true)
+    public List<ProductFullResponse> getProductsByCategoryId(Long categoryId) {
         if (!categoryRepository.existsById(categoryId)) {
             throw new NotFoundEntityException("Category not found with id: " + categoryId);
         }
-
         List<ProductEntity> products = productRepository.findByCategoryId(categoryId);
-        return products.stream()
-                .map(ProductResponse::fromEntity)
-                .collect(Collectors.toList());
+        return mapWithRatings(products);
     }
 
     @Override
     @Transactional
-    public ProductResponse updateProduct(Long id, UpdateProductRequest request) {
+    public ProductFullResponse updateProduct(Long id, UpdateProductRequest request) {
         ProductEntity product = productRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + id));
 
-        // Update fields if provided
         if (request.getProductName() != null) {
             product.setProductName(request.getProductName());
         }
@@ -160,7 +158,6 @@ public class ProductServiceImpl implements ProductService {
             product.setIsFeatured(request.getIsFeatured());
         }
 
-        // Handle category change
         if (request.getCategoryId() != null) {
             CategoryEntity category = categoryRepository.findById(request.getCategoryId())
                     .orElseThrow(() -> new NotFoundEntityException(
@@ -169,7 +166,9 @@ public class ProductServiceImpl implements ProductService {
         }
 
         product = productRepository.save(product);
-        return ProductResponse.fromEntity(product);
+        ProductEntity full = productRepository.findWithFullRelationsById(product.getId())
+                .orElse(product);
+        return toFullWithRatings(full);
     }
 
     @Override
@@ -178,5 +177,31 @@ public class ProductServiceImpl implements ProductService {
         ProductEntity product = productRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + id));
         productRepository.delete(product);
+    }
+
+    private List<ProductFullResponse> mapWithRatings(List<ProductEntity> products) {
+        Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
+                products.stream().map(ProductEntity::getId).toList());
+        return products.stream().map(p -> toFull(p, ratings)).collect(Collectors.toList());
+    }
+
+    private Map<Long, ProductRatingAggregate> ratingMapForIds(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of();
+        }
+        return userRatingRepository.aggregateByProductIdIn(ids).stream()
+                .collect(Collectors.toMap(ProductRatingAggregate::getProductId, Function.identity()));
+    }
+
+    private ProductFullResponse toFullWithRatings(ProductEntity p) {
+        Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(List.of(p.getId()));
+        return toFull(p, ratings);
+    }
+
+    private static ProductFullResponse toFull(ProductEntity p, Map<Long, ProductRatingAggregate> ratings) {
+        ProductRatingAggregate a = ratings.get(p.getId());
+        Double avg = a != null ? a.getAverageRating() : null;
+        Long cnt = a != null ? a.getRatingCount() : null;
+        return ProductFullResponse.fromEntity(p, null, null, avg, cnt);
     }
 }

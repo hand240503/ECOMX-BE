@@ -21,6 +21,7 @@ public class UserRatingEntity extends BaseEntity {
     public static final String COL_PRODUCT_ID = "product_id";
     public static final String COL_RATING = "rating";
     public static final String COL_COMMENT = "comment";
+    public static final String COL_TYPE = "type";
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = COL_USER_ID, nullable = false)
@@ -31,8 +32,11 @@ public class UserRatingEntity extends BaseEntity {
     private ProductEntity product;
 
     @Column(name = COL_RATING, nullable = false)
-    private Integer rating; // Thường là 1-5
+    private Double rating;
 
     @Column(name = COL_COMMENT, columnDefinition = "TEXT", nullable = true)
     private String comment;
+
+    @Column(name = COL_TYPE)
+    private Integer type;
 }

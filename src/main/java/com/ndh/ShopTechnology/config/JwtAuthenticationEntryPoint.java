@@ -1,7 +1,7 @@
 package com.ndh.ShopTechnology.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ndh.ShopTechnology.constant.MessageConstant;
+import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
