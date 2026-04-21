@@ -1,4 +1,4 @@
-package com.ndh.ShopTechnology.controller.product;
+  package com.ndh.ShopTechnology.controller.product;
 
 import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
 import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
@@ -124,15 +124,23 @@ public class ProductController {
   }
 
   @GetMapping("/category/{categoryId}")
-  public ResponseEntity<APIResponse<List<ProductFullResponse>>> getProductsByCategory(@PathVariable Long categoryId) {
+  public ResponseEntity<APIResponse<List<ProductFullResponse>>> getProductsByCategory(
+      @PathVariable Long categoryId,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int limit) {
     try {
-      List<ProductFullResponse> products = productService.getProductsByCategoryId(categoryId);
-      APIResponse<List<ProductFullResponse>> response = APIResponse.of(
-          true,
-          "Products retrieved successfully",
-          products,
-          null,
-          null);
+      Page<ProductFullResponse> productPage =
+          productService.getProductsByCategoryId(categoryId, page, limit);
+      List<ProductFullResponse> products = productPage.getContent();
+      PaginationMetadata metadata = PaginationMetadata.fromPage(productPage);
+
+      APIResponse<List<ProductFullResponse>> response = APIResponse.<List<ProductFullResponse>>builder()
+          .success(true)
+          .message("Products retrieved successfully")
+          .data(products)
+          .metadata(metadata)
+          .build();
+
       return ResponseEntity.ok(response);
     } catch (Exception e) {
       APIResponse<List<ProductFullResponse>> response = APIResponse.of(

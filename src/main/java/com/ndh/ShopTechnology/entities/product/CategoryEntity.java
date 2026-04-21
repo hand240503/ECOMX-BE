@@ -16,10 +16,10 @@ import java.util.Set;
 @Entity(name = "category")
 public class CategoryEntity extends BaseEntity {
 
-    public static final String COL_CODE            = "code";
-    public static final String COL_NAME            = "name";
-    public static final String COL_STATUS          = "status";
-    public static final String COL_PARENT_ID       = "parent_id";
+    public static final String COL_CODE = "code";
+    public static final String COL_NAME = "name";
+    public static final String COL_STATUS = "status";
+    public static final String COL_PARENT_ID = "parent_id";
 
     @Column(name = COL_CODE, nullable = true, unique = true)
     private String code;

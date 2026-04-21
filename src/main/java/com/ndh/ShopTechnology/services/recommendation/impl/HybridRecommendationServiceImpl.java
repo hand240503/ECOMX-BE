@@ -45,27 +45,46 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
     private static final double W_CF_ITEM = 0.7;
     private static final double W_CONTENT_ITEM = 0.3;
 
+    /** Max rank (offset + limit) served for home pagination. */
+    private static final int MAX_HOME_RANK = 500;
+    /** Max items per home request. */
+    private static final int MAX_HOME_PAGE_SIZE = 100;
+    /** Upper bound on merged candidate pool from sources. */
+    private static final int MAX_MERGE_POOL = 2000;
+
     @Override
     @Transactional(readOnly = true)
-    public List<RecommendationItem> getHomeRecommendations(Long userId, String sessionId, int limit) {
+    public List<RecommendationItem> getHomeRecommendations(
+            Long userId, String sessionId, int offset, int limit) {
+
+        int off = Math.max(0, offset);
+        int lim = Math.min(Math.max(1, limit), MAX_HOME_PAGE_SIZE);
+        if (off >= MAX_HOME_RANK) {
+            return List.of();
+        }
+
+        int need = Math.min(off + lim, MAX_HOME_RANK);
+        int mergeCap = Math.min(need * 2, MAX_MERGE_POOL);
+
         UserState state = userStateService.getUserState(userId);
-        log.info("[Hybrid Home] userId={} sessionId={} state={}", userId, sessionId, state);
+        log.info("[Hybrid Home] userId={} sessionId={} state={} offset={} limit={}",
+                userId, sessionId, state, off, lim);
 
         Map<Supplier<List<RecommendationItem>>, Double> sources = new LinkedHashMap<>();
         switch (state) {
-            case NEW -> sources.put(() -> popularityService.getPopularItems(limit * 2), 1.0);
+            case NEW -> sources.put(() -> popularityService.getPopularItems(mergeCap), 1.0);
             case COLD -> {
-                sources.put(() -> cbContentService.getRecommendations(userId, limit * 2), 0.7);
-                sources.put(() -> popularityService.getPopularItems(limit * 2), 0.3);
+                sources.put(() -> cbContentService.getRecommendations(userId, mergeCap), 0.7);
+                sources.put(() -> popularityService.getPopularItems(mergeCap), 0.3);
             }
             case ACTIVE -> {
-                sources.put(() -> cbContentService.getRecommendations(userId, limit * 2), 0.5);
-                sources.put(() -> contentToCfFromUserHistory(userId, sessionId, limit * 2), 0.3);
-                sources.put(() -> popularityService.getPopularItems(limit * 2), 0.2);
+                sources.put(() -> cbContentService.getRecommendations(userId, mergeCap), 0.5);
+                sources.put(() -> contentToCfFromUserHistory(userId, sessionId, mergeCap), 0.3);
+                sources.put(() -> popularityService.getPopularItems(mergeCap), 0.2);
             }
         }
 
-        List<RecommendationItem> base = weightedMerge(sources, limit * 2);
+        List<RecommendationItem> base = weightedMerge(sources, mergeCap);
         SessionContext ctx = sessionContextService.buildContext(userId);
         List<RecommendationItem> boosted = sessionBooster.boost(base, ctx);
 
@@ -73,11 +92,13 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
                 base.size(), boosted.size(),
                 blendProperties.getLongWeight(), blendProperties.getShortWeight());
 
-        return blendLongShort(base, boosted, limit);
+        List<RecommendationItem> blended = blendLongShort(base, boosted, need);
+        return blended.stream().skip(off).limit(lim).toList();
     }
 
     /**
-     * long = chuẩn hoá score trước session; short = chuẩn hoá score sau session boost.
+     * long = chuẩn hoá score trước session; short = chuẩn hoá score sau session
+     * boost.
      */
     private List<RecommendationItem> blendLongShort(
             List<RecommendationItem> base,
@@ -118,12 +139,14 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
     }
 
     private static List<RecommendationItem> truncate(List<RecommendationItem> list, int limit) {
-        if (list == null) return List.of();
+        if (list == null)
+            return List.of();
         return list.stream().limit(limit).toList();
     }
 
     private static Map<Long, Double> minMaxNormByProductId(List<RecommendationItem> items) {
-        if (items == null || items.isEmpty()) return Map.of();
+        if (items == null || items.isEmpty())
+            return Map.of();
         double min = items.stream().mapToDouble(RecommendationItem::getScore).min().orElse(0);
         double max = items.stream().mapToDouble(RecommendationItem::getScore).max().orElse(1);
         double den = Math.max(1e-9, max - min);

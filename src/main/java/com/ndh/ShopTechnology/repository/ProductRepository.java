@@ -16,21 +16,37 @@ import java.util.Optional;
 @Repository
 public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
 
-  @EntityGraph(attributePaths = {"category", "category.parent", "brand"})
+  @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
   @Query("SELECT p FROM products p")
   Page<ProductEntity> findPageWithListRelations(Pageable pageable);
 
-  @EntityGraph(attributePaths = {"category", "category.parent", "brand"})
+  @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
   @Query("SELECT p FROM products p")
   List<ProductEntity> findAllWithListRelations();
 
-  @EntityGraph(attributePaths = {"category", "category.parent", "brand"})
-  List<ProductEntity> findByCategoryId(Long categoryId);
+  /**
+   * Paginated products for one category (exact {@code category.id}, not subtree).
+   * No {@code @EntityGraph} on this query: graph + {@code Page} can break counts; relations load in the service tx.
+   */
+  @Query(
+      value = "SELECT p FROM products p WHERE p.category.id = :categoryId",
+      countQuery = "SELECT count(p) FROM products p WHERE p.category.id = :categoryId")
+  Page<ProductEntity> findPageByCategoryId(@Param("categoryId") Long categoryId, Pageable pageable);
 
-  @EntityGraph(attributePaths = {"category", "category.parent", "brand"})
+  /**
+   * Products whose {@code category.parent.id} equals {@code parentCategoryId}
+   * (direct children of that parent only), matching {@code JOIN category c ON c.id = p.category_id WHERE c.parent_id = :id}.
+   */
+  @Query(
+      value = "SELECT p FROM products p WHERE p.category.parent.id = :parentCategoryId",
+      countQuery = "SELECT count(p) FROM products p WHERE p.category.parent.id = :parentCategoryId")
+  Page<ProductEntity> findPageByDirectChildCategoriesOf(@Param("parentCategoryId") Long parentCategoryId,
+      Pageable pageable);
+
+  @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
   List<ProductEntity> findByIsFeaturedTrue(Pageable pageable);
 
-  @EntityGraph(attributePaths = {"category", "category.parent", "brand"})
+  @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
   List<ProductEntity> findTopNByOrderBySoldCountDesc(Pageable pageable);
 
   @Query("SELECT DISTINCT p FROM products p "

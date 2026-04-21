@@ -20,14 +20,16 @@ public class RecommendationController {
     private final HybridRecommendationService hybridService;
     private final RecommendationEnrichmentService enrichmentService;
     private final SessionBasedRecommendationService sessionBasedService;
+
     @GetMapping("/home")
     public List<ProductFullResponse> home(
             @RequestParam Long userId,
             @RequestParam(required = false) String sessionId,
+            @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "20") int limit) {
 
         List<RecommendationItem> items =
-                hybridService.getHomeRecommendations(userId, sessionId, limit);
+                hybridService.getHomeRecommendations(userId, sessionId, offset, limit);
         return enrichmentService.enrich(items);
     }
 
@@ -38,8 +40,7 @@ public class RecommendationController {
             @RequestParam(required = false) String sessionId,
             @RequestParam(defaultValue = "10") int limit) {
 
-        List<RecommendationItem> items =
-                hybridService.getSimilarToProduct(productId, userId, sessionId, limit);
+        List<RecommendationItem> items = hybridService.getSimilarToProduct(productId, userId, sessionId, limit);
         return enrichmentService.enrich(items);
     }
 
@@ -50,9 +51,8 @@ public class RecommendationController {
             @RequestParam(required = false) String sessionId,
             @RequestParam(defaultValue = "10") int limit) {
 
-        List<RecommendationItem> items =
-                hybridService.getPostPurchaseRecommendations(
-                        productId, userId, sessionId, limit);
+        List<RecommendationItem> items = hybridService.getPostPurchaseRecommendations(
+                productId, userId, sessionId, limit);
         return enrichmentService.enrich(items);
     }
 

@@ -128,12 +128,18 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductFullResponse> getProductsByCategoryId(Long categoryId) {
+    public Page<ProductFullResponse> getProductsByCategoryId(Long categoryId, int page, int limit) {
         if (!categoryRepository.existsById(categoryId)) {
             throw new NotFoundEntityException("Category not found with id: " + categoryId);
         }
-        List<ProductEntity> products = productRepository.findByCategoryId(categoryId);
-        return mapWithRatings(products);
+        Pageable pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "id"));
+        boolean isParentCategory = categoryRepository.existsByParent_Id(categoryId);
+        Page<ProductEntity> productPage = isParentCategory
+                ? productRepository.findPageByDirectChildCategoriesOf(categoryId, pageable)
+                : productRepository.findPageByCategoryId(categoryId, pageable);
+        Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
+                productPage.getContent().stream().map(ProductEntity::getId).toList());
+        return productPage.map(p -> toFull(p, ratings));
     }
 
     @Override
