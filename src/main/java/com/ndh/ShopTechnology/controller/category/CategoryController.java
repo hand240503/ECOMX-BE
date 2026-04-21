@@ -53,8 +53,16 @@ public class CategoryController {
   }
 
   @GetMapping
-  public ResponseEntity<APIResponse<List<CategoryResponse>>> getAllCategories() {
-    List<CategoryResponse> categories = categoryService.getAllCategories();
+  public ResponseEntity<APIResponse<List<CategoryResponse>>> getAllCategories(
+      @RequestParam(required = false) Boolean featured,
+      @RequestParam(required = false) Integer limit) {
+    List<CategoryResponse> categories;
+    if (Boolean.TRUE.equals(featured)) {
+      int lim = (limit == null || limit < 1) ? 6 : limit;
+      categories = categoryService.getFeaturedCategories(lim);
+    } else {
+      categories = categoryService.getAllCategories();
+    }
     APIResponse<List<CategoryResponse>> response = APIResponse.of(
         true,
         MessageConstant.CATEGORY_LIST_SUCCESS,

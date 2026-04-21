@@ -9,6 +9,9 @@ import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.CategoryRepository;
 import com.ndh.ShopTechnology.services.category.CategoryService;
 import com.ndh.ShopTechnology.services.user.UserService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,6 +61,16 @@ public class CategoryServiceImpl implements CategoryService {
     public List<CategoryResponse> getAllCategories() {
         List<CategoryEntity> categories = categoryRepository.findAll();
         return categories.stream()
+                .map(CategoryResponse::fromEntitySimple)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CategoryResponse> getFeaturedCategories(int limit) {
+        int lim = Math.min(Math.max(limit, 1), 100);
+        Pageable pageable = PageRequest.of(0, lim, Sort.by(Sort.Direction.ASC, "id"));
+        return categoryRepository.findByParentIsNull(pageable).getContent().stream()
                 .map(CategoryResponse::fromEntitySimple)
                 .collect(Collectors.toList());
     }

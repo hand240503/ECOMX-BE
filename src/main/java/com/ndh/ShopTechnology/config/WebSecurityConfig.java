@@ -17,6 +17,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -80,21 +81,49 @@ public class WebSecurityConfig {
         return source;
     }
 
+    /**
+     * Normalizes {@code api.prefix} so request matchers always use a single leading slash (avoids
+     * {@code //api/...} when the property is configured with a leading slash).
+     */
+    private String apiBasePath() {
+        String p = apiPrefix == null ? "" : apiPrefix.trim();
+        while (p.startsWith("/")) {
+            p = p.substring(1);
+        }
+        while (p.endsWith("/")) {
+            p = p.substring(0, p.length() - 1);
+        }
+        return p.isEmpty() ? "" : "/" + p;
+    }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        final String base = apiBasePath();
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource())) // THÊM DÒNG NÀY
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(requests -> {
                     requests
-                            .requestMatchers(String.format("/%s/admin/**", apiPrefix))
-                            .hasAnyRole(RoleConstant.ROLE_ADMIN, RoleConstant.ROLE_EMPLOYEE, RoleConstant.ROLE_MANAGER)
-
-                            .requestMatchers(String.format("/%s/auth/**", apiPrefix),String.format("/%s/document/**", apiPrefix))
+                            // CORS preflight must not require JWT (browser sends OPTIONS without Authorization)
+                            .requestMatchers(HttpMethod.OPTIONS, "/**")
                             .permitAll()
 
+                            .requestMatchers(String.format("%s/admin/**", base))
+                            .hasAnyRole(RoleConstant.ROLE_ADMIN, RoleConstant.ROLE_EMPLOYEE, RoleConstant.ROLE_MANAGER)
 
-                            .requestMatchers(String.format("/%s/recommendations/**", apiPrefix))
+                            .requestMatchers(String.format("%s/auth/**", base), String.format("%s/document/**", base))
+                            .permitAll()
+
+                            .requestMatchers(String.format("%s/recommendations/**", base))
+                            .permitAll()
+
+                            .requestMatchers(String.format("%s/search/**", base))
+                            .permitAll()
+
+                            .requestMatchers(HttpMethod.GET, String.format("%s/products/**", base))
+                            .permitAll()
+
+                            .requestMatchers(HttpMethod.GET, String.format("%s/categories/**", base))
                             .permitAll()
 
                             .anyRequest()

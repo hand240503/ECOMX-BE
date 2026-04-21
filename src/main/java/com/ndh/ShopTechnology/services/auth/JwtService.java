@@ -20,8 +20,8 @@ public class JwtService {
     private static final String TOKEN_TYPE_ACCESS = "access";
     private static final String TOKEN_TYPE_REFRESH = "refresh";
 
-    private static final long ACCESS_TOKEN_EXPIRATION_MS = 15 * 60 * 1000L;
-    private static final long REFRESH_TOKEN_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000L;
+    private static final long ACCESS_TOKEN_EXPIRATION_MS = 7L * 24 * 60 * 60 * 1000;
+    private static final long REFRESH_TOKEN_EXPIRATION_MS = 30L * 24 * 60 * 60 * 1000;
 
     public String generateAccessToken(String username) {
         return generateToken(username, ACCESS_TOKEN_EXPIRATION_MS, TOKEN_TYPE_ACCESS);

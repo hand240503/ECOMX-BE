@@ -2,6 +2,8 @@ package com.ndh.ShopTechnology.services.product;
 
 import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
 import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
+import com.ndh.ShopTechnology.dto.search.ProductSearchResult;
+import com.ndh.ShopTechnology.dto.response.product.ProductDetailResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 
 import org.springframework.data.domain.Page;
@@ -21,7 +23,17 @@ public interface ProductService {
 
     ProductFullResponse getProductById(Long id);
 
+    /**
+     * PDP payload: full product row (prices, category, brand, ratings) plus similar-item recommendations.
+     */
+    ProductDetailResponse getProductDetail(Long id, Long userId, String sessionId, int recommendationLimit);
+
     Page<ProductFullResponse> getProductsByCategoryId(Long categoryId, int page, int limit);
+
+    /**
+     * Search products by keyword (name, description, tag). Empty or blank query returns an empty page.
+     */
+    ProductSearchResult searchProducts(String query, int page, int limit);
 
     ProductFullResponse updateProduct(Long id, UpdateProductRequest request);
 

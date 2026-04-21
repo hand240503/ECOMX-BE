@@ -5,7 +5,10 @@ import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.PaginationMetadata;
+import com.ndh.ShopTechnology.dto.response.ProductSearchPaginationMetadata;
+import com.ndh.ShopTechnology.dto.response.product.ProductDetailResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
+import com.ndh.ShopTechnology.dto.search.ProductSearchResult;
 import com.ndh.ShopTechnology.services.product.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -96,6 +99,63 @@ public class ProductController {
         null,
         null);
     return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Full-text style search on product name, description, and tag (active items). Pagination metadata may
+   * include {@code suggestedQuery} / {@code spellSuggestion} when the backend provides an alternate keyword.
+   */
+  @GetMapping("/search")
+  public ResponseEntity<APIResponse<List<ProductFullResponse>>> searchProducts(
+      @RequestParam(value = "q", required = false, defaultValue = "") String q,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int limit) {
+    ProductSearchResult result = productService.searchProducts(q, page, limit);
+    List<ProductFullResponse> products = result.page().getContent();
+    ProductSearchPaginationMetadata metadata =
+        ProductSearchPaginationMetadata.fromPage(result.page(), result.suggestedQuery());
+
+    APIResponse<List<ProductFullResponse>> response = APIResponse.<List<ProductFullResponse>>builder()
+        .success(true)
+        .message("Products search completed")
+        .data(products)
+        .metadata(metadata)
+        .build();
+
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * PDP: full {@link ProductFullResponse} plus {@code recommendations} (similar products), same hybrid
+   * engine as {@code GET .../recommendations/pdp/{productId}}.
+   */
+  @GetMapping("/{id}/detail")
+  public ResponseEntity<APIResponse<ProductDetailResponse>> getProductDetail(
+      @PathVariable Long id,
+      @RequestParam(required = false) Long userId,
+      @RequestParam(required = false) String sessionId,
+      @RequestParam(defaultValue = "10") int recommendationLimit) {
+    try {
+      ProductDetailResponse detail = productService.getProductDetail(id, userId, sessionId, recommendationLimit);
+      APIResponse<ProductDetailResponse> response = APIResponse.of(
+          true,
+          "Product detail retrieved successfully",
+          detail,
+          null,
+          null);
+      return ResponseEntity.ok(response);
+    } catch (Exception e) {
+      APIResponse<ProductDetailResponse> response = APIResponse.of(
+          false,
+          "Product not found",
+          null,
+          List.of(ErrorResponse.builder()
+              .field("id")
+              .message(e.getMessage())
+              .build()),
+          null);
+      return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
   }
 
   @GetMapping("/{id}")
