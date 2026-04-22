@@ -123,6 +123,9 @@ public class WebSecurityConfig {
                             .requestMatchers(HttpMethod.GET, String.format("%s/products/**", base))
                             .permitAll()
 
+                            .requestMatchers(HttpMethod.POST, String.format("%s/products/by-ids", base))
+                            .permitAll()
+
                             .requestMatchers(HttpMethod.GET, String.format("%s/categories/**", base))
                             .permitAll()
 

@@ -173,13 +173,22 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
 
     @Override
     @Transactional(readOnly = true)
-    public List<RecommendationItem> getPostPurchaseRecommendations(
-            Integer productId, Long userId, String sessionId, int limit) {
-
+    public List<RecommendationItem> getItemHybridSimilar(Integer productId, int limit) {
+        if (productId == null) {
+            return List.of();
+        }
         return weightedMerge(
                 cfService.getSimilar(productId, limit * 2, null), W_CF_ITEM,
                 contentItemService.getSimilar(productId, limit * 2, null), W_CONTENT_ITEM,
                 limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RecommendationItem> getPostPurchaseRecommendations(
+            Integer productId, Long userId, String sessionId, int limit) {
+
+        return getItemHybridSimilar(productId, limit);
     }
 
     private List<RecommendationItem> weightedMerge(

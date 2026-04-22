@@ -5,6 +5,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.BatchSize;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -55,4 +58,16 @@ public class ProductEntity extends BaseEntity {
     @BatchSize(size = 32)
     @Builder.Default
     private java.util.List<PriceEntity> prices = new java.util.ArrayList<>();
+
+    /**
+     * Chính sách áp dụng cho sản phẩm (cùng một bản ghi {@link PolicyEntity} có thể dùng cho nhiều SP).
+     */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "product_policies",
+        joinColumns = @JoinColumn(name = "product_id", referencedColumnName = "id"),
+        inverseJoinColumns = @JoinColumn(name = "policy_id", referencedColumnName = "id"))
+    @BatchSize(size = 32)
+    @Builder.Default
+    private Set<PolicyEntity> policies = new HashSet<>();
 }

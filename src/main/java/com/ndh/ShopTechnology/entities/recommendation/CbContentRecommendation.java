@@ -1,5 +1,7 @@
 package com.ndh.ShopTechnology.entities.recommendation;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.ndh.ShopTechnology.entities.user.UserEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -38,6 +40,20 @@ public class CbContentRecommendation {
 
     @Column(name = COL_USER_ID, nullable = false, unique = true)
     private Long userId;
+
+    /**
+     * Optional navigation to {@code users}; same column as {@link #userId}, read-only for JPA so
+     * writes still go through {@code userId}.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = COL_USER_ID,
+            referencedColumnName = "id",
+            nullable = false,
+            insertable = false,
+            updatable = false)
+    @JsonIgnore
+    private UserEntity user;
 
     /** Mảng product_id đã sort theo rank (rank 1 = phần tử [0]). */
     @JdbcTypeCode(SqlTypes.JSON)

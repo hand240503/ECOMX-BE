@@ -1,5 +1,7 @@
 package com.ndh.ShopTechnology.entities.recommendation;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.ndh.ShopTechnology.entities.product.ProductEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -38,10 +40,34 @@ public class ItemSimilarityEntity {
         private Long id;
 
         @Column(name = COL_SOURCE, nullable = false)
-        private Integer source;
+        private Long source;
 
         @Column(name = COL_TARGET, nullable = false)
-        private Integer target;
+        private Long target;
+
+        /**
+         * Optional navigation to {@code products} as source item; same columns as {@link #source} /
+         * {@link #target}, read-only; scalar columns must match {@code products.id} ({@link Long} / BIGINT).
+         */
+        @ManyToOne(fetch = FetchType.LAZY)
+        @JoinColumn(
+                        name = COL_SOURCE,
+                        referencedColumnName = "id",
+                        nullable = false,
+                        insertable = false,
+                        updatable = false)
+        @JsonIgnore
+        private ProductEntity sourceProduct;
+
+        @ManyToOne(fetch = FetchType.LAZY)
+        @JoinColumn(
+                        name = COL_TARGET,
+                        referencedColumnName = "id",
+                        nullable = false,
+                        insertable = false,
+                        updatable = false)
+        @JsonIgnore
+        private ProductEntity targetProduct;
 
         @Column(name = COL_ALGORITHM, nullable = false, length = 32)
         private String algorithm;

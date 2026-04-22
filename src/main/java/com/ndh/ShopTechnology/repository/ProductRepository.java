@@ -50,6 +50,11 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>, J
   @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
   List<ProductEntity> findTopNByOrderBySoldCountDesc(Pageable pageable);
 
+  /**
+   * Full PDP / admin reload: category, brand, prices (+ unit). Policies are {@link jakarta.persistence.ManyToMany}
+   * and are <strong>not</strong> join-fetched here — combining two collection fetch joins would Cartesian-multiply
+   * rows and duplicate {@code prices} in memory (one copy per linked policy).
+   */
   @Query("SELECT DISTINCT p FROM products p "
       + "LEFT JOIN FETCH p.category c "
       + "LEFT JOIN FETCH c.parent "

@@ -1,6 +1,7 @@
   package com.ndh.ShopTechnology.controller.product;
 
 import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
+import com.ndh.ShopTechnology.dto.request.product.GetProductsByIdsRequest;
 import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
@@ -28,6 +29,22 @@ public class ProductController {
   @Autowired
   public ProductController(ProductService productService) {
     this.productService = productService;
+  }
+
+  /**
+   * FE gửi danh sách id; BE trả đúng các sản phẩm tồn tại, cùng thứ tự, bỏ trùng (tối đa 200 id).
+   */
+  @PostMapping("/by-ids")
+  public ResponseEntity<APIResponse<List<ProductFullResponse>>> getProductsByIds(
+      @Valid @RequestBody GetProductsByIdsRequest request) {
+    List<ProductFullResponse> products = productService.getProductsByIds(request.getProductIds());
+    APIResponse<List<ProductFullResponse>> response = APIResponse.of(
+        true,
+        "Products retrieved successfully",
+        products,
+        null,
+        null);
+    return ResponseEntity.ok(response);
   }
 
   @PostMapping

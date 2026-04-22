@@ -17,6 +17,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class CfRecommendationServiceImpl implements CfRecommendationService {
@@ -45,9 +46,9 @@ public class CfRecommendationServiceImpl implements CfRecommendationService {
         if (productId == null) return List.of();
 
         int safeLimit = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
-        Set<Integer> excl = (excludeIds == null || excludeIds.isEmpty())
+        Set<Long> excl = (excludeIds == null || excludeIds.isEmpty())
                 ? Collections.emptySet()
-                : Set.copyOf(excludeIds);
+                : excludeIds.stream().map(Integer::longValue).collect(Collectors.toSet());
 
         List<ItemSimilarityEntity> raw = self.fetchTopBySource(productId);
 
@@ -62,7 +63,7 @@ public class CfRecommendationServiceImpl implements CfRecommendationService {
     public List<ItemSimilarityEntity> fetchTopBySource(Integer productId) {
         log.debug("CACHE MISS - CF similar for product {}", productId);
         return itemSimilarityRepository.findTopBySource(
-                productId,
+                productId.longValue(),
                 RecommendationAlgorithm.CF_COSINE,
                 PageRequest.of(0, FETCH_BUFFER)
         );

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class ContentItemRecommendationServiceImpl implements ContentItemRecommendationService {
@@ -42,9 +43,9 @@ public class ContentItemRecommendationServiceImpl implements ContentItemRecommen
         if (productId == null) return List.of();
 
         int safeLimit = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
-        Set<Integer> excl = (excludeIds == null || excludeIds.isEmpty())
+        Set<Long> excl = (excludeIds == null || excludeIds.isEmpty())
                 ? Collections.emptySet()
-                : Set.copyOf(excludeIds);
+                : excludeIds.stream().map(Integer::longValue).collect(Collectors.toSet());
 
         List<ItemSimilarityEntity> raw = self.fetchTopBySource(productId);
 
@@ -59,7 +60,7 @@ public class ContentItemRecommendationServiceImpl implements ContentItemRecommen
     public List<ItemSimilarityEntity> fetchTopBySource(Integer productId) {
         log.debug("CACHE MISS - Content similar for product {}", productId);
         return itemSimilarityRepository.findTopBySource(
-                productId,
+                productId.longValue(),
                 RecommendationAlgorithm.CONTENT_TFIDF,
                 PageRequest.of(0, FETCH_BUFFER));
     }

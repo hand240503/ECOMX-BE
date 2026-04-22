@@ -24,6 +24,11 @@ public interface ProductService {
     ProductFullResponse getProductById(Long id);
 
     /**
+     * Trả về {@link ProductFullResponse} cho đúng các id (giữ thứ tự FE gửi, bỏ trùng và id không có trong DB).
+     */
+    List<ProductFullResponse> getProductsByIds(List<Long> productIds);
+
+    /**
      * PDP payload: full product row (prices, category, brand, ratings) plus similar-item recommendations.
      */
     ProductDetailResponse getProductDetail(Long id, Long userId, String sessionId, int recommendationLimit);

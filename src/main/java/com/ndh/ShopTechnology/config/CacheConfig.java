@@ -18,7 +18,9 @@ public class CacheConfig {
                 "userContentRecs",     // key = userId     → top-K từ cb_content_recommendation
                 "popularItems",        // key = "all"      → top popular
                 "longtermScores",
-                "fbtCache"
+                "fbtCache",
+                "users",               // UserServiceImpl @Cacheable by id
+                "userPermissions"      // PermissionService by username
         );
         mgr.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(30, TimeUnit.MINUTES)

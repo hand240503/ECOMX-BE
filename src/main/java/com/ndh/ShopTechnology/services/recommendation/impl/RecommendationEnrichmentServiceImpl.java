@@ -8,6 +8,7 @@ import com.ndh.ShopTechnology.repository.UserRatingRepository;
 import com.ndh.ShopTechnology.repository.projection.ProductRatingAggregate;
 import com.ndh.ShopTechnology.services.recommendation.RecommendationEnrichmentService;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,8 @@ public class RecommendationEnrichmentServiceImpl
         Map<Long, ProductEntity> productMap = productRepository.findAllWithFullRelationsByIdIn(ids)
                 .stream()
                 .collect(Collectors.toMap(ProductEntity::getId, Function.identity()));
+
+        productMap.values().forEach(p -> Hibernate.initialize(p.getPolicies()));
 
         Map<Long, ProductRatingAggregate> ratingMap = userRatingRepository.aggregateByProductIdIn(ids)
                 .stream()

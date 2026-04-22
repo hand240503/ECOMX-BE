@@ -1,6 +1,7 @@
 package com.ndh.ShopTechnology.dto.response.product;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.ndh.ShopTechnology.entities.product.PolicyEntity;
 import com.ndh.ShopTechnology.entities.product.PriceEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
 import lombok.AllArgsConstructor;
@@ -8,6 +9,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import org.hibernate.Hibernate;
 
 import java.util.Comparator;
 import java.util.Date;
@@ -39,6 +42,8 @@ public class ProductFullResponse {
   private BrandSummaryResponse brand;
   private CategorySummaryResponse category;
   private List<ProductPriceResponse> prices;
+  /** Có dữ liệu khi entity đã fetch policies (vd. GET /products/{id}, GET /products/{id}/detail). */
+  private List<PolicyResponse> policies;
 
   /** Chỉ có ý nghĩa với API recommendation — các API khác để null. */
   private Double recommendationScore;
@@ -76,6 +81,14 @@ public class ProductFullResponse {
           .map(ProductPriceResponse::fromEntity)
           .collect(Collectors.toList());
     }
+    List<PolicyResponse> policyList = null;
+    if (Hibernate.isInitialized(entity.getPolicies()) && entity.getPolicies() != null) {
+      policyList = entity.getPolicies().stream()
+          .filter(Objects::nonNull)
+          .sorted(Comparator.comparing(PolicyEntity::getId, Comparator.nullsLast(Long::compareTo)))
+          .map(PolicyResponse::fromEntity)
+          .collect(Collectors.toList());
+    }
     return ProductFullResponse.builder()
         .id(entity.getId())
         .productName(entity.getProductName())
@@ -89,6 +102,7 @@ public class ProductFullResponse {
         .brand(BrandSummaryResponse.fromEntity(entity.getBrand()))
         .category(CategorySummaryResponse.fromEntity(entity.getCategory()))
         .prices(priceList)
+        .policies(policyList)
         .recommendationScore(recommendationScore)
         .recommendationSource(recommendationSource)
         .averageRating(averageRating)

@@ -30,10 +30,14 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.hibernate.Hibernate;
+
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -142,6 +146,41 @@ public class ProductServiceImpl implements ProductService {
         ProductEntity product = productRepository.findWithFullRelationsById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + id));
         return toFullWithRatings(product);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductFullResponse> getProductsByIds(List<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> seen = new LinkedHashSet<>();
+        for (Long id : productIds) {
+            if (id == null) {
+                continue;
+            }
+            seen.add(id);
+            if (seen.size() >= 200) {
+                break;
+            }
+        }
+        if (seen.isEmpty()) {
+            return List.of();
+        }
+        List<Long> orderedUnique = new ArrayList<>(seen);
+        List<ProductEntity> loaded = productRepository.findAllWithFullRelationsByIdIn(orderedUnique);
+        loaded.forEach(p -> Hibernate.initialize(p.getPolicies()));
+        Map<Long, ProductEntity> byId = loaded.stream()
+                .collect(Collectors.toMap(ProductEntity::getId, Function.identity()));
+        Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(orderedUnique);
+        List<ProductFullResponse> out = new ArrayList<>();
+        for (Long id : orderedUnique) {
+            ProductEntity p = byId.get(id);
+            if (p != null) {
+                out.add(toFull(p, ratings));
+            }
+        }
+        return out;
     }
 
     @Override
@@ -316,6 +355,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private ProductFullResponse toFullWithRatings(ProductEntity p) {
+        Hibernate.initialize(p.getPolicies());
         Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(List.of(p.getId()));
         return toFull(p, ratings);
     }

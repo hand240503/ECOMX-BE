@@ -19,7 +19,7 @@ public interface ItemSimilarityRepository
         ORDER BY s.rankPos ASC
     """)
     List<ItemSimilarityEntity> findTopBySource(
-            @Param("source") Integer source,
+            @Param("source") Long source,
             @Param("algorithm") String algorithm,
             Pageable pageable);
 
@@ -31,8 +31,8 @@ public interface ItemSimilarityRepository
         ORDER BY s.similarity DESC
     """)
     List<ItemSimilarityEntity> findBySourcesExcluding(
-            @Param("sources") List<Integer> sources,
+            @Param("sources") List<Long> sources,
             @Param("algorithm") String algorithm,
-            @Param("excluded") List<Integer> excluded,
+            @Param("excluded") List<Long> excluded,
             Pageable pageable);
 }

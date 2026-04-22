@@ -16,6 +16,13 @@ public interface HybridRecommendationService {
     List<RecommendationItem> getSimilarToProduct(
             Integer productId, Long userId, String sessionId, int limit);
 
+    /**
+     * Gợi ý theo <strong>một</strong> sản phẩm: trộn có trọng số CF item–item + content item–item
+     * (không dùng session/recent profile). Khác {@link #getSimilarToProduct} — bên đó là cascade
+     * (ưu tiên CF đủ slot, thiếu mới bổ sung content).
+     */
+    List<RecommendationItem> getItemHybridSimilar(Integer productId, int limit);
+
     List<RecommendationItem> getPostPurchaseRecommendations(
             Integer productId, Long userId, String sessionId, int limit);
 }
