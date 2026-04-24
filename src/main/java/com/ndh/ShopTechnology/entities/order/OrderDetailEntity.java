@@ -16,6 +16,7 @@ public class OrderDetailEntity extends BaseEntity {
     public static final String COL_DESCRIPTION      = "description";
     public static final String COL_QUANTITY         = "quantity";
     public static final String COL_TOTAL_PRICE      = "total_price";
+    public static final String COL_UNIT_PRICE         = "unit_price";
     public static final String COL_ORDER_ID         = "order_id";
     public static final String COL_PRODUCT_ID       = "product_id";
 
@@ -24,6 +25,12 @@ public class OrderDetailEntity extends BaseEntity {
 
     @Column(name = COL_QUANTITY, nullable = true)
     private Integer quantity;
+
+    /**
+     * Đơn giá áp dụng tại thời điểm đặt hàng (snapshot; không đổi khi giá sản phẩm cập nhật sau này).
+     */
+    @Column(name = COL_UNIT_PRICE, nullable = false)
+    private Double unitPrice;
 
     @Column(name = COL_TOTAL_PRICE, nullable = true)
     private String totalPrice;

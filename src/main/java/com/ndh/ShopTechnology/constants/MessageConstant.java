@@ -18,6 +18,10 @@ public class MessageConstant {
     public static final String USER_ALREADY_EXISTS = "User already exists.";
     public static final String VALIDATION_FAILED = "Validation failed.";
 
+    /** Dùng khi chưa gửi hoặc chưa chấp nhận token (bảo vệ trừ vùng permitAll). */
+    public static final String AUTHENTICATION_REQUIRED =
+            "Authentication required. Please provide a valid Bearer access token in the Authorization header.";
+
     // Authorization messages
     public static final String ACCESS_DENIED = "Access denied. You do not have permission to perform this action.";
     public static final String NO_PERMISSION_ACTION = "You do not have permission to perform this action.";

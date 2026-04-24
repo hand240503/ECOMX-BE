@@ -29,11 +29,12 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint, Se
                          AuthenticationException authException) throws IOException, ServletException {
 
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        // Chưa xác thực (thiếu / sai JWT) — 401, không dùng 403 (dành cho đã xác thực nhưng không đủ quyền)
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
         APIResponse<Void> apiResponse = APIResponse.of(
                 false,
-                MessageConstant.ACCESS_DENIED,
+                MessageConstant.AUTHENTICATION_REQUIRED,
                 null,
                 null,
                 null

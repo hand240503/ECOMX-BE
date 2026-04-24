@@ -129,6 +129,15 @@ public class WebSecurityConfig {
                             .requestMatchers(HttpMethod.GET, String.format("%s/categories/**", base))
                             .permitAll()
 
+                            .requestMatchers(HttpMethod.GET, String.format("%s/payment-methods", base))
+                            .permitAll()
+
+                            // VNPAY: IPN (server) + Return (browser redirect) — không dùng JWT
+                            .requestMatchers(HttpMethod.GET, String.format("%s/payment/vnpay/ipn", base))
+                            .permitAll()
+                            .requestMatchers(HttpMethod.GET, String.format("%s/payment/vnpay/return", base))
+                            .permitAll()
+
                             .anyRequest()
                             .authenticated();
                 })
