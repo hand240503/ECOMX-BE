@@ -10,7 +10,8 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Entity(name = "orders")
+@Entity(name = "Order")
+@Table(name = "orders")
 public class OrderEntity extends BaseEntity {
 
     public static final String COL_STATUS         = "status";
@@ -20,6 +21,8 @@ public class OrderEntity extends BaseEntity {
     public static final String COL_USER_ID        = "user_id";
     public static final String COL_ORDER_CODE     = "order_code";
     public static final String COL_DELIVERY_ADDRESS = "delivery_address";
+    public static final String COL_DELIVERY_DISTANCE_METERS = "delivery_distance_meters";
+    public static final String COL_SHIPPING_FEE_VND = "shipping_fee_vnd";
     public static final String COL_PAYMENT_METHOD_ID = "payment_method_id";
     public static final String COL_RETURN_REFUND_STATUS = "return_refund_status";
     public static final String COL_RETURN_REFUND_NOTE  = "return_refund_note";
@@ -53,6 +56,9 @@ public class OrderEntity extends BaseEntity {
     @Column(name = COL_DESCRIPTION, nullable = true)
     private String description;
 
+    /**
+     * Tổng thanh toán: tổng các dòng chi tiết + {@link #shippingFeeVnd} (phí null coi như 0).
+     */
     @Column(name = COL_TOTAL, nullable = true)
     private Double total;
 
@@ -71,6 +77,14 @@ public class OrderEntity extends BaseEntity {
     @Column(name = COL_DELIVERY_ADDRESS, columnDefinition = "TEXT")
     private String deliveryAddress;
 
+    /** Quãng đường lái tới kho tại thời điểm đặt (OSRM), mét. */
+    @Column(name = COL_DELIVERY_DISTANCE_METERS)
+    private Double deliveryDistanceMeters;
+
+    /** Phí ship (VND) snapshot theo {@link com.ndh.ShopTechnology.utils.ShippingFeeCalculator}. */
+    @Column(name = COL_SHIPPING_FEE_VND)
+    private Long shippingFeeVnd;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = COL_PAYMENT_METHOD_ID, nullable = false)
     private PaymentMethodEntity paymentMethod;
@@ -83,7 +97,7 @@ public class OrderEntity extends BaseEntity {
      * Mã công khai cùng {@link CheckoutSessionEntity#getPublicId()} — đồng bộ với bản ghi phiên; FE/BE đối chiếu
      * {@code GET .../vnpay-pending/{publicId}}.
      */
-    @Column(name = COL_CHECKOUT_SESSION_PUBLIC_ID, length = 36, unique = true)
+    @Column(name = COL_CHECKOUT_SESSION_PUBLIC_ID, length = 128, unique = true)
     private String checkoutSessionPublicId;
 
     /**

@@ -21,9 +21,9 @@ import java.util.Date;
 public class CheckoutSessionEntity extends BaseEntity {
 
     /**
-     * UUID bảo mật cho FE tra cứu trạng thái phiên (thay vì lộ id số nội bộ). Khác {@code vnp_TxnRef} (id phiên) gửi VNPAY.
+     * Mặc định = chuỗi {@link #getId()} sau khi lưu; hoặc = {@code checkoutWorkSessionId} do FE gửi (VNPAY) nếu có và hợp lệ.
      */
-    @Column(name = "public_id", nullable = false, unique = true, length = 36, updatable = false)
+    @Column(name = "public_id", nullable = false, unique = true, length = 128)
     private String publicId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -36,6 +36,12 @@ public class CheckoutSessionEntity extends BaseEntity {
 
     @Column(name = "total", nullable = false)
     private Double total;
+
+    @Column(name = "delivery_distance_meters")
+    private Double deliveryDistanceMeters;
+
+    @Column(name = "shipping_fee_vnd")
+    private Long shippingFeeVnd;
 
     /** JSON {@link com.ndh.ShopTechnology.dto.request.order.CreateOrderRequest} tại thời điểm checkout. */
     @Column(name = "request_payload_json", nullable = false, columnDefinition = "TEXT")
@@ -57,9 +63,9 @@ public class CheckoutSessionEntity extends BaseEntity {
     private Long orderId;
 
     @PrePersist
-    void ensurePublicId() {
+    void assignPlaceholderPublicId() {
         if (publicId == null || publicId.isEmpty()) {
-            publicId = java.util.UUID.randomUUID().toString();
+            publicId = "pending:" + java.util.UUID.randomUUID();
         }
     }
 }

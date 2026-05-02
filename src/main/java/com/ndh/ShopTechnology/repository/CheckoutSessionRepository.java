@@ -21,6 +21,8 @@ public interface CheckoutSessionRepository extends JpaRepository<CheckoutSession
     @Query("select c from CheckoutSessionEntity c where c.id = :id")
     Optional<CheckoutSessionEntity> findByIdWithUserAndPaymentMethod(@Param("id") Long id);
 
+    boolean existsByPublicId(String publicId);
+
     @EntityGraph(attributePaths = {"user", "paymentMethod"})
     Optional<CheckoutSessionEntity> findByPublicIdAndUser_Id(String publicId, Long userId);
 }

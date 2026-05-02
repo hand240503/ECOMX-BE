@@ -10,7 +10,8 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Entity(name = "order_detail")
+@Entity(name = "OrderDetail")
+@Table(name = "order_detail")
 public class OrderDetailEntity extends BaseEntity {
 
     public static final String COL_DESCRIPTION      = "description";

@@ -18,7 +18,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("${api.prefix}/products")
@@ -38,6 +40,72 @@ public class ProductController {
   public ResponseEntity<APIResponse<List<ProductFullResponse>>> getProductsByIds(
       @Valid @RequestBody GetProductsByIdsRequest request) {
     List<ProductFullResponse> products = productService.getProductsByIds(request.getProductIds());
+    APIResponse<List<ProductFullResponse>> response = APIResponse.of(
+        true,
+        "Products retrieved successfully",
+        products,
+        null,
+        null);
+    return ResponseEntity.ok(response);
+  }
+
+  /**
+   * Cùng dữ liệu với {@code POST /by-ids} nhưng dùng query để tránh nhầm {@code GET /products/{id}} với
+   * {@code id = "by-ids"} (MethodArgumentTypeMismatchException). Ví dụ: {@code ?ids=1,2,3} (tối đa 200 id).
+   */
+  @GetMapping("/by-ids")
+  public ResponseEntity<APIResponse<List<ProductFullResponse>>> getProductsByIdsFromQuery(
+      @RequestParam(value = "ids", required = false) String idsParam) {
+    if (idsParam == null || idsParam.isBlank()) {
+      APIResponse<List<ProductFullResponse>> response = APIResponse.of(
+          false,
+          "Query parameter ids is required (e.g. ?ids=1,2,3)",
+          null,
+          List.of(ErrorResponse.builder()
+              .field("ids")
+              .message("Comma-separated product ids required")
+              .build()),
+          null);
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+    List<Long> productIds;
+    try {
+      productIds = Arrays.stream(idsParam.split(","))
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .map(Long::parseLong)
+          .collect(Collectors.toList());
+    } catch (NumberFormatException e) {
+      APIResponse<List<ProductFullResponse>> response = APIResponse.of(
+          false,
+          "Invalid ids parameter",
+          null,
+          List.of(ErrorResponse.builder()
+              .field("ids")
+              .message("Each id must be a number")
+              .build()),
+          null);
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+    if (productIds.isEmpty()) {
+      APIResponse<List<ProductFullResponse>> response = APIResponse.of(
+          false,
+          "No product ids parsed",
+          null,
+          List.of(ErrorResponse.builder().field("ids").message("empty").build()),
+          null);
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+    if (productIds.size() > 200) {
+      APIResponse<List<ProductFullResponse>> response = APIResponse.of(
+          false,
+          "At most 200 product ids per request",
+          null,
+          List.of(ErrorResponse.builder().field("ids").message("max 200").build()),
+          null);
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+    List<ProductFullResponse> products = productService.getProductsByIds(productIds);
     APIResponse<List<ProductFullResponse>> response = APIResponse.of(
         true,
         "Products retrieved successfully",

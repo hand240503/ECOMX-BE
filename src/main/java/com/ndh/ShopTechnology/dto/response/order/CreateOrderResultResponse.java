@@ -22,12 +22,18 @@ public class CreateOrderResultResponse {
     /** Có khi PTTT = VNPAY, phiên chưa thanh toán. Gọi {@code POST .../payment/vnpay/checkout-sessions/{id}/payment-url}. */
     Long checkoutSessionId;
     /**
-     * UUID công khai: {@code GET .../orders/vnpay-pending/{transactionPublicId} } để xem thất bại / hết hạn / đơn đã tạo
-     * (khi thành công, phiên DB bị xóa nhưng api vẫn trả {@code state=COMPLETED} nếu đã có đơn liên kết).
+     * Giá trị {@code checkout_sessions.public_id}: nếu FE gửi {@code order.checkoutWorkSessionId} thì trùng giá trị đó;
+     * nếu không thì là chuỗi của {@link #checkoutSessionId}. Dùng cho {@code GET .../vnpay-pending/{transactionPublicId}}.
      */
     String transactionPublicId;
     /** Tổng tiền (VND) giữ cho VNPAY / hiển thị. */
     Double pendingTotal;
+    /**
+     * Ước tính từ địa chỉ giao (OSRM + bảng phí cứng). Có khi tạo phiên VNPAY hoặc đơn COD;
+     * null nếu dịch vụ định tuyến/geocode lỗi.
+     */
+    Double deliveryDistanceMeters;
+    Long shippingFeeVnd;
     PaymentMethodSummaryResponse paymentMethod;
     String message;
 }

@@ -22,6 +22,8 @@ import com.ndh.ShopTechnology.entities.order.OrderEntity;
 import com.ndh.ShopTechnology.entities.order.PaymentMethodEntity;
 import com.ndh.ShopTechnology.entities.product.PriceEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
+import com.ndh.ShopTechnology.entities.user.AddressType;
+import com.ndh.ShopTechnology.entities.user.UserAddressEntity;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
@@ -30,9 +32,12 @@ import com.ndh.ShopTechnology.repository.OrderDetailRepository;
 import com.ndh.ShopTechnology.repository.OrderRepository;
 import com.ndh.ShopTechnology.repository.PaymentMethodRepository;
 import com.ndh.ShopTechnology.repository.ProductRepository;
+import com.ndh.ShopTechnology.repository.UserAddressRepository;
+import com.ndh.ShopTechnology.utils.ShippingFeeCalculator;
 import com.ndh.ShopTechnology.services.order.OrderService;
 import com.ndh.ShopTechnology.services.order.VnpaySessionFinalizeResult;
 import com.ndh.ShopTechnology.services.user.UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,7 +45,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.Year;
 import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
@@ -48,11 +52,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+@Slf4j
 @Service
 public class OrderServiceImpl implements OrderService {
 
-    private static final int CHECKOUT_SESSION_HOURS_VALID = 2;
+    private static final int CHECKOUT_SESSION_VALID_MINUTES = 30;
 
     /**
      * Bảng mã {@code vnp_TransactionStatus} (tài liệu Thanh toán Pay VNPAY) — bản rút gọn dùng cho API.
@@ -72,6 +78,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserService userService;
     private final ObjectMapper objectMapper;
     private final VnpayProperties vnpayProperties;
+    private final UserAddressRepository userAddressRepository;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
@@ -81,7 +88,8 @@ public class OrderServiceImpl implements OrderService {
             CheckoutSessionRepository checkoutSessionRepository,
             UserService userService,
             ObjectMapper objectMapper,
-            VnpayProperties vnpayProperties) {
+            VnpayProperties vnpayProperties,
+            UserAddressRepository userAddressRepository) {
         this.orderRepository = orderRepository;
         this.orderDetailRepository = orderDetailRepository;
         this.productRepository = productRepository;
@@ -90,6 +98,7 @@ public class OrderServiceImpl implements OrderService {
         this.userService = userService;
         this.objectMapper = objectMapper;
         this.vnpayProperties = vnpayProperties;
+        this.userAddressRepository = userAddressRepository;
     }
 
     @Override
@@ -99,6 +108,7 @@ public class OrderServiceImpl implements OrderService {
         if (request.getOrderDetails() == null || request.getOrderDetails().isEmpty()) {
             throw new CustomApiException(HttpStatus.BAD_REQUEST, "orderDetails must not be empty");
         }
+        validateOrderHeaderForShipping(request.getOrder());
 
         OrderPlaceDraft draft = buildDraft(request);
 
@@ -109,9 +119,12 @@ public class OrderServiceImpl implements OrderService {
         if (OrderConstants.PM_CODE_COD.equalsIgnoreCase(pmCode)) {
             OrderEntity order = persistOrderFromDraft(draft, currentUser, false, null);
             List<OrderDetailEntity> savedDetails = orderDetailRepository.findByOrder_IdOrderByIdAsc(order.getId());
+            OrderResponse orderRes = buildOrderResponse(order, mapDetailResponses(savedDetails));
             return CreateOrderResultResponse.builder()
                     .outcome("ORDER_CREATED")
-                    .order(buildOrderResponse(order, mapDetailResponses(savedDetails)))
+                    .order(orderRes)
+                    .deliveryDistanceMeters(orderRes.getDeliveryDistanceMeters())
+                    .shippingFeeVnd(orderRes.getShippingFeeVnd())
                     .message("Order created successfully")
                     .build();
         }
@@ -123,23 +136,42 @@ public class OrderServiceImpl implements OrderService {
             } catch (Exception e) {
                 throw new CustomApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not serialize checkout payload");
             }
-            Date expiresAt = new Date(System.currentTimeMillis() + CHECKOUT_SESSION_HOURS_VALID * 3600_000L);
-            CheckoutSessionEntity session = CheckoutSessionEntity.builder()
+            Date expiresAt = new Date(System.currentTimeMillis() + CHECKOUT_SESSION_VALID_MINUTES * 60_000L);
+            CheckoutShipping ship = resolveCheckoutShipping(request.getOrder(), currentUser.getId(), null);
+            double grandTotal = grandOrderTotalVnd(draft.orderTotal(), ship.shippingFeeVnd());
+            CreateOrderHeaderRequest header = request.getOrder();
+            String workSession = normalizeOptionalCheckoutWorkSessionId(header.getCheckoutWorkSessionId());
+            if (workSession != null && checkoutSessionRepository.existsByPublicId(workSession)) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                        "checkoutWorkSessionId is already in use; choose a new session id");
+            }
+            CheckoutSessionEntity.CheckoutSessionEntityBuilder sessionBuilder = CheckoutSessionEntity.builder()
                     .user(currentUser)
                     .paymentMethod(draft.paymentMethod())
-                    .total(draft.orderTotal())
+                    .total(grandTotal)
+                    .deliveryDistanceMeters(ship.distanceMeters())
+                    .shippingFeeVnd(ship.shippingFeeVnd())
                     .requestPayloadJson(json)
                     .status(CheckoutSessionStatus.PENDING)
                     .expiresAt(expiresAt)
-                    .orderId(null)
-                    .build();
+                    .orderId(null);
+            if (workSession != null) {
+                sessionBuilder.publicId(workSession);
+            }
+            CheckoutSessionEntity session = sessionBuilder.build();
             session = checkoutSessionRepository.save(session);
+            if (workSession == null) {
+                session.setPublicId(String.valueOf(session.getId()));
+                session = checkoutSessionRepository.save(session);
+            }
             PaymentMethodEntity pm = draft.paymentMethod();
             return CreateOrderResultResponse.builder()
                     .outcome("PENDING_VNPAY_PAYMENT")
                     .checkoutSessionId(session.getId())
                     .transactionPublicId(session.getPublicId())
-                    .pendingTotal(draft.orderTotal())
+                    .pendingTotal(grandTotal)
+                    .deliveryDistanceMeters(ship.distanceMeters())
+                    .shippingFeeVnd(ship.shippingFeeVnd())
                     .paymentMethod(PaymentMethodSummaryResponse.builder()
                             .id(pm.getId())
                             .name(pm.getName())
@@ -204,7 +236,9 @@ public class OrderServiceImpl implements OrderService {
             return VnpaySessionFinalizeResult.BUSINESS_ERROR;
         }
 
-        if (Math.abs(draft.orderTotal() - session.getTotal()) > 0.01) {
+        CheckoutShipping shipRecalc = resolveCheckoutShipping(request.getOrder(), user.getId(), null);
+        double expectedGrand = grandOrderTotalVnd(draft.orderTotal(), shipRecalc.shippingFeeVnd());
+        if (Math.abs(expectedGrand - session.getTotal()) > 0.01) {
             return VnpaySessionFinalizeResult.BUSINESS_ERROR;
         }
         String code = draft.paymentMethod().getCode() != null ? draft.paymentMethod().getCode() : "";
@@ -214,7 +248,7 @@ public class OrderServiceImpl implements OrderService {
 
         try {
             OrderEntity order = persistOrderFromDraft(
-                    draft, user, true, new Date(), session.getPublicId(), session.getId());
+                    draft, user, true, new Date(), session.getPublicId(), session.getId(), session);
             session.setOrderId(order.getId());
             session.setStatus(CheckoutSessionStatus.COMPLETED);
             checkoutSessionRepository.save(session);
@@ -227,20 +261,16 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public VnpayPendingTransactionResponse getVnpayPendingTransactionByPublicId(String publicId) {
-        try {
-            UUID.fromString(publicId);
-        } catch (IllegalArgumentException e) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Invalid transaction public id");
-        }
+        String pub = normalizeCheckoutSessionPublicId(publicId);
         UserEntity currentUser = userService.getCurrentUser();
         long userId = currentUser.getId();
 
         return checkoutSessionRepository
-                .findByPublicIdAndUser_Id(publicId, userId)
-                .map(session -> toPendingFromSession(session, publicId))
+                .findByPublicIdAndUser_Id(pub, userId)
+                .map(session -> toPendingFromSession(session, pub))
                 .or(() -> orderRepository
-                        .findByCheckoutSessionPublicIdAndUser_Id(publicId, userId)
-                        .map(order -> toPendingCompleted(publicId, order)))
+                        .findByCheckoutSessionPublicIdAndUser_Id(pub, userId)
+                        .map(order -> toPendingCompleted(pub, order)))
                 .orElseThrow(
                         () -> new NotFoundEntityException("VNPAY payment session not found for this id"));
     }
@@ -248,20 +278,16 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public VnpayTransactionStatusResponse getVnpayTransactionStatusByPublicId(String publicId) {
-        try {
-            UUID.fromString(publicId);
-        } catch (IllegalArgumentException e) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Invalid transaction public id");
-        }
+        String pub = normalizeCheckoutSessionPublicId(publicId);
         UserEntity currentUser = userService.getCurrentUser();
         long userId = currentUser.getId();
 
         return checkoutSessionRepository
-                .findByPublicIdAndUser_Id(publicId, userId)
-                .map(session -> toVnpayTransactionStatusFromSession(session, publicId))
+                .findByPublicIdAndUser_Id(pub, userId)
+                .map(session -> toVnpayTransactionStatusFromSession(session, pub))
                 .or(() -> orderRepository
-                        .findByCheckoutSessionPublicIdAndUser_Id(publicId, userId)
-                        .map(order -> toVnpayTransactionStatusFromCompletedOrder(publicId, order.getId())))
+                        .findByCheckoutSessionPublicIdAndUser_Id(pub, userId)
+                        .map(order -> toVnpayTransactionStatusFromCompletedOrder(pub, order.getId())))
                 .orElseThrow(
                         () -> new NotFoundEntityException("VNPAY payment session not found for this id"));
     }
@@ -345,14 +371,10 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public void abandonVnpayCheckoutSessionByPublicId(String publicId) {
-        try {
-            UUID.fromString(publicId);
-        } catch (IllegalArgumentException e) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Invalid transaction public id");
-        }
+        String pub = normalizeCheckoutSessionPublicId(publicId);
         UserEntity currentUser = userService.getCurrentUser();
         CheckoutSessionEntity session = checkoutSessionRepository
-                .findByPublicIdAndUser_Id(publicId, currentUser.getId())
+                .findByPublicIdAndUser_Id(pub, currentUser.getId())
                 .orElseThrow(() -> new NotFoundEntityException(
                         "Checkout session not found or not owned by current user"));
 
@@ -381,15 +403,11 @@ public class OrderServiceImpl implements OrderService {
                     HttpStatus.FORBIDDEN,
                     "Dev simulate is disabled. Set vnpay.dev-simulate-success-enabled=true (local only; never in production).");
         }
-        try {
-            UUID.fromString(publicId);
-        } catch (IllegalArgumentException e) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Invalid transaction public id");
-        }
+        String pub = normalizeCheckoutSessionPublicId(publicId);
         UserEntity currentUser = userService.getCurrentUser();
         long userId = currentUser.getId();
         CheckoutSessionEntity session = checkoutSessionRepository
-                .findByPublicIdAndUser_Id(publicId, userId)
+                .findByPublicIdAndUser_Id(pub, userId)
                 .orElseThrow(() -> new NotFoundEntityException(
                         "Checkout session not found or not owned by current user"));
 
@@ -400,7 +418,7 @@ public class OrderServiceImpl implements OrderService {
         VnpaySessionFinalizeResult r = finalizeVnpayCheckoutSession(session.getId(), true);
         if (r == VnpaySessionFinalizeResult.CREATED || r == VnpaySessionFinalizeResult.ALREADY_COMPLETED) {
             CheckoutSessionEntity updated = checkoutSessionRepository
-                    .findByPublicIdAndUser_Id(publicId, userId)
+                    .findByPublicIdAndUser_Id(pub, userId)
                     .orElseThrow(() -> new NotFoundEntityException("Checkout session not found after dev simulate"));
             if (updated.getOrderId() == null) {
                 throw new CustomApiException(
@@ -558,11 +576,14 @@ public class OrderServiceImpl implements OrderService {
             OrderPlaceDraft draft = buildDraft(req);
             CreateOrderHeaderRequest h = draft.header();
             int typeOrder = h.getTypeOrder() != null ? h.getTypeOrder() : OrderConstants.TYPE_ONLINE;
+            CheckoutShipping ship = resolveCheckoutShipping(h, session.getUser().getId(), session);
             return VnpayCheckoutOrderInfoResponse.builder()
                     .description(h.getDescription())
                     .typeOrder(typeOrder)
-                    .deliveryAddress(h.getDeliveryAddress())
-                    .total(draft.orderTotal())
+                    .deliveryAddress(ship.deliveryAddressForOrder())
+                    .total(session.getTotal())
+                    .deliveryDistanceMeters(session.getDeliveryDistanceMeters())
+                    .shippingFeeVnd(session.getShippingFeeVnd())
                     .orderDetails(draft.detailResponses())
                     .build();
         } catch (Exception e) {
@@ -579,6 +600,8 @@ public class OrderServiceImpl implements OrderService {
                 .typeOrder(order.getTypeOrder())
                 .deliveryAddress(order.getDeliveryAddress())
                 .total(order.getTotal())
+                .deliveryDistanceMeters(order.getDeliveryDistanceMeters())
+                .shippingFeeVnd(order.getShippingFeeVnd())
                 .orderDetails(orderDetails)
                 .build();
     }
@@ -648,7 +671,7 @@ public class OrderServiceImpl implements OrderService {
             UserEntity currentUser,
             boolean markPaid,
             Date paidAt) {
-        return persistOrderFromDraft(draft, currentUser, markPaid, paidAt, null, null);
+        return persistOrderFromDraft(draft, currentUser, markPaid, paidAt, null, null, null);
     }
 
     private OrderEntity persistOrderFromDraft(
@@ -657,20 +680,26 @@ public class OrderServiceImpl implements OrderService {
             boolean markPaid,
             Date paidAt,
             String checkoutSessionPublicId,
-            Long vnpayCheckoutTxnRef) {
+            Long vnpayCheckoutTxnRef,
+            CheckoutSessionEntity vnpaySessionOrNull) {
         CreateOrderHeaderRequest header = draft.header();
         String orderDescription = header.getDescription();
         int typeOrder = header.getTypeOrder() != null
                 ? header.getTypeOrder()
                 : OrderConstants.TYPE_ONLINE;
 
+        CheckoutShipping ship = resolveCheckoutShipping(header, currentUser.getId(), vnpaySessionOrNull);
+        double grandTotal = grandOrderTotalVnd(draft.orderTotal(), ship.shippingFeeVnd());
+
         OrderEntity order = OrderEntity.builder()
                 .user(currentUser)
                 .status(OrderConstants.STATUS_AWAITING_CONFIRM)
                 .description(orderDescription)
-                .total(draft.orderTotal())
+                .total(grandTotal)
                 .typeOrder(typeOrder)
-                .deliveryAddress(header.getDeliveryAddress())
+                .deliveryAddress(ship.deliveryAddressForOrder())
+                .deliveryDistanceMeters(ship.distanceMeters())
+                .shippingFeeVnd(ship.shippingFeeVnd())
                 .paymentMethod(draft.paymentMethod())
                 .paid(markPaid)
                 .paidAt(markPaid ? paidAt : null)
@@ -696,6 +725,140 @@ public class OrderServiceImpl implements OrderService {
             List<OrderDetailResponse> detailResponses,
             CreateOrderHeaderRequest header,
             PaymentMethodEntity paymentMethod) {
+    }
+
+    /**
+     * Khoảng cách + phí + chuỗi địa chỉ lưu trên đơn (địa chỉ lấy từ {@code user_address} khi có id).
+     */
+    private record CheckoutShipping(Double distanceMeters, Long shippingFeeVnd, String deliveryAddressForOrder) {}
+
+    /** Tổng thanh toán (VND): tiền hàng (chi tiết) + phí ship; phí null coi như 0. */
+    private static double grandOrderTotalVnd(double merchandiseSubtotal, Long shippingFeeVnd) {
+        long shipVnd = shippingFeeVnd != null ? shippingFeeVnd : 0L;
+        return merchandiseSubtotal + shipVnd;
+    }
+
+    private void validateOrderHeaderForShipping(CreateOrderHeaderRequest h) {
+        if (h.getUserAddressId() != null) {
+            return;
+        }
+        if (h.getDeliveryDistanceMeters() != null) {
+            if (h.getDeliveryAddress() == null || h.getDeliveryAddress().isBlank()) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                        "deliveryAddress is required when using deliveryDistanceMeters without userAddressId");
+            }
+            return;
+        }
+        throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                "Provide userAddressId (saved address) or deliveryDistanceMeters from GET .../shipping/distance-to-warehouse");
+    }
+
+    private static String normalizeOptionalCheckoutWorkSessionId(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String t = raw.trim();
+        if (t.isEmpty()) {
+            return null;
+        }
+        if (t.length() > 128) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "checkoutWorkSessionId must be at most 128 characters");
+        }
+        if (!WORK_SESSION_PUBLIC_ID_PATTERN.matcher(t).matches()) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "checkoutWorkSessionId may only contain letters, digits, hyphen, underscore, dot, colon");
+        }
+        return t;
+    }
+
+    private static final java.util.regex.Pattern WORK_SESSION_PUBLIC_ID_PATTERN =
+            java.util.regex.Pattern.compile("^[a-zA-Z0-9._:\\-]+$");
+
+    /** {@code public_id} = id phiên (chuỗi); từ chối rỗng / quá dài. */
+    private static String normalizeCheckoutSessionPublicId(String publicId) {
+        if (publicId == null) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Invalid transaction public id");
+        }
+        String t = publicId.trim();
+        if (t.isEmpty() || t.length() > 128) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Invalid transaction public id");
+        }
+        return t;
+    }
+
+    /**
+     * Ưu tiên snapshot phiên VNPAY (nếu có khoảng cách hoặc phí); không gọi OSM/OSRM.
+     * Ngược lại: ưu tiên {@code userAddressId} (đọc {@code distance_to_warehouse_meters}, {@code shipping_fee_vnd} trên DB).
+     */
+    private CheckoutShipping resolveCheckoutShipping(
+            CreateOrderHeaderRequest header,
+            long userId,
+            CheckoutSessionEntity vnpaySessionOrNull) {
+        if (vnpaySessionOrNull != null
+                && (vnpaySessionOrNull.getDeliveryDistanceMeters() != null
+                        || vnpaySessionOrNull.getShippingFeeVnd() != null)) {
+            return new CheckoutShipping(
+                    vnpaySessionOrNull.getDeliveryDistanceMeters(),
+                    vnpaySessionOrNull.getShippingFeeVnd(),
+                    resolveDeliveryAddressForOrder(header, userId));
+        }
+        return resolveCheckoutShippingFromHeader(header, userId);
+    }
+
+    private CheckoutShipping resolveCheckoutShippingFromHeader(CreateOrderHeaderRequest header, long userId) {
+        if (header.getUserAddressId() != null) {
+            UserAddressEntity addr = userAddressRepository
+                    .findByIdAndUserIdAndAddressType(header.getUserAddressId(), userId, AddressType.USER)
+                    .orElseThrow(() -> new NotFoundEntityException(
+                            "User address not found with id: " + header.getUserAddressId()));
+            Double dist = addr.getDistanceToWarehouseMeters();
+            Long fee = addr.getShippingFeeVnd();
+            if (dist == null && header.getDeliveryDistanceMeters() != null) {
+                dist = header.getDeliveryDistanceMeters();
+                fee = ShippingFeeCalculator.fromDistanceMeters(dist);
+            } else if (dist != null) {
+                if (fee == null) {
+                    fee = ShippingFeeCalculator.fromDistanceMeters(dist);
+                }
+            } else {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                        "Saved address has no distance to warehouse; update the address or send deliveryDistanceMeters");
+            }
+            return new CheckoutShipping(dist, fee, formatUserAddressSnapshot(addr));
+        }
+        if (header.getDeliveryDistanceMeters() != null) {
+            double m = header.getDeliveryDistanceMeters();
+            if (header.getDeliveryAddress() == null || header.getDeliveryAddress().isBlank()) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                        "deliveryAddress is required when using deliveryDistanceMeters without userAddressId");
+            }
+            return new CheckoutShipping(
+                    m, ShippingFeeCalculator.fromDistanceMeters(m), header.getDeliveryAddress().trim());
+        }
+        throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                "Provide userAddressId (saved address) or deliveryDistanceMeters from the shipping API");
+    }
+
+    private String resolveDeliveryAddressForOrder(CreateOrderHeaderRequest header, long userId) {
+        if (header.getUserAddressId() != null) {
+            UserAddressEntity addr = userAddressRepository
+                    .findByIdAndUserIdAndAddressType(header.getUserAddressId(), userId, AddressType.USER)
+                    .orElseThrow(() -> new NotFoundEntityException(
+                            "User address not found with id: " + header.getUserAddressId()));
+            return formatUserAddressSnapshot(addr);
+        }
+        if (header.getDeliveryAddress() == null || header.getDeliveryAddress().isBlank()) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "deliveryAddress is required when userAddressId is omitted");
+        }
+        return header.getDeliveryAddress().trim();
+    }
+
+    private static String formatUserAddressSnapshot(UserAddressEntity a) {
+        return Stream.of(a.getAddressLine(), a.getCity(), a.getState(), a.getCountry(), a.getZipCode())
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .collect(Collectors.joining(", "));
     }
 
     @Override
@@ -823,6 +986,8 @@ public class OrderServiceImpl implements OrderService {
                 .total(order.getTotal())
                 .typeOrder(order.getTypeOrder())
                 .deliveryAddress(order.getDeliveryAddress())
+                .deliveryDistanceMeters(order.getDeliveryDistanceMeters())
+                .shippingFeeVnd(order.getShippingFeeVnd())
                 .paid(order.getPaid())
                 .paidAt(order.getPaidAt())
                 .paymentMethod(pm == null ? null : PaymentMethodSummaryResponse.builder()

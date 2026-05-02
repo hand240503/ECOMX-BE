@@ -30,6 +30,10 @@ public class OrderResponse {
     private Integer typeOrder;
     /** Địa chỉ giao hàng lưu snapshot. */
     private String deliveryAddress;
+    /** Quãng đường lái tới kho lúc đặt (m), null nếu không tính được. */
+    private Double deliveryDistanceMeters;
+    /** Phí ship snapshot (VND). */
+    private Long shippingFeeVnd;
     /** Đã ghi nhận thanh toán. */
     private Boolean paid;
     private Date paidAt;

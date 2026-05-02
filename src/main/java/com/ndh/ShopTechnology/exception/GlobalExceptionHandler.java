@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -53,6 +54,32 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
+                .body(response);
+    }
+
+    @ExceptionHandler(value = ConstraintViolationException.class)
+    public ResponseEntity<APIResponse<Void>> handleConstraintViolation(ConstraintViolationException ex) {
+        log.error("Constraint violation: {}", ex.getMessage());
+
+        List<ErrorResponse> errors = ex.getConstraintViolations()
+                .stream()
+                .map(v -> ErrorResponse.builder()
+                        .field(v.getPropertyPath().toString())
+                        .message(v.getMessage())
+                        .rejectedValue(v.getInvalidValue())
+                        .build())
+                .collect(Collectors.toList());
+
+        APIResponse<Void> response = APIResponse.of(
+                false,
+                MessageConstant.VALIDATION_FAILED,
+                null,
+                errors,
+                null
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
                 .body(response);
     }
 

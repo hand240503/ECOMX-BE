@@ -26,5 +26,7 @@ public class VnpayCheckoutOrderInfoResponse {
     private Integer typeOrder;
     private String deliveryAddress;
     private Double total;
+    private Double deliveryDistanceMeters;
+    private Long shippingFeeVnd;
     private List<OrderDetailResponse> orderDetails;
 }
