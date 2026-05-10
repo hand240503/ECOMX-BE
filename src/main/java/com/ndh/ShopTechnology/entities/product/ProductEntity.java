@@ -19,12 +19,15 @@ public class ProductEntity extends BaseEntity {
     public static final String COL_PRODUCT_NAME = "product_name";
     public static final String COL_STATUS = "status";
     public static final String COL_DESCRIPTION = "description";
+    public static final String COL_L_DESCRIPTION = "l_description";
     public static final String COL_CATEGORY_ID = "category_id";
     public static final String COL_PRODUCT_ID = "product_id";
     public static final String COL_BRAND_ID = "brand_id";
     public static final String COL_IS_FEATURED = "is_featured";
+    public static final String COL_HOT_SALE = "hot_sale";
     public static final String COL_SOLD_COUNT = "sold_count";
     public static final String COL_TAG = "tag";
+    public static final String COL_SKU = "sku";
 
     @Column(name = COL_PRODUCT_NAME, nullable = true)
     private String productName;
@@ -34,6 +37,10 @@ public class ProductEntity extends BaseEntity {
 
     @Column(name = COL_DESCRIPTION, nullable = true)
     private String description;
+
+    /** Mô tả dài / rich-text (tuỳ nghiệp vụ). */
+    @Column(name = COL_L_DESCRIPTION, nullable = true, columnDefinition = "TEXT")
+    private String lDescription;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = COL_CATEGORY_ID, nullable = false)
@@ -47,12 +54,20 @@ public class ProductEntity extends BaseEntity {
     @Builder.Default
     private Boolean isFeatured = false;
 
+    @Column(name = COL_HOT_SALE)
+    @Builder.Default
+    private Boolean hotSale = false;
+
     @Column(name = COL_SOLD_COUNT)
     @Builder.Default
     private Long soldCount = 0L;
 
     @Column(name = COL_TAG)
     private String tag;
+
+    /** Mã SKU dạng số (tùy nghiệp vụ, có thể null với dữ liệu cũ). */
+    @Column(name = COL_SKU)
+    private Long sku;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @BatchSize(size = 32)

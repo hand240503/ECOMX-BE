@@ -1,5 +1,6 @@
 package com.ndh.ShopTechnology.dto.response.log;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.ndh.ShopTechnology.entities.log.CollectorLogEntity;
 import lombok.*;
 
@@ -22,6 +23,10 @@ public class CollectorLogResponse {
     private Date timestamp;
     private Long productId;
     private String productName;
+
+    @JsonProperty("l_description")
+    private String lDescription;
+
     private Long userId;
     private String username;
     private Date createdDate;
@@ -45,7 +50,8 @@ public class CollectorLogResponse {
 
         if (entity.getProduct() != null) {
             builder.productId(entity.getProduct().getId())
-                    .productName(entity.getProduct().getProductName());
+                    .productName(entity.getProduct().getProductName())
+                    .lDescription(entity.getProduct().getLDescription());
         }
 
         if (entity.getUser() != null) {

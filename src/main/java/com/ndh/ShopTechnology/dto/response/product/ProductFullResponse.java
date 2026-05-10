@@ -1,6 +1,7 @@
 package com.ndh.ShopTechnology.dto.response.product;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.ndh.ShopTechnology.entities.product.PolicyEntity;
 import com.ndh.ShopTechnology.entities.product.PriceEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
@@ -20,6 +21,12 @@ import java.util.stream.Collectors;
 
 /**
  * DTO thống nhất cho mọi API trả về sản phẩm (home, tìm kiếm, gợi ý, theo category, …).
+ *
+ * <p>JSON gồm {@code description}, {@code l_description} (mô tả dài) và các field khác map trực tiếp từ
+ * {@link ProductEntity}.
+ *
+ * <p>Các URL ảnh ({@code thumbnailUrl}, {@code mainImageUrl}, {@code imageUrls}) và danh sách {@link #documents}
+ * được gán từ bảng {@code document} trong service, không được gán trong {@link #fromEntity}.
  */
 @Getter
 @Setter
@@ -30,10 +37,17 @@ import java.util.stream.Collectors;
 public class ProductFullResponse {
 
   private Long id;
+  /** Mã SKU (số), có thể null. */
+  private Long sku;
   private String productName;
   private String description;
+
+  @JsonProperty("l_description")
+  private String lDescription;
+
   private Integer status;
   private Boolean isFeatured;
+  private Boolean hotSale;
   private Long soldCount;
   private String tag;
   private Date createdDate;
@@ -52,6 +66,29 @@ public class ProductFullResponse {
 
   private Double averageRating;
   private Long ratingCount;
+
+  /** Địa chỉ ảnh đại diện (thường trùng {@link #mainImageUrl}; document đầu tiên của SP). */
+  private String thumbnailUrl;
+  /** Ảnh cover / PDP chính — URL đầy đủ (Cloudinary hoặc tương đương). */
+  private String mainImageUrl;
+  /** Tất cả URL ảnh gallery ({@code document.type} = ảnh hoặc legacy 0), không trùng; thumbnail ưu tiên {@code isMain}. */
+  private List<String> imageUrls;
+  /**
+   * Tóm tắt media (ảnh/video) của sản phẩm, thứ tự theo id document tăng dần. Xem {@link ProductDocumentSummary}.
+   */
+  private List<ProductDocumentSummary> documents;
+
+  /** Alias storefront: cùng giá trị {@link #mainImageUrl}. Chỉ xuất JSON, không lưu field. */
+  @JsonProperty(value = "imageUrl", access = JsonProperty.Access.READ_ONLY)
+  public String getImageUrl() {
+    return mainImageUrl;
+  }
+
+  /** Alias storefront (cover): cùng {@link #mainImageUrl}. */
+  @JsonProperty(value = "coverImageUrl", access = JsonProperty.Access.READ_ONLY)
+  public String getCoverImageUrl() {
+    return mainImageUrl;
+  }
 
   public static ProductFullResponse fromEntity(ProductEntity entity) {
     return fromEntity(entity, null, null, null, null);
@@ -91,10 +128,13 @@ public class ProductFullResponse {
     }
     return ProductFullResponse.builder()
         .id(entity.getId())
+        .sku(entity.getSku())
         .productName(entity.getProductName())
         .description(entity.getDescription())
+        .lDescription(entity.getLDescription())
         .status(entity.getStatus())
         .isFeatured(entity.getIsFeatured())
+        .hotSale(entity.getHotSale())
         .soldCount(entity.getSoldCount())
         .tag(entity.getTag())
         .createdDate(entity.getCreatedDate())

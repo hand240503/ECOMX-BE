@@ -1,6 +1,7 @@
 package com.ndh.ShopTechnology.services.user.impl;
 
 import com.ndh.ShopTechnology.constants.MessageConstant;
+import com.ndh.ShopTechnology.constants.PermissionCode;
 import com.ndh.ShopTechnology.constants.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.PaginationRequest;
 import com.ndh.ShopTechnology.dto.request.user.CreateUserRequest;
@@ -21,6 +22,7 @@ import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.RoleRepository;
 import com.ndh.ShopTechnology.repository.UserRepository;
 import com.ndh.ShopTechnology.services.auth.TokenFacade;
+import com.ndh.ShopTechnology.services.permission.PermissionEvaluator;
 import com.ndh.ShopTechnology.services.permission.PermissionService;
 import com.ndh.ShopTechnology.services.user.RoleAssignmentService;
 import com.ndh.ShopTechnology.services.user.UserService;
@@ -76,8 +78,18 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new AuthenticationFailedException(MessageConstant.AUTH_FAILED));
     }
 
+    /**
+     * Coi user là admin nếu có ít nhất 1 trong các quyền hệ thống "*_ALL" (101..104).
+     * Đây là tiêu chí dùng cho các flow cập nhật user theo id (admin update bất kỳ user nào).
+     */
     protected boolean isAdmin(UserEntity user) {
-        return user != null && user.hasAnyPermission("admin:all");
+        if (user == null) return false;
+        return PermissionEvaluator.hasAnyPermission(
+                user.getAllPermissions(),
+                PermissionCode.UPDATE_ALL,
+                PermissionCode.READ_ALL,
+                PermissionCode.CREATE_ALL,
+                PermissionCode.DELETE_ALL);
     }
 
     /**
@@ -217,7 +229,8 @@ public class UserServiceImpl implements UserService {
     public Page<UserResponse> getAllUsers(PaginationRequest request) {
         // Permission check must run before paging query.
         UserEntity currentUser = getCurrentUserEntity();
-        if (!currentUser.hasAnyPermission("user:read", "admin:all")) {
+        if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
+                PermissionCode.READ_USER, PermissionCode.READ_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
 
@@ -241,7 +254,8 @@ public class UserServiceImpl implements UserService {
     public UserResponse getUserInfo(Long id) {
         UserEntity currentUser = getCurrentUser();
 
-        if (!currentUser.hasAnyPermission("user:read", "admin:all")) {
+        if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
+                PermissionCode.READ_USER, PermissionCode.READ_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
 
@@ -441,7 +455,8 @@ public class UserServiceImpl implements UserService {
         }
 
         UserEntity currentUser = getCurrentUserEntity();
-        if (!currentUser.hasAnyPermission("user:create", "admin:all")) {
+        if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
+                PermissionCode.CREATE_USER, PermissionCode.CREATE_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
 

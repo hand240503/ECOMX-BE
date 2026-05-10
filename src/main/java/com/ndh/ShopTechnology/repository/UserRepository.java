@@ -28,14 +28,12 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
     boolean existsByPhoneNumberAndIdNot(String phoneNumber, Long id);
 
     /**
-     * Load user với roles, permissions, userInfo và default address
-     * Dùng cho login và authentication
+     * Load user kèm roles (permission_codes JSON đã eager), user permission grants, userInfo và default address.
+     * Dùng cho login và authentication.
      */
     @Query("SELECT DISTINCT u FROM UserEntity u " +
             "LEFT JOIN FETCH u.roles r " +
-            "LEFT JOIN FETCH r.permissions " +
-            "LEFT JOIN FETCH u.userPermissions up " +
-            "LEFT JOIN FETCH up.permission " +
+            "LEFT JOIN FETCH u.userPermissions " +
             "LEFT JOIN FETCH u.userInfo " +
             "LEFT JOIN FETCH u.addresses addr " +
             "WHERE u.username = :username " +
@@ -43,30 +41,18 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
     Optional<UserEntity> findByUsernameWithRolesAndPermissions(@Param("username") String username);
 
     /**
-     * Load user với roles, permissions và userInfo theo id.
-     * Dùng cho các luồng update (write) cần entity đã được fetch đầy đủ để tránh LazyInitialization.
+     * Load user kèm roles, user permission grants và userInfo theo id.
      */
     @Query("SELECT DISTINCT u FROM UserEntity u " +
             "LEFT JOIN FETCH u.roles r " +
-            "LEFT JOIN FETCH r.permissions " +
-            "LEFT JOIN FETCH u.userPermissions up " +
-            "LEFT JOIN FETCH up.permission " +
+            "LEFT JOIN FETCH u.userPermissions " +
             "LEFT JOIN FETCH u.userInfo " +
             "WHERE u.id = :id")
     Optional<UserEntity> findByIdWithRolesAndPermissions(@Param("id") Long id);
 
-    /**
-     * Query nhẹ chỉ lấy username theo id (tránh fetch full entity + tránh tái tạo cache không cần thiết).
-     */
     @Query("SELECT u.username FROM UserEntity u WHERE u.id = :id")
     Optional<String> findUsernameById(@Param("id") Long id);
 
-    /**
-     * Load user với userInfo (không cần roles/permissions)
-     * Dùng cho các case chỉ cần thông tin cơ bản
-     */
-    @Query("SELECT u FROM UserEntity u " +
-            "LEFT JOIN FETCH u.userInfo " +
-            "WHERE u.id = :id")
+    @Query("SELECT u FROM UserEntity u LEFT JOIN FETCH u.userInfo WHERE u.id = :id")
     Optional<UserEntity> findByIdWithInfo(@Param("id") Long id);
 }

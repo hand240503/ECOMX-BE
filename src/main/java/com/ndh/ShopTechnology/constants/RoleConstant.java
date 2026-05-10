@@ -1,16 +1,23 @@
 package com.ndh.ShopTechnology.constants;
 
-public class RoleConstant {
+/**
+ * Role codes của hệ thống. Dùng đồng thời:
+ * <ul>
+ *     <li>Trong {@code WebSecurityConfig} (qua {@code hasAnyRole(...)} → Spring Security tự thêm prefix {@code ROLE_}).</li>
+ *     <li>Trong {@code RolePermissionBootstrapper} để seed dữ liệu mặc định.</li>
+ * </ul>
+ */
+public final class RoleConstant {
+
+    private RoleConstant() {
+    }
+
+    public static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
     public static final String ROLE_ADMIN       = "ADMIN";
-    public static final String ROLE_USER        = "USER";
+    public static final String ROLE_MANAGER     = "MANAGER";
     public static final String ROLE_EMPLOYEE    = "EMPLOYEE";
     public static final String ROLE_CUSTOMER    = "CUSTOMER";
-    public static final String ROLE_MANAGER     = "MANAGER";
 
-    // Role IDs
-    public static final Long ROLE_ADMIN_ID      = 100L;
-    public static final Long ROLE_USER_ID       = 0L;
-    public static final Long ROLE_EMPLOYEE_ID   = 201L;
-    public static final Long ROLE_CUSTOMER_ID   = 202L;
-    public static final Long ROLE_MANAGER_ID    = 101L;
+    // Backward-compat (một số chỗ legacy dùng "USER"). Map về CUSTOMER ở RoleAssignmentService.
+    public static final String ROLE_USER        = "USER";
 }

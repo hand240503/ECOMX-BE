@@ -48,25 +48,31 @@ public class ProductServiceImpl implements ProductService {
     private static final int MAX_SEARCH_TOKENS = 12;
     private static final int MAX_TOKEN_LENGTH = 64;
 
+    /** Trần {@code limit} cho {@link #getFeaturedProducts} / {@link #getHotSaleProducts} khi {@code all == false}. */
+    public static final int MAX_FLAGGED_PRODUCT_LIST_LIMIT = 500;
+
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final UnitRepository unitRepository;
     private final UserRatingRepository userRatingRepository;
     private final HybridRecommendationService hybridRecommendationService;
     private final RecommendationEnrichmentService recommendationEnrichmentService;
+    private final ProductImageAttachService productImageAttachService;
 
     public ProductServiceImpl(ProductRepository productRepository,
             CategoryRepository categoryRepository,
             UnitRepository unitRepository,
             UserRatingRepository userRatingRepository,
             HybridRecommendationService hybridRecommendationService,
-            RecommendationEnrichmentService recommendationEnrichmentService) {
+            RecommendationEnrichmentService recommendationEnrichmentService,
+            ProductImageAttachService productImageAttachService) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.unitRepository = unitRepository;
         this.userRatingRepository = userRatingRepository;
         this.hybridRecommendationService = hybridRecommendationService;
         this.recommendationEnrichmentService = recommendationEnrichmentService;
+        this.productImageAttachService = productImageAttachService;
     }
 
     @Override
@@ -79,8 +85,11 @@ public class ProductServiceImpl implements ProductService {
         ProductEntity product = ProductEntity.builder()
                 .productName(request.getProductName())
                 .description(request.getDescription())
+                .lDescription(request.getLDescription())
                 .status(request.getStatus())
+                .sku(request.getSku())
                 .isFeatured(request.getIsFeatured() != null ? request.getIsFeatured() : false)
+                .hotSale(request.getHotSale() != null ? request.getHotSale() : false)
                 .category(category)
                 .build();
 
@@ -121,15 +130,50 @@ public class ProductServiceImpl implements ProductService {
         Page<ProductEntity> productPage = productRepository.findPageWithListRelations(pageable);
         Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
                 productPage.getContent().stream().map(ProductEntity::getId).toList());
-        return productPage.map(p -> toFull(p, ratings));
+        Page<ProductFullResponse> mapped = productPage.map(p -> toFull(p, ratings));
+        productImageAttachService.attach(mapped.getContent());
+        return mapped;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductFullResponse> getFeaturedProducts(int limit) {
-        Pageable pageable = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "id"));
-        List<ProductEntity> products = productRepository.findByIsFeaturedTrue(pageable);
+    public Page<ProductFullResponse> getAdminProducts(int page, int limit) {
+        Pageable pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.ASC, "id"));
+        Page<ProductEntity> productPage = productRepository.findPageWithListRelations(pageable);
+        Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
+                productPage.getContent().stream().map(ProductEntity::getId).toList());
+        Page<ProductFullResponse> mapped = productPage.map(p -> toFull(p, ratings));
+        productImageAttachService.attach(mapped.getContent());
+        return mapped;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductFullResponse> getFeaturedProducts(int limit, boolean all) {
+        List<ProductEntity> products = all
+                ? productRepository.findByIsFeaturedTrueOrderByIdDesc()
+                : productRepository.findByIsFeaturedTrue(PageRequest.of(
+                        0,
+                        effectiveFlaggedListLimit(limit),
+                        Sort.by(Sort.Direction.DESC, "id")));
         return mapWithRatings(products);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductFullResponse> getHotSaleProducts(int limit, boolean all) {
+        List<ProductEntity> products = all
+                ? productRepository.findByHotSaleTrueOrderByIdDesc()
+                : productRepository.findByHotSaleTrue(PageRequest.of(
+                        0,
+                        effectiveFlaggedListLimit(limit),
+                        Sort.by(Sort.Direction.DESC, "id")));
+        return mapWithRatings(products);
+    }
+
+    private static int effectiveFlaggedListLimit(int limit) {
+        int l = limit <= 0 ? 10 : limit;
+        return Math.min(l, MAX_FLAGGED_PRODUCT_LIST_LIMIT);
     }
 
     @Override
@@ -180,6 +224,7 @@ public class ProductServiceImpl implements ProductService {
                 out.add(toFull(p, ratings));
             }
         }
+        productImageAttachService.attach(out);
         return out;
     }
 
@@ -229,7 +274,27 @@ public class ProductServiceImpl implements ProductService {
                 : productRepository.findPageByCategoryId(categoryId, pageable);
         Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
                 productPage.getContent().stream().map(ProductEntity::getId).toList());
-        return productPage.map(p -> toFull(p, ratings));
+        Page<ProductFullResponse> mapped = productPage.map(p -> toFull(p, ratings));
+        productImageAttachService.attach(mapped.getContent());
+        return mapped;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductFullResponse> getAdminProductsByCategoryId(Long categoryId, int page, int limit) {
+        if (!categoryRepository.existsById(categoryId)) {
+            throw new NotFoundEntityException("Category not found with id: " + categoryId);
+        }
+        Pageable pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.ASC, "id"));
+        boolean isParentCategory = categoryRepository.existsByParent_Id(categoryId);
+        Page<ProductEntity> productPage = isParentCategory
+                ? productRepository.findPageByDirectChildCategoriesOf(categoryId, pageable)
+                : productRepository.findPageByCategoryId(categoryId, pageable);
+        Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
+                productPage.getContent().stream().map(ProductEntity::getId).toList());
+        Page<ProductFullResponse> mapped = productPage.map(p -> toFull(p, ratings));
+        productImageAttachService.attach(mapped.getContent());
+        return mapped;
     }
 
     @Override
@@ -253,11 +318,12 @@ public class ProductServiceImpl implements ProductService {
         Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
                 productPage.getContent().stream().map(ProductEntity::getId).toList());
         Page<ProductFullResponse> mapped = productPage.map(p -> toFull(p, ratings));
+        productImageAttachService.attach(mapped.getContent());
         return new ProductSearchResult(mapped, null);
     }
 
     /**
-     * Splits on whitespace; each token is matched (AND) against name / description / tag so spaced
+     * Splits on whitespace; each token is matched (AND) against name / description / {@code l_description} / tag so spaced
      * queries still hit compact product titles (e.g. "Smart Phone" vs "Smartphone").
      */
     private static List<String> tokenizeSearchKeywords(String sanitizedQuery) {
@@ -311,6 +377,10 @@ public class ProductServiceImpl implements ProductService {
             product.setDescription(request.getDescription());
         }
 
+        if (request.getLDescription() != null) {
+            product.setLDescription(request.getLDescription());
+        }
+
         if (request.getStatus() != null) {
             product.setStatus(request.getStatus());
         }
@@ -319,11 +389,23 @@ public class ProductServiceImpl implements ProductService {
             product.setIsFeatured(request.getIsFeatured());
         }
 
+        if (request.getHotSale() != null) {
+            product.setHotSale(request.getHotSale());
+        }
+
         if (request.getCategoryId() != null) {
             CategoryEntity category = categoryRepository.findById(request.getCategoryId())
                     .orElseThrow(() -> new NotFoundEntityException(
                             "Category not found with id: " + request.getCategoryId()));
             product.setCategory(category);
+        }
+
+        if (request.getTag() != null) {
+            product.setTag(request.getTag());
+        }
+
+        if (request.getSku() != null) {
+            product.setSku(request.getSku());
         }
 
         product = productRepository.save(product);
@@ -343,7 +425,10 @@ public class ProductServiceImpl implements ProductService {
     private List<ProductFullResponse> mapWithRatings(List<ProductEntity> products) {
         Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
                 products.stream().map(ProductEntity::getId).toList());
-        return products.stream().map(p -> toFull(p, ratings)).collect(Collectors.toList());
+        List<ProductFullResponse> list =
+                products.stream().map(p -> toFull(p, ratings)).collect(Collectors.toList());
+        productImageAttachService.attach(list);
+        return list;
     }
 
     private Map<Long, ProductRatingAggregate> ratingMapForIds(Collection<Long> ids) {
@@ -357,7 +442,9 @@ public class ProductServiceImpl implements ProductService {
     private ProductFullResponse toFullWithRatings(ProductEntity p) {
         Hibernate.initialize(p.getPolicies());
         Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(List.of(p.getId()));
-        return toFull(p, ratings);
+        ProductFullResponse dto = toFull(p, ratings);
+        productImageAttachService.attach(List.of(dto));
+        return dto;
     }
 
     private static ProductFullResponse toFull(ProductEntity p, Map<Long, ProductRatingAggregate> ratings) {

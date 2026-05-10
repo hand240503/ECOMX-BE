@@ -1,16 +1,19 @@
 package com.ndh.ShopTechnology.services.log.impl;
 
+import com.ndh.ShopTechnology.constants.CollectorLogEventConstant;
 import com.ndh.ShopTechnology.dto.request.log.CreateCollectorLogRequest;
 import com.ndh.ShopTechnology.dto.request.log.FilterCollectorLogRequest;
 import com.ndh.ShopTechnology.dto.response.log.CollectorLogResponse;
 import com.ndh.ShopTechnology.entities.log.CollectorLogEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
+import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.CollectorLogRepository;
 import com.ndh.ShopTechnology.repository.ProductRepository;
 import com.ndh.ShopTechnology.repository.UserRepository;
 import com.ndh.ShopTechnology.services.log.CollectorLogService;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,8 +39,17 @@ public class CollectorLogServiceImpl implements CollectorLogService {
     @Override
     @Transactional
     public CollectorLogResponse createLog(CreateCollectorLogRequest request) {
+        String event = request.getEvent() != null ? request.getEvent().trim() : "";
+        if (!CollectorLogEventConstant.ALLOWED_EVENTS.contains(event)) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "event must be one of: "
+                            + CollectorLogEventConstant.DETAILS + ", "
+                            + CollectorLogEventConstant.MORE_DETAILS + ", "
+                            + CollectorLogEventConstant.BUY);
+        }
+
         CollectorLogEntity.CollectorLogEntityBuilder builder = CollectorLogEntity.builder()
-                .event(request.getEvent())
+                .event(event)
                 .sessionId(request.getSessionId())
                 .deviceType(request.getDeviceType())
                 .platform(request.getPlatform())

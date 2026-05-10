@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
@@ -116,6 +117,7 @@ public class ProductController {
   }
 
   @PostMapping
+  @PreAuthorize("@perm.check(100001)")
   public ResponseEntity<APIResponse<ProductFullResponse>> createProduct(
       @Valid @RequestBody CreateProductRequest request) {
     try {
@@ -162,11 +164,41 @@ public class ProductController {
 
   @GetMapping("/featured")
   public ResponseEntity<APIResponse<List<ProductFullResponse>>> getFeaturedProducts(
-      @RequestParam(defaultValue = "10") int limit) {
-    List<ProductFullResponse> products = productService.getFeaturedProducts(limit);
+      @RequestParam(defaultValue = "10") int limit,
+      @RequestParam(defaultValue = "false") boolean all) {
+    List<ProductFullResponse> products = productService.getFeaturedProducts(limit, all);
     APIResponse<List<ProductFullResponse>> response = APIResponse.of(
         true,
         "Featured products retrieved successfully",
+        products,
+        null,
+        null);
+    return ResponseEntity.ok(response);
+  }
+
+  /** Cùng dữ liệu với {@code GET /featured} — lọc {@code is_featured = true}. */
+  @GetMapping("/is-featured")
+  public ResponseEntity<APIResponse<List<ProductFullResponse>>> getIsFeaturedProducts(
+      @RequestParam(defaultValue = "10") int limit,
+      @RequestParam(defaultValue = "false") boolean all) {
+    List<ProductFullResponse> products = productService.getFeaturedProducts(limit, all);
+    APIResponse<List<ProductFullResponse>> response = APIResponse.of(
+        true,
+        "Featured products retrieved successfully",
+        products,
+        null,
+        null);
+    return ResponseEntity.ok(response);
+  }
+
+  @GetMapping("/hot-sale")
+  public ResponseEntity<APIResponse<List<ProductFullResponse>>> getHotSaleProducts(
+      @RequestParam(defaultValue = "10") int limit,
+      @RequestParam(defaultValue = "false") boolean all) {
+    List<ProductFullResponse> products = productService.getHotSaleProducts(limit, all);
+    APIResponse<List<ProductFullResponse>> response = APIResponse.of(
+        true,
+        "Hot sale products retrieved successfully",
         products,
         null,
         null);
@@ -187,7 +219,7 @@ public class ProductController {
   }
 
   /**
-   * Full-text style search on product name, description, and tag (active items). Pagination metadata may
+   * Full-text style search on product name, description, {@code l_description}, and tag (active items). Pagination metadata may
    * include {@code suggestedQuery} / {@code spellSuggestion} when the backend provides an alternate keyword.
    */
   @GetMapping("/search")
@@ -302,6 +334,7 @@ public class ProductController {
   }
 
   @PutMapping("/{id}")
+  @PreAuthorize("@perm.check(100003)")
   public ResponseEntity<APIResponse<ProductFullResponse>> updateProduct(
       @PathVariable Long id,
       @Valid @RequestBody UpdateProductRequest request) {
@@ -329,6 +362,7 @@ public class ProductController {
   }
 
   @DeleteMapping("/{id}")
+  @PreAuthorize("@perm.check(100004)")
   public ResponseEntity<APIResponse<Void>> deleteProduct(@PathVariable Long id) {
     try {
       productService.deleteProduct(id);

@@ -41,6 +41,7 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
     private final SessionContextService sessionContextService;
     private final SessionBooster sessionBooster;
     private final RecommendationBlendProperties blendProperties;
+    private final RecommendationDiversityService recommendationDiversityService;
 
     private static final double W_CF_ITEM = 0.7;
     private static final double W_CONTENT_ITEM = 0.3;
@@ -66,26 +67,42 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
         int need = Math.min(off + lim, MAX_HOME_RANK);
         int mergeCap = Math.min(need * 2, MAX_MERGE_POOL);
 
-        UserState state = userStateService.getUserState(userId);
-        log.info("[Hybrid Home] userId={} sessionId={} state={} offset={} limit={}",
-                userId, sessionId, state, off, lim);
+        boolean guest = userId == null || userId <= 0;
 
         Map<Supplier<List<RecommendationItem>>, Double> sources = new LinkedHashMap<>();
-        switch (state) {
-            case NEW -> sources.put(() -> popularityService.getPopularItems(mergeCap), 1.0);
-            case COLD -> {
-                sources.put(() -> cbContentService.getRecommendations(userId, mergeCap), 0.7);
+        if (guest) {
+            List<Long> guestSeeds = (sessionId != null && !sessionId.isBlank())
+                    ? collectorLogRepository.findRecentProductIdsByGuestSession(sessionId, 5)
+                    : List.of();
+            if (guestSeeds.isEmpty()) {
+                sources.put(() -> popularityService.getPopularItems(mergeCap), 1.0);
+            } else {
+                List<Long> seeds = List.copyOf(guestSeeds);
+                sources.put(() -> mergeFromSeedProducts(seeds, mergeCap, true), 0.7);
                 sources.put(() -> popularityService.getPopularItems(mergeCap), 0.3);
             }
-            case ACTIVE -> {
-                sources.put(() -> cbContentService.getRecommendations(userId, mergeCap), 0.5);
-                sources.put(() -> contentToCfFromUserHistory(userId, sessionId, mergeCap), 0.3);
-                sources.put(() -> popularityService.getPopularItems(mergeCap), 0.2);
+            log.info("[Hybrid Home] guest sessionId={} personalized={} offset={} limit={}",
+                    sessionId, !guestSeeds.isEmpty(), off, lim);
+        } else {
+            UserState state = userStateService.getUserState(userId);
+            log.info("[Hybrid Home] userId={} sessionId={} state={} offset={} limit={}",
+                    userId, sessionId, state, off, lim);
+            switch (state) {
+                case NEW -> sources.put(() -> popularityService.getPopularItems(mergeCap), 1.0);
+                case COLD -> {
+                    sources.put(() -> cbContentService.getRecommendations(userId, mergeCap), 0.7);
+                    sources.put(() -> popularityService.getPopularItems(mergeCap), 0.3);
+                }
+                case ACTIVE -> {
+                    sources.put(() -> cbContentService.getRecommendations(userId, mergeCap), 0.5);
+                    sources.put(() -> contentToCfFromUserHistory(userId, sessionId, mergeCap), 0.3);
+                    sources.put(() -> popularityService.getPopularItems(mergeCap), 0.2);
+                }
             }
         }
 
         List<RecommendationItem> base = weightedMerge(sources, mergeCap);
-        SessionContext ctx = sessionContextService.buildContext(userId);
+        SessionContext ctx = sessionContextService.buildContext(userId, sessionId);
         List<RecommendationItem> boosted = sessionBooster.boost(base, ctx);
 
         log.info("[Hybrid Home] base={} boosted={} blend long={} short={}",
@@ -93,7 +110,8 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
                 blendProperties.getLongWeight(), blendProperties.getShortWeight());
 
         List<RecommendationItem> blended = blendLongShort(base, boosted, need);
-        return blended.stream().skip(off).limit(lim).toList();
+        List<RecommendationItem> diversified = recommendationDiversityService.diversifyByBrand(blended, need);
+        return diversified.stream().skip(off).limit(lim).toList();
     }
 
     /**
@@ -276,20 +294,59 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
             return List.of();
         }
 
+        return mergeFromSeedProducts(recent, limit, false);
+    }
+
+    /**
+     * Gộp gợi ý từ danh sách seed (CF; và content item–item nếu {@code hybridContent}).
+     */
+    private List<RecommendationItem> mergeFromSeedProducts(
+            List<Long> recent, int limit, boolean hybridContent) {
+
+        if (recent == null || recent.isEmpty()) {
+            return List.of();
+        }
+
         List<Integer> recentInt = recent.stream()
                 .map(Long::intValue)
                 .toList();
 
-        return recent.stream()
-                .flatMap(pid -> cfService
-                        .getSimilar(pid.intValue(), limit, recentInt)
-                        .stream())
-                .collect(Collectors.toMap(
-                        RecommendationItem::getProductId,
-                        it -> it,
-                        (a, b) -> a.getScore() >= b.getScore() ? a : b))
-                .values()
-                .stream()
+        if (!hybridContent) {
+            return recent.stream()
+                    .flatMap(pid -> cfService
+                            .getSimilar(pid.intValue(), limit, recentInt)
+                            .stream())
+                    .collect(Collectors.toMap(
+                            RecommendationItem::getProductId,
+                            it -> it,
+                            (a, b) -> a.getScore() >= b.getScore() ? a : b))
+                    .values()
+                    .stream()
+                    .sorted(Comparator.comparingDouble(RecommendationItem::getScore).reversed())
+                    .limit(limit)
+                    .toList();
+        }
+
+        Map<Long, Double> scoreMap = new HashMap<>();
+        Map<Long, String> sourceMap = new HashMap<>();
+        for (int i = 0; i < recent.size(); i++) {
+            long seedId = recent.get(i);
+            double recencyWeight = 1.0 / (1.0 + i);
+
+            for (RecommendationItem r : cfService.getSimilar((int) seedId, limit, recentInt)) {
+                scoreMap.merge(r.getProductId(), r.getScore() * W_CF_ITEM * recencyWeight, Double::sum);
+                sourceMap.merge(r.getProductId(), "cf",
+                        (oldS, newS) -> oldS.contains(newS) ? oldS : oldS + "+" + newS);
+            }
+            for (RecommendationItem r : contentItemService.getSimilar((int) seedId, limit, recentInt)) {
+                scoreMap.merge(r.getProductId(), r.getScore() * W_CONTENT_ITEM * recencyWeight, Double::sum);
+                sourceMap.merge(r.getProductId(), "content",
+                        (oldS, newS) -> oldS.contains(newS) ? oldS : oldS + "+" + newS);
+            }
+        }
+
+        return scoreMap.entrySet().stream()
+                .map(e -> new RecommendationItem(e.getKey(), e.getValue(), sourceMap.get(e.getKey())))
                 .sorted(Comparator.comparingDouble(RecommendationItem::getScore).reversed())
                 .limit(limit)
                 .toList();

@@ -1,5 +1,6 @@
 package com.ndh.ShopTechnology.services.user;
 
+import com.ndh.ShopTechnology.constants.RoleConstant;
 import com.ndh.ShopTechnology.entities.role.RoleEntity;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.RoleRepository;
@@ -10,6 +11,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Resolve {@link RoleEntity} từ list id; fallback về role CUSTOMER nếu input rỗng / không hợp lệ.
+ */
 @Service
 @RequiredArgsConstructor
 public class RoleAssignmentService {
@@ -25,7 +29,7 @@ public class RoleAssignmentService {
         }
 
         if (roles.isEmpty()) {
-            roleRepository.findByCode("ROLE_USER").ifPresent(roles::add);
+            roleRepository.findByCode(RoleConstant.ROLE_CUSTOMER).ifPresent(roles::add);
         }
 
         if (roles.isEmpty()) {

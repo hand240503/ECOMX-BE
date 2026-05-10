@@ -6,6 +6,7 @@ import com.ndh.ShopTechnology.dto.request.user.AdminModUserInfoRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.PaginationMetadata;
 import com.ndh.ShopTechnology.dto.response.user.UserResponse;
+import com.ndh.ShopTechnology.services.permission.PermissionService;
 import com.ndh.ShopTechnology.services.user.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,11 +22,13 @@ import java.util.List;
 public class AdminUserController {
 
   private final UserService userService;
+  private final PermissionService permissionService;
 
   @GetMapping("")
   public ResponseEntity<APIResponse<List<UserResponse>>> getAllUser(
       @RequestParam(value = "page", defaultValue = "0", required = false) int page,
       @RequestParam(value = "size", defaultValue = "10", required = false) int size) {
+    permissionService.requireAnyPermission(400002, 700002);
 
     PaginationRequest request = new PaginationRequest();
     request.setPage(page);
@@ -59,6 +62,7 @@ public class AdminUserController {
    */
   @PostMapping("")
   public ResponseEntity<APIResponse<UserResponse>> createUser(@RequestBody CreateUserRequest request) {
+    permissionService.requireAnyPermission(400001, 700001);
 
     UserResponse userResponse = userService.createUser(request);
 
@@ -73,6 +77,7 @@ public class AdminUserController {
    */
   @GetMapping("/{id}")
   public ResponseEntity<APIResponse<UserResponse>> getUserInfo(@PathVariable Long id) {
+    permissionService.requireAnyPermission(400002, 700002);
 
     UserResponse userResponse = userService.getUserInfo(id);
 
@@ -86,6 +91,7 @@ public class AdminUserController {
    */
   @PutMapping("")
   public ResponseEntity<APIResponse<UserResponse>> modUserInfo(@RequestBody AdminModUserInfoRequest request) {
+    permissionService.requireAnyPermission(400003, 700003);
 
     UserResponse userResponse = userService.updateUserInfo(request);
 

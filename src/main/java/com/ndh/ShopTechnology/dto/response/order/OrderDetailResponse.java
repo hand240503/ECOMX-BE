@@ -1,6 +1,7 @@
 package com.ndh.ShopTechnology.dto.response.order;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,4 +21,8 @@ public class OrderDetailResponse {
     private Double unitPrice;
     private String lineTotal;
     private String description;
+
+    /** Mô tả dài sản phẩm tại thời điểm xem đơn (snapshot từ bảng product). */
+    @JsonProperty("l_description")
+    private String lDescription;
 }

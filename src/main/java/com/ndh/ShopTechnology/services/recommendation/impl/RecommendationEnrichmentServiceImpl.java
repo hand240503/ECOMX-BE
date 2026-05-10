@@ -6,6 +6,7 @@ import com.ndh.ShopTechnology.entities.product.ProductEntity;
 import com.ndh.ShopTechnology.repository.ProductRepository;
 import com.ndh.ShopTechnology.repository.UserRatingRepository;
 import com.ndh.ShopTechnology.repository.projection.ProductRatingAggregate;
+import com.ndh.ShopTechnology.services.product.impl.ProductImageAttachService;
 import com.ndh.ShopTechnology.services.recommendation.RecommendationEnrichmentService;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Hibernate;
@@ -25,6 +26,7 @@ public class RecommendationEnrichmentServiceImpl
 
     private final ProductRepository productRepository;
     private final UserRatingRepository userRatingRepository;
+    private final ProductImageAttachService productImageAttachService;
 
     @Override
     @Transactional(readOnly = true)
@@ -49,7 +51,7 @@ public class RecommendationEnrichmentServiceImpl
                 .stream()
                 .collect(Collectors.toMap(ProductRatingAggregate::getProductId, Function.identity()));
 
-        return items.stream()
+        List<ProductFullResponse> enrichedList = items.stream()
                 .map(it -> {
                     ProductEntity p = productMap.get(it.getProductId());
                     if (p == null) {
@@ -62,5 +64,7 @@ public class RecommendationEnrichmentServiceImpl
                 })
                 .filter(Objects::nonNull)
                 .toList();
+        productImageAttachService.attach(enrichedList);
+        return enrichedList;
     }
 }

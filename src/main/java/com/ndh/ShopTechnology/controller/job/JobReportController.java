@@ -12,6 +12,7 @@ import com.ndh.ShopTechnology.services.job.JobReportService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,6 +29,7 @@ public class JobReportController {
     }
 
     @PostMapping
+    @PreAuthorize("@perm.check(600001)")
     public ResponseEntity<APIResponse<JobReportEntity>> createJobReport(
             @RequestBody CreateJobReportRequest request) throws Exception {
 
@@ -63,6 +65,7 @@ public class JobReportController {
     }
 
     @PutMapping
+    @PreAuthorize("@perm.check(600003)")
     public ResponseEntity<APIResponse<JobReportDetailEntity>> modifyJobReport(
             @RequestBody ModJobReportRequest request) throws Exception {
 
@@ -82,6 +85,7 @@ public class JobReportController {
     }
 
     @PostMapping("/details")
+    @PreAuthorize("@perm.check(600002)")
     public ResponseEntity<APIResponse<JobReportDetailEntity>> getJobReportForUser(
             @RequestBody GetJobReportRequest request) throws Exception {
 

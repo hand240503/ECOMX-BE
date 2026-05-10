@@ -2,6 +2,7 @@ package com.ndh.ShopTechnology.services.user;
 
 import com.ndh.ShopTechnology.config.MyUser;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
+import com.ndh.ShopTechnology.entities.user.UserPermissionEntity;
 import com.ndh.ShopTechnology.repository.UserRepository;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.core.GrantedAuthority;
@@ -12,11 +13,26 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
+/**
+ * Build authorities từ role + permission code (Integer) của user.
+ *
+ * <p>Ánh xạ:
+ * <ul>
+ *   <li>Role code → authority {@code ROLE_<code>} (vd ADMIN → ROLE_ADMIN). Dùng cho {@code hasRole(...)}.</li>
+ *   <li>Permission code (Integer) → authority {@code PERM_<code>} (vd 100002 → PERM_100002). Dùng cho debug/log; logic check chính thực hiện qua bean {@code @perm.check(...)}.</li>
+ * </ul>
+ */
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
+
+    public static final String AUTHORITY_PERM_PREFIX = "PERM_";
+    public static final String AUTHORITY_ROLE_PREFIX = "ROLE_";
 
     private final UserRepository userRepository;
 
@@ -31,63 +47,50 @@ public class CustomUserDetailsService implements UserDetailsService {
         UserEntity userEntity = userRepository.findByUsernameWithRolesAndPermissions(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
-        // Build authorities từ roles và permissions
         List<GrantedAuthority> authorities = buildAuthorities(userEntity);
 
-        // Tạo MyUser với authorities
         MyUser myUserDetail = new MyUser(
                 userEntity.getUsername(),
                 userEntity.getPassword(),
-                true,  // enabled
-                true,  // accountNonExpired
-                true,  // credentialsNonExpired
-                true,  // accountNonLocked
+                true,
+                true,
+                true,
+                true,
                 authorities
         );
 
-        // Copy properties
         BeanUtils.copyProperties(userEntity, myUserDetail);
 
         return myUserDetail;
     }
 
     /**
-     * Build authorities từ roles và permissions của user
+     * Build authority list = role authorities (ROLE_*) + permission authorities (PERM_*).
      */
     private List<GrantedAuthority> buildAuthorities(UserEntity user) {
+        Set<Integer> effective = new LinkedHashSet<>();
         List<GrantedAuthority> authorities = new ArrayList<>();
 
-        // 1. Thêm ROLE authorities từ roles
-        if (user.getRoles() != null && !user.getRoles().isEmpty()) {
+        if (user.getRoles() != null) {
             user.getRoles().forEach(role -> {
-                // Thêm role authority (VD: ROLE_ADMIN, ROLE_USER)
-                authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getCode()));
-
-                // 2. Thêm permission authorities từ role (VD: user:read, user:create)
-                if (role.getPermissions() != null) {
-                    role.getPermissions().forEach(permission ->
-                            authorities.add(new SimpleGrantedAuthority(permission.getCode()))
-                    );
+                authorities.add(new SimpleGrantedAuthority(AUTHORITY_ROLE_PREFIX + role.getCode()));
+                if (role.getPermissionCodes() != null) {
+                    effective.addAll(role.getPermissionCodes());
                 }
             });
         }
 
-        // 3. Thêm user-specific permissions (override)
         if (user.getUserPermissions() != null) {
-            user.getUserPermissions().forEach(userPerm -> {
-                String permCode = userPerm.getPermission().getCode();
-                GrantedAuthority authority = new SimpleGrantedAuthority(permCode);
+            LocalDateTime now = LocalDateTime.now();
+            for (UserPermissionEntity up : user.getUserPermissions()) {
+                if (up.getPermissionCode() == null) continue;
+                if (up.getExpiresAt() != null && up.getExpiresAt().isBefore(now)) continue;
+                effective.add(up.getPermissionCode());
+            }
+        }
 
-                if (userPerm.getPermissionType() == com.ndh.ShopTechnology.entities.user.UserPermissionEntity.PermissionType.GRANT) {
-                    // Grant permission
-                    if (!authorities.contains(authority)) {
-                        authorities.add(authority);
-                    }
-                } else {
-                    // Deny permission (remove if exists)
-                    authorities.remove(authority);
-                }
-            });
+        for (Integer code : effective) {
+            authorities.add(new SimpleGrantedAuthority(AUTHORITY_PERM_PREFIX + code));
         }
 
         return authorities;

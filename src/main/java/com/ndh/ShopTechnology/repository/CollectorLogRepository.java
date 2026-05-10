@@ -62,7 +62,9 @@ public interface CollectorLogRepository extends JpaRepository<CollectorLogEntity
 
         /** Đếm tổng số event của 1 user — dùng cho UserStateService (Bước 4). */
         @Query(value = """
-                        SELECT COUNT(*) FROM collector_log WHERE user_id = :userId
+                        SELECT COUNT(*) FROM collector_log
+                        WHERE user_id = :userId
+                          AND event IN ('details', 'moreDetails', 'buy')
                         """, nativeQuery = true)
         long countByUserId(@Param("userId") Long userId);
 
@@ -77,6 +79,7 @@ public interface CollectorLogRepository extends JpaRepository<CollectorLogEntity
                             FROM collector_log
                             WHERE user_id = :userId
                               AND product_id IS NOT NULL
+                              AND event IN ('details', 'moreDetails', 'buy')
                               AND (:sessionId IS NULL OR session_id = :sessionId)
                             GROUP BY product_id
                             ORDER BY last_ts DESC
@@ -95,6 +98,7 @@ public interface CollectorLogRepository extends JpaRepository<CollectorLogEntity
                             WHERE user_id = :userId
                               AND timestamp >= :since
                               AND product_id IS NOT NULL
+                              AND event IN ('details', 'moreDetails', 'buy')
                             GROUP BY product_id
                             ORDER BY last_ts DESC
                             LIMIT :limit
@@ -114,6 +118,7 @@ public interface CollectorLogRepository extends JpaRepository<CollectorLogEntity
     WHERE user_id = :userId
       AND `timestamp` >= :since
       AND product_id IS NOT NULL
+      AND event IN ('details', 'moreDetails', 'buy')
     GROUP BY product_id
     ORDER BY lastTs DESC
     LIMIT :limit
@@ -123,4 +128,43 @@ public interface CollectorLogRepository extends JpaRepository<CollectorLogEntity
             @Param("since") LocalDateTime since,
             @Param("limit") int limit
     );
+
+    /**
+     * Khách (chưa đăng nhập): N sản phẩm tương tác gần nhất theo phiên (session_id), user_id NULL.
+     */
+    @Query(value = """
+            SELECT product_id FROM (
+                SELECT product_id, MAX(`timestamp`) AS last_ts
+                FROM collector_log
+                WHERE session_id = :sessionId
+                  AND user_id IS NULL
+                  AND product_id IS NOT NULL
+                  AND event IN ('details', 'moreDetails', 'buy')
+                GROUP BY product_id
+                ORDER BY last_ts DESC
+                LIMIT :limit
+            ) t
+            """, nativeQuery = true)
+    List<Long> findRecentProductIdsByGuestSession(
+            @Param("sessionId") String sessionId,
+            @Param("limit") int limit);
+
+    @Query(value = """
+            SELECT product_id            AS productId,
+                   MAX(`timestamp`)      AS lastTs,
+                   COUNT(*)              AS cnt
+            FROM collector_log
+            WHERE session_id = :sessionId
+              AND user_id IS NULL
+              AND `timestamp` >= :since
+              AND product_id IS NOT NULL
+              AND event IN ('details', 'moreDetails', 'buy')
+            GROUP BY product_id
+            ORDER BY lastTs DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Object[]> findRecentProductActivityByGuestSession(
+            @Param("sessionId") String sessionId,
+            @Param("since") LocalDateTime since,
+            @Param("limit") int limit);
 }

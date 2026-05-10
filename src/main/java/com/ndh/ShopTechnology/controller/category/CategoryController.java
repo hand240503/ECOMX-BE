@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,6 +28,7 @@ public class CategoryController {
   }
 
   @PostMapping
+  @PreAuthorize("@perm.check(200001)")
   public ResponseEntity<APIResponse<CategoryResponse>> createCategory(
       @Valid @RequestBody CreateCategoryRequest req) {
     try {
@@ -135,6 +137,7 @@ public class CategoryController {
   }
 
   @PutMapping("/{id}")
+  @PreAuthorize("@perm.check(200003)")
   public ResponseEntity<APIResponse<CategoryResponse>> updateCategory(
       @PathVariable Long id,
       @Valid @RequestBody UpdateCategoryRequest req) {
@@ -162,6 +165,7 @@ public class CategoryController {
   }
 
   @DeleteMapping("/{id}")
+  @PreAuthorize("@perm.check(200004)")
   public ResponseEntity<APIResponse<Void>> deleteCategory(@PathVariable Long id) {
     try {
       categoryService.deleteCategory(id);

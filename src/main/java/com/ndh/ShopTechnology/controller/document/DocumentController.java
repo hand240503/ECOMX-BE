@@ -1,22 +1,21 @@
 package com.ndh.ShopTechnology.controller.document;
 
+import com.ndh.ShopTechnology.config.UploadStorageProperties;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.entities.doc.DocumentEntity;
 import com.ndh.ShopTechnology.services.doc.DocumentService;
-import com.ndh.ShopTechnology.utils.FileUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -24,15 +23,20 @@ import java.util.List;
 public class DocumentController {
 
     private final DocumentService documentService;
-    private static final String UPLOAD_DIR = "D:\\NDH-Project\\ShopTechnology\\uploads\\";
+    private final UploadStorageProperties uploadStorageProperties;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(DocumentService documentService, UploadStorageProperties uploadStorageProperties) {
         this.documentService = documentService;
+        this.uploadStorageProperties = uploadStorageProperties;
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(300001)")
     public ResponseEntity<APIResponse<List<DocumentEntity>>> uploadImages(
-            @RequestParam("files") List<MultipartFile> files
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestParam(value = "entityId", required = false) Long entityId,
+            @RequestParam(value = "entityType", required = false) Integer entityType,
+            @RequestParam(value = "mainFileIndex", required = false) Integer mainFileIndex
     ) throws Exception {
 
         // Validate files
@@ -71,13 +75,22 @@ public class DocumentController {
             }
         }
 
-        // Process files
-        List<DocumentEntity> documentEntities = new ArrayList<>();
-        for (MultipartFile file : files) {
-            DocumentEntity documentEntity = FileUtils.storeFile(file);
-            documentEntity = documentService.createDocument(documentEntity);
-            documentEntities.add(documentEntity);
+        if (DocumentUploadRequestChecks.isIncompleteEntityPair(entityId, entityType)) {
+            APIResponse<List<DocumentEntity>> response = APIResponse.of(
+                    false,
+                    "entityId and entityType must be sent together",
+                    null,
+                    List.of(ErrorResponse.builder()
+                            .field("entityId")
+                            .message("Provide both entityId and entityType, or omit both")
+                            .build()),
+                    null
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
+
+        List<DocumentEntity> documentEntities =
+                documentService.persistUploadedFiles(files, entityId, entityType, mainFileIndex);
 
         APIResponse<List<DocumentEntity>> response = APIResponse.of(
                 true,
@@ -92,10 +105,17 @@ public class DocumentController {
                 .body(response);
     }
 
+    /**
+     * Tải file đã lưu — {@code filename} là phần sau {@code /uploads/}, ví dụ {@code 260510/uuid_....jpg}.
+     */
     @GetMapping("/{filename:.+}")
     public ResponseEntity<byte[]> getImage(@PathVariable String filename) {
         try {
-            Path filePath = Paths.get(UPLOAD_DIR, filename);
+            Path uploadRoot = uploadStorageProperties.getResolvedRoot();
+            Path filePath = uploadRoot.resolve(filename).normalize();
+            if (!filePath.startsWith(uploadRoot)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+            }
             File file = filePath.toFile();
 
             if (!file.exists()) {

@@ -17,7 +17,20 @@ public interface ProductService {
 
     Page<ProductFullResponse> getProducts(int page, int limit);
 
-    List<ProductFullResponse> getFeaturedProducts(int limit);
+    /** Danh sách admin: phân trang, sắp xếp {@code id} tăng dần. */
+    Page<ProductFullResponse> getAdminProducts(int page, int limit);
+
+    /**
+     * @param limit khi {@code all} là {@code false}: số bản ghi tối đa (mặc định controller 10);
+     *              service chuẩn hoá tối thiểu 1 và áp trần an toàn.
+     * @param all   {@code true}: trả về mọi sản phẩm thỏa điều kiện, sắp xếp {@code id} giảm dần; {@code limit} bị bỏ qua.
+     */
+    List<ProductFullResponse> getFeaturedProducts(int limit, boolean all);
+
+    /**
+     * Sản phẩm {@code hot_sale = true}, cùng định dạng list với {@link #getFeaturedProducts(int, boolean)}.
+     */
+    List<ProductFullResponse> getHotSaleProducts(int limit, boolean all);
 
     List<ProductFullResponse> getBestSellingProducts(int limit);
 
@@ -35,8 +48,11 @@ public interface ProductService {
 
     Page<ProductFullResponse> getProductsByCategoryId(Long categoryId, int page, int limit);
 
+    /** Admin: sản phẩm theo category, {@code id} tăng dần. */
+    Page<ProductFullResponse> getAdminProductsByCategoryId(Long categoryId, int page, int limit);
+
     /**
-     * Search products by keyword (name, description, tag). Empty or blank query returns an empty page.
+     * Search products by keyword (name, description, {@code l_description}, tag). Empty or blank query returns an empty page.
      */
     ProductSearchResult searchProducts(String query, int page, int limit);
 

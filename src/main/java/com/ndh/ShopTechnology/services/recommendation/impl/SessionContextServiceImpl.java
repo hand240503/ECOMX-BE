@@ -42,8 +42,22 @@ public class SessionContextServiceImpl implements SessionContextService {
     @Override
     @Transactional(readOnly = true)
     public SessionContext buildContext(Long userId) {
-        if (userId == null) return emptyContext(null);
+        return buildContext(userId, null);
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public SessionContext buildContext(Long userId, String sessionId) {
+        if (userId != null && userId > 0) {
+            return buildContextForUser(userId);
+        }
+        if (sessionId != null && !sessionId.isBlank()) {
+            return buildContextForGuestSession(sessionId);
+        }
+        return emptyContext(userId);
+    }
+
+    private SessionContext buildContextForUser(Long userId) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime since = now.minusMinutes(sessionWindowMinutes);
 
@@ -53,9 +67,31 @@ public class SessionContextServiceImpl implements SessionContextService {
         log.info("[Session] userId={} found {} recent products in last {} min",
                 userId, rows.size(), sessionWindowMinutes);
 
-        if (rows.isEmpty()) return emptyContext(userId);
+        if (rows.isEmpty()) {
+            return emptyContext(userId);
+        }
+        return toSessionContextFromRows(rows, now, userId);
+    }
 
-        // Tính weight cho từng product theo recency + frequency
+    private SessionContext buildContextForGuestSession(String sessionId) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime since = now.minusMinutes(sessionWindowMinutes);
+
+        List<Object[]> rows = collectorLogRepository
+                .findRecentProductActivityByGuestSession(sessionId, since, maxRecentProducts);
+
+        log.info("[Session] guest sessionId={} found {} recent products in last {} min",
+                sessionId, rows.size(), sessionWindowMinutes);
+
+        if (rows.isEmpty()) {
+            return emptyContext(null);
+        }
+        return toSessionContextFromRows(rows, now, null);
+    }
+
+    private SessionContext toSessionContextFromRows(
+            List<Object[]> rows, LocalDateTime now, Long userId) {
+
         Map<Long, Double> productWeights = new HashMap<>();
         for (Object[] row : rows) {
             Long pid = ((Number) row[0]).longValue();
@@ -64,14 +100,13 @@ public class SessionContextServiceImpl implements SessionContextService {
 
             long minutesAgo = Math.max(0, ChronoUnit.MINUTES.between(lastTs, now));
 
-            double recency = 1.0 / (1.0 + minutesAgo);   // càng mới càng cao
-            double freq    = Math.log(1.0 + cnt);         // càng nhiều càng cao
-            double w       = recency * (1.0 + freq);
+            double recency = 1.0 / (1.0 + minutesAgo);
+            double freq = Math.log(1.0 + cnt);
+            double w = recency * (1.0 + freq);
 
             productWeights.put(pid, w);
         }
 
-        // Aggregate weight theo category & brand
         List<ProductEntity> products = productRepository.findAllById(productWeights.keySet());
 
         Map<Long, Double> categoryWeights = new HashMap<>();
@@ -79,7 +114,9 @@ public class SessionContextServiceImpl implements SessionContextService {
 
         for (ProductEntity p : products) {
             Double w = productWeights.get(p.getId());
-            if (w == null) continue;
+            if (w == null) {
+                continue;
+            }
 
             if (p.getCategory() != null) {
                 categoryWeights.merge(p.getCategory().getId(), w, Double::sum);

@@ -234,17 +234,18 @@ public class UserAuthServiceImpl implements UserAuthService {
         return password;
     }
 
+    /**
+     * Chuẩn hoá role code về dạng UPPER, mặc định CUSTOMER nếu null.
+     * Lưu ý: hệ thống Role/Permission mới không dùng prefix "ROLE_" trong cột {@code roles.code}
+     * (Spring Security chỉ tự thêm prefix khi build authority).
+     */
     private String normalizeRoleCode(String roleCode) {
-        String normalized = Optional.ofNullable(roleCode)
+        return Optional.ofNullable(roleCode)
                 .map(String::trim)
                 .map(String::toUpperCase)
-                .orElse("USER");
-
-        if (!normalized.startsWith("ROLE_")) {
-            normalized = "ROLE_" + normalized;
-        }
-
-        return normalized;
+                .filter(s -> !s.isEmpty())
+                .map(s -> s.startsWith("ROLE_") ? s.substring("ROLE_".length()) : s)
+                .orElse(com.ndh.ShopTechnology.constants.RoleConstant.ROLE_CUSTOMER);
     }
 
     private String validateLoginInput(String login) {

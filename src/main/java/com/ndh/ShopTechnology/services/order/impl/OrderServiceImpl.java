@@ -20,7 +20,6 @@ import com.ndh.ShopTechnology.entities.order.CheckoutSessionStatus;
 import com.ndh.ShopTechnology.entities.order.OrderDetailEntity;
 import com.ndh.ShopTechnology.entities.order.OrderEntity;
 import com.ndh.ShopTechnology.entities.order.PaymentMethodEntity;
-import com.ndh.ShopTechnology.entities.product.PriceEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
 import com.ndh.ShopTechnology.entities.user.AddressType;
 import com.ndh.ShopTechnology.entities.user.UserAddressEntity;
@@ -36,6 +35,7 @@ import com.ndh.ShopTechnology.repository.UserAddressRepository;
 import com.ndh.ShopTechnology.utils.ShippingFeeCalculator;
 import com.ndh.ShopTechnology.services.order.OrderService;
 import com.ndh.ShopTechnology.services.order.VnpaySessionFinalizeResult;
+import com.ndh.ShopTechnology.services.promotion.PromotionPricingService;
 import com.ndh.ShopTechnology.services.user.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -46,7 +46,6 @@ import java.time.Instant;
 import java.time.Year;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +78,7 @@ public class OrderServiceImpl implements OrderService {
     private final ObjectMapper objectMapper;
     private final VnpayProperties vnpayProperties;
     private final UserAddressRepository userAddressRepository;
+    private final PromotionPricingService promotionPricingService;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
@@ -89,7 +89,8 @@ public class OrderServiceImpl implements OrderService {
             UserService userService,
             ObjectMapper objectMapper,
             VnpayProperties vnpayProperties,
-            UserAddressRepository userAddressRepository) {
+            UserAddressRepository userAddressRepository,
+            PromotionPricingService promotionPricingService) {
         this.orderRepository = orderRepository;
         this.orderDetailRepository = orderDetailRepository;
         this.productRepository = productRepository;
@@ -99,6 +100,7 @@ public class OrderServiceImpl implements OrderService {
         this.objectMapper = objectMapper;
         this.vnpayProperties = vnpayProperties;
         this.userAddressRepository = userAddressRepository;
+        this.promotionPricingService = promotionPricingService;
     }
 
     @Override
@@ -616,10 +618,6 @@ public class OrderServiceImpl implements OrderService {
         Map<Long, ProductEntity> byId = products.stream()
                 .collect(Collectors.toMap(ProductEntity::getId, p -> p));
 
-        double orderTotal = 0.0;
-        List<OrderDetailResponse> detailResponses = new ArrayList<>();
-        List<OrderDetailEntity> detailsToSave = new ArrayList<>();
-
         for (CreateOrderDetailRequest line : request.getOrderDetails()) {
             ProductEntity product = byId.get(line.getProductId());
             if (product == null) {
@@ -629,8 +627,20 @@ public class OrderServiceImpl implements OrderService {
                 throw new CustomApiException(HttpStatus.BAD_REQUEST,
                         "Product is not available: " + line.getProductId());
             }
-            double unitPrice = resolveUnitPrice(product);
-            double lineTotalValue = unitPrice * line.getQuantity();
+        }
+
+        List<PromotionPricingService.PricedLine> priced =
+                promotionPricingService.priceLines(request.getOrderDetails(), byId);
+
+        double orderTotal = 0.0;
+        List<OrderDetailResponse> detailResponses = new ArrayList<>();
+        List<OrderDetailEntity> detailsToSave = new ArrayList<>();
+
+        for (PromotionPricingService.PricedLine pl : priced) {
+            CreateOrderDetailRequest line = pl.line();
+            ProductEntity product = byId.get(line.getProductId());
+            double unitPrice = pl.unitPrice();
+            double lineTotalValue = pl.lineTotal();
             orderTotal += lineTotalValue;
             String lineTotalStr = String.valueOf(lineTotalValue);
 
@@ -651,6 +661,7 @@ public class OrderServiceImpl implements OrderService {
                     .unitPrice(unitPrice)
                     .lineTotal(lineTotalStr)
                     .description(line.getDescription())
+                    .lDescription(product.getLDescription())
                     .build());
         }
 
@@ -1011,20 +1022,9 @@ public class OrderServiceImpl implements OrderService {
                         .unitPrice(d.getUnitPrice())
                         .lineTotal(d.getTotalPrice())
                         .description(d.getDescription())
+                        .lDescription(d.getProduct().getLDescription())
                         .build())
                 .collect(Collectors.toList());
     }
 
-    private static double resolveUnitPrice(ProductEntity product) {
-        if (product.getPrices() == null || product.getPrices().isEmpty()) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST,
-                    "Product has no price: " + product.getId());
-        }
-        return product.getPrices().stream()
-                .filter(Objects::nonNull)
-                .min(Comparator.comparing(PriceEntity::getId, Comparator.nullsLast(Long::compareTo)))
-                .map(PriceEntity::getCurrentValue)
-                .orElseThrow(() -> new CustomApiException(HttpStatus.BAD_REQUEST,
-                        "Product has no price: " + product.getId()));
-    }
 }

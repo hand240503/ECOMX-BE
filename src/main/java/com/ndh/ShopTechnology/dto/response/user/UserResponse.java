@@ -1,8 +1,10 @@
 package com.ndh.ShopTechnology.dto.response.user;
 
+import com.ndh.ShopTechnology.entities.role.RoleEntity;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 import lombok.*;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -23,8 +25,11 @@ public class UserResponse {
 
     private UserInfoResponse userInfo;
 
+    /** Tập role code (vd ADMIN, EMPLOYEE). */
     private Set<String> roles;
-    private Set<String> permissions;
+
+    /** Quyền hiệu lực (Integer) — đã hợp role + cấp thêm. */
+    private Set<Integer> permissions;
 
     private UserAddressResponse defaultAddress;
 
@@ -43,8 +48,8 @@ public class UserResponse {
 
         if (entity.getRoles() != null) {
             builder.roles(entity.getRoles().stream()
-                    .map(role -> role.getCode())
-                    .collect(Collectors.toSet()));
+                    .map(RoleEntity::getCode)
+                    .collect(Collectors.toCollection(LinkedHashSet::new)));
         }
 
         builder.permissions(entity.getAllPermissions());

@@ -17,63 +17,78 @@ import java.util.Optional;
 @Repository
 public interface ProductRepository extends JpaRepository<ProductEntity, Long>, JpaSpecificationExecutor<ProductEntity> {
 
-  @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
-  @Query("SELECT p FROM products p")
-  Page<ProductEntity> findPageWithListRelations(Pageable pageable);
+    long countByBrand_Id(Long brandId);
 
-  @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
-  @Query("SELECT p FROM products p")
-  List<ProductEntity> findAllWithListRelations();
+    @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
+    @Query("SELECT p FROM products p")
+    Page<ProductEntity> findPageWithListRelations(Pageable pageable);
 
-  /**
-   * Paginated products for one category (exact {@code category.id}, not subtree).
-   * No {@code @EntityGraph} on this query: graph + {@code Page} can break counts; relations load in the service tx.
-   */
-  @Query(
-      value = "SELECT p FROM products p WHERE p.category.id = :categoryId",
-      countQuery = "SELECT count(p) FROM products p WHERE p.category.id = :categoryId")
-  Page<ProductEntity> findPageByCategoryId(@Param("categoryId") Long categoryId, Pageable pageable);
+    @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
+    @Query("SELECT p FROM products p")
+    List<ProductEntity> findAllWithListRelations();
 
-  /**
-   * Products whose {@code category.parent.id} equals {@code parentCategoryId}
-   * (direct children of that parent only), matching {@code JOIN category c ON c.id = p.category_id WHERE c.parent_id = :id}.
-   */
-  @Query(
-      value = "SELECT p FROM products p WHERE p.category.parent.id = :parentCategoryId",
-      countQuery = "SELECT count(p) FROM products p WHERE p.category.parent.id = :parentCategoryId")
-  Page<ProductEntity> findPageByDirectChildCategoriesOf(@Param("parentCategoryId") Long parentCategoryId,
-      Pageable pageable);
+    /**
+     * Paginated products for one category (exact {@code category.id}, not subtree).
+     * No {@code @EntityGraph} on this query: graph + {@code Page} can break counts;
+     * relations load in the service tx.
+     */
+    @Query(value = "SELECT p FROM products p WHERE p.category.id = :categoryId", countQuery = "SELECT count(p) FROM products p WHERE p.category.id = :categoryId")
+    Page<ProductEntity> findPageByCategoryId(@Param("categoryId") Long categoryId, Pageable pageable);
 
-  @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
-  List<ProductEntity> findByIsFeaturedTrue(Pageable pageable);
+    /**
+     * Products whose {@code category.parent.id} equals {@code parentCategoryId}
+     * (direct children of that parent only), matching
+     * {@code JOIN category c ON c.id = p.category_id WHERE c.parent_id = :id}.
+     */
+    @Query(value = "SELECT p FROM products p WHERE p.category.parent.id = :parentCategoryId", countQuery = "SELECT count(p) FROM products p WHERE p.category.parent.id = :parentCategoryId")
+    Page<ProductEntity> findPageByDirectChildCategoriesOf(@Param("parentCategoryId") Long parentCategoryId,
+            Pageable pageable);
 
-  @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
-  List<ProductEntity> findTopNByOrderBySoldCountDesc(Pageable pageable);
+    @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
+    List<ProductEntity> findByIsFeaturedTrue(Pageable pageable);
 
-  /**
-   * Full PDP / admin reload: category, brand, prices (+ unit). Policies are {@link jakarta.persistence.ManyToMany}
-   * and are <strong>not</strong> join-fetched here — combining two collection fetch joins would Cartesian-multiply
-   * rows and duplicate {@code prices} in memory (one copy per linked policy).
-   */
-  @Query("SELECT DISTINCT p FROM products p "
-      + "LEFT JOIN FETCH p.category c "
-      + "LEFT JOIN FETCH c.parent "
-      + "LEFT JOIN FETCH p.brand "
-      + "LEFT JOIN FETCH p.prices pr "
-      + "LEFT JOIN FETCH pr.unit "
-      + "WHERE p.id = :id")
-  Optional<ProductEntity> findWithFullRelationsById(@Param("id") Long id);
+    @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
+    List<ProductEntity> findByIsFeaturedTrueOrderByIdDesc();
 
-  @Query("SELECT DISTINCT p FROM products p "
-      + "LEFT JOIN FETCH p.category c "
-      + "LEFT JOIN FETCH c.parent "
-      + "LEFT JOIN FETCH p.brand "
-      + "LEFT JOIN FETCH p.prices pr "
-      + "LEFT JOIN FETCH pr.unit "
-      + "WHERE p.id IN :ids")
-  List<ProductEntity> findAllWithFullRelationsByIdIn(@Param("ids") Collection<Long> ids);
+    @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
+    List<ProductEntity> findByHotSaleTrue(Pageable pageable);
 
-  Optional<ProductEntity> findByProductName(String productName);
+    @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
+    List<ProductEntity> findByHotSaleTrueOrderByIdDesc();
 
-  List<ProductEntity> findByStatus(Integer status);
+    @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
+    List<ProductEntity> findTopNByOrderBySoldCountDesc(Pageable pageable);
+
+    /**
+     * Full PDP / admin reload: category, brand, prices (+ unit). Policies are
+     * {@link jakarta.persistence.ManyToMany}
+     * and are <strong>not</strong> join-fetched here — combining two collection
+     * fetch joins would Cartesian-multiply
+     * rows and duplicate {@code prices} in memory (one copy per linked policy).
+     */
+    @Query("SELECT DISTINCT p FROM products p "
+            + "LEFT JOIN FETCH p.category c "
+            + "LEFT JOIN FETCH c.parent "
+            + "LEFT JOIN FETCH p.brand "
+            + "LEFT JOIN FETCH p.prices pr "
+            + "LEFT JOIN FETCH pr.unit "
+            + "WHERE p.id = :id")
+    Optional<ProductEntity> findWithFullRelationsById(@Param("id") Long id);
+
+    @Query("SELECT DISTINCT p FROM products p "
+            + "LEFT JOIN FETCH p.category c "
+            + "LEFT JOIN FETCH c.parent "
+            + "LEFT JOIN FETCH p.brand "
+            + "LEFT JOIN FETCH p.prices pr "
+            + "LEFT JOIN FETCH pr.unit "
+            + "WHERE p.id IN :ids")
+    List<ProductEntity> findAllWithFullRelationsByIdIn(@Param("ids") Collection<Long> ids);
+
+    @EntityGraph(attributePaths = "brand")
+    @Query("SELECT p FROM products p WHERE p.id IN :ids")
+    List<ProductEntity> findAllWithBrandByIdIn(@Param("ids") Collection<Long> ids);
+
+    Optional<ProductEntity> findByProductName(String productName);
+
+    List<ProductEntity> findByStatus(Integer status);
 }

@@ -1,5 +1,6 @@
 package com.ndh.ShopTechnology.dto.response.rating;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.ndh.ShopTechnology.entities.rating.UserRatingEntity;
 import lombok.*;
 
@@ -17,6 +18,10 @@ public class UserRatingResponse {
     private String username;
     private Long productId;
     private String productName;
+
+    @JsonProperty("l_description")
+    private String lDescription;
+
     private Double rating;
     private String comment;
     private Date createdDate;
@@ -40,7 +45,8 @@ public class UserRatingResponse {
 
         if (entity.getProduct() != null) {
             builder.productId(entity.getProduct().getId())
-                    .productName(entity.getProduct().getProductName());
+                    .productName(entity.getProduct().getProductName())
+                    .lDescription(entity.getProduct().getLDescription());
         }
 
         return builder.build();

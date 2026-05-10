@@ -70,7 +70,8 @@ public class WebSecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:5173"));
+        configuration.setAllowedOriginPatterns(
+                List.of("http://localhost:5173", "http://localhost:5174"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
@@ -109,9 +110,19 @@ public class WebSecurityConfig {
                             .permitAll()
 
                             .requestMatchers(String.format("%s/admin/**", base))
-                            .hasAnyRole(RoleConstant.ROLE_ADMIN, RoleConstant.ROLE_EMPLOYEE, RoleConstant.ROLE_MANAGER)
+                            .hasAnyRole(
+                                    RoleConstant.ROLE_SUPER_ADMIN,
+                                    RoleConstant.ROLE_ADMIN,
+                                    RoleConstant.ROLE_MANAGER,
+                                    RoleConstant.ROLE_EMPLOYEE)
 
-                            .requestMatchers(String.format("%s/auth/**", base), String.format("%s/document/**", base))
+                            .requestMatchers(String.format("%s/auth/**", base))
+                            .permitAll()
+
+                            .requestMatchers(HttpMethod.GET, String.format("%s/document/**", base))
+                            .permitAll()
+
+                            .requestMatchers(HttpMethod.POST, String.format("%s/collector-logs", base))
                             .permitAll()
 
                             .requestMatchers(String.format("%s/recommendations/**", base))

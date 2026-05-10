@@ -16,21 +16,22 @@ import java.util.List;
 public interface PopularityRepository extends Repository<CollectorLogEntity, Long> {
 
     /**
-     * Top sản phẩm phổ biến — weighted event từ collector_log:
-     *   buy        × 5
-     *   addToCart  × 3
-     *   details    × 1
+     * Top sản phẩm phổ biến — chỉ event được thu thập ({@code details}, {@code moreDetails}, {@code buy}):
+     *   buy         × 5
+     *   moreDetails × 2
+     *   details     × 1
      */
     @Query(value = """
         SELECT product_id AS productId,
                SUM(CASE event
-                       WHEN 'buy'       THEN 5
-                       WHEN 'addToCart' THEN 3
-                       WHEN 'details'   THEN 1
+                       WHEN 'buy'          THEN 5
+                       WHEN 'moreDetails' THEN 2
+                       WHEN 'details'     THEN 1
                        ELSE 0
                    END) AS cnt
         FROM collector_log
         WHERE product_id IS NOT NULL
+          AND event IN ('details', 'moreDetails', 'buy')
         GROUP BY product_id
         HAVING cnt > 0
         ORDER BY cnt DESC
@@ -43,13 +44,14 @@ public interface PopularityRepository extends Repository<CollectorLogEntity, Lon
     @Query(value = """
         SELECT product_id AS productId,
                SUM(CASE event
-                       WHEN 'buy'       THEN 5
-                       WHEN 'addToCart' THEN 3
-                       WHEN 'details'   THEN 1
+                       WHEN 'buy'          THEN 5
+                       WHEN 'moreDetails' THEN 2
+                       WHEN 'details'     THEN 1
                        ELSE 0
                    END) AS cnt
         FROM collector_log
         WHERE product_id IS NOT NULL
+          AND event IN ('details', 'moreDetails', 'buy')
           AND `timestamp` >= (NOW() - INTERVAL 30 DAY)
         GROUP BY product_id
         HAVING cnt > 0

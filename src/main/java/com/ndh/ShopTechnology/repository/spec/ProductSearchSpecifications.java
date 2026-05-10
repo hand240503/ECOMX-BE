@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Search: each whitespace-separated token must appear in product name, description, or tag (OR per
+ * Search: each whitespace-separated token must appear in product name, description, {@code l_description}, or tag (OR per
  * field, AND across tokens). So "Smart Phone" matches "Smartphone" (both "smart" and "phone" occur).
  */
 public final class ProductSearchSpecifications {
@@ -34,10 +34,12 @@ public final class ProductSearchSpecifications {
         String pattern = "%" + token + "%";
         var name = cb.lower(cb.coalesce(root.get("productName"), ""));
         var desc = cb.lower(cb.coalesce(root.get("description"), ""));
+        var lDesc = cb.lower(cb.coalesce(root.get("lDescription"), ""));
         var tag = cb.lower(cb.coalesce(root.get("tag"), ""));
         tokenAnd.add(cb.or(
             cb.like(name, pattern),
             cb.like(desc, pattern),
+            cb.like(lDesc, pattern),
             cb.like(tag, pattern)));
       }
       if (tokenAnd.isEmpty()) {

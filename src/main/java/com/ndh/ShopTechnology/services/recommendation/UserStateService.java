@@ -8,7 +8,8 @@ public interface UserStateService {
     long countInteractions(Long userId);
 
     /**
-     * Phân loại user dựa trên số lượng tương tác trong collector_log.
+     * Phân loại user dựa trên số lượng tương tác trong collector_log
+     * (chỉ các event {@code details}, {@code moreDetails}, {@code buy}).
      *
      * @param userId ID user (có thể null cho guest)
      * @return UserState.NEW (0 events), COLD (1-9), ACTIVE (>=10)

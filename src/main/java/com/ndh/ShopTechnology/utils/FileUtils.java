@@ -1,5 +1,6 @@
 package com.ndh.ShopTechnology.utils;
 
+import com.ndh.ShopTechnology.constants.DocumentKind;
 import com.ndh.ShopTechnology.entities.doc.DocumentEntity;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.util.StringUtils;
@@ -8,19 +9,28 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
-import java.time.LocalDate;
 
-public class FileUtils {
-    private static final String UPLOADS_FOLDER = "uploads";
+public final class FileUtils {
 
-    public static DocumentEntity storeFile(MultipartFile file) throws IOException {
+    /** Segment đầu trong {@link DocumentEntity#getFilePath()} (URL tương đối). */
+    public static final String PUBLIC_UPLOAD_SEGMENT = "uploads";
+
+    private FileUtils() {
+    }
+
+    /**
+     * Ghi file dưới {@code uploadRoot}/{yyMMdd}/{uuid}_{nano}.{ext}} và trả entity với {@code filePath} kiểu
+     * {@code /uploads/{yyMMdd}/...}.
+     */
+    public static DocumentEntity storeFile(MultipartFile file, Path uploadRoot) throws IOException {
         String filename = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
         String extension = FilenameUtils.getExtension(filename);
-        String uniqueFilename = UUID.randomUUID().toString() + "_" + System.nanoTime() + "." + extension;
+        String uniqueFilename = UUID.randomUUID().toString() + "_" + System.nanoTime()
+                + (extension == null || extension.isEmpty() ? "" : "." + extension);
 
         LocalDate today = LocalDate.now();
         String year = String.valueOf(today.getYear()).substring(2);
@@ -28,8 +38,7 @@ public class FileUtils {
         String day = String.format("%02d", today.getDayOfMonth());
 
         String datePath = year + month + day;
-        Path dateDir = Paths.get(UPLOADS_FOLDER, datePath);
-
+        Path dateDir = uploadRoot.resolve(datePath);
         if (!Files.exists(dateDir)) {
             Files.createDirectories(dateDir);
         }
@@ -37,17 +46,16 @@ public class FileUtils {
         Path destination = dateDir.resolve(uniqueFilename);
         Files.copy(file.getInputStream(), destination, StandardCopyOption.REPLACE_EXISTING);
 
-
         return DocumentEntity.builder()
                 .fileName(uniqueFilename)
                 .fileSize(String.valueOf(file.getSize()))
-                .filePath(getRelativePath(datePath, uniqueFilename))
-                .type(0) // Set appropriate type as needed
+                .filePath(relativePublicPath(datePath, uniqueFilename))
+                .type(DocumentKind.resolve(file))
+                .main(false)
                 .build();
     }
 
-    private static String getRelativePath(String datePath, String uniqueFilename) {
-        String relativePath = Paths.get(UPLOADS_FOLDER, datePath, uniqueFilename).toString();
-        return "/" + relativePath.replace("\\", "/");
+    private static String relativePublicPath(String datePath, String uniqueFilename) {
+        return "/" + PUBLIC_UPLOAD_SEGMENT + "/" + datePath + "/" + uniqueFilename;
     }
 }

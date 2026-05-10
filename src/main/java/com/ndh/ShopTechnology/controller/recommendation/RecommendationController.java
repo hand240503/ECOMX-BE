@@ -23,7 +23,7 @@ public class RecommendationController {
 
     @GetMapping("/home")
     public List<ProductFullResponse> home(
-            @RequestParam Long userId,
+            @RequestParam(required = false) Long userId,
             @RequestParam(required = false) String sessionId,
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "20") int limit) {
