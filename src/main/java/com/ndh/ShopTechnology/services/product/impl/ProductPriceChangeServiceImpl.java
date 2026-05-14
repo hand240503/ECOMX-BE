@@ -2,12 +2,12 @@ package com.ndh.ShopTechnology.services.product.impl;
 
 import com.ndh.ShopTechnology.dto.request.product.UpsertPriceChangeRequest;
 import com.ndh.ShopTechnology.dto.response.product.ProductPriceChangeResponse;
-import com.ndh.ShopTechnology.entities.product.ProductEntity;
 import com.ndh.ShopTechnology.entities.product.ProductPriceChangeEntity;
+import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.ProductPriceChangeRepository;
-import com.ndh.ShopTechnology.repository.ProductRepository;
+import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.services.product.ProductPriceChangeService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -20,32 +20,33 @@ import java.util.stream.Collectors;
 @Service
 public class ProductPriceChangeServiceImpl implements ProductPriceChangeService {
 
-    private final ProductRepository productRepository;
+    private final ProductVariantRepository variantRepository;
     private final ProductPriceChangeRepository priceChangeRepository;
 
     public ProductPriceChangeServiceImpl(
-            ProductRepository productRepository,
+            ProductVariantRepository variantRepository,
             ProductPriceChangeRepository priceChangeRepository) {
-        this.productRepository = productRepository;
+        this.variantRepository = variantRepository;
         this.priceChangeRepository = priceChangeRepository;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductPriceChangeResponse> list(Long productId) {
-        ensureProduct(productId);
-        return priceChangeRepository.findByProduct_IdOrderByStartAtDesc(productId).stream()
+    public List<ProductPriceChangeResponse> list(Long productId, Long variantId) {
+        ProductVariantEntity v = ensureVariant(productId, variantId);
+        return priceChangeRepository.findByProductVariant_IdOrderByStartAtDesc(v.getId()).stream()
                 .map(ProductPriceChangeServiceImpl::toResponse)
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional
-    public ProductPriceChangeResponse create(Long productId, UpsertPriceChangeRequest request) {
-        ProductEntity product = ensureProduct(productId);
+    public ProductPriceChangeResponse create(Long productId, Long variantId, UpsertPriceChangeRequest request) {
+        ProductVariantEntity v = ensureVariant(productId, variantId);
         validateWindow(request.getStartAt(), request.getEndAt());
         ProductPriceChangeEntity e = ProductPriceChangeEntity.builder()
-                .product(product)
+                .productVariant(v)
+                .productId(productId)
                 .basePrice(request.getBasePrice())
                 .salePrice(request.getSalePrice())
                 .startAt(request.getStartAt())
@@ -58,14 +59,17 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
 
     @Override
     @Transactional
-    public ProductPriceChangeResponse update(Long productId, long priceChangeId, UpsertPriceChangeRequest request) {
-        ensureProduct(productId);
+    public ProductPriceChangeResponse update(Long productId, Long variantId, long priceChangeId,
+            UpsertPriceChangeRequest request) {
+        ensureVariant(productId, variantId);
         ProductPriceChangeEntity e = priceChangeRepository.findById(priceChangeId)
                 .orElseThrow(() -> new NotFoundEntityException("PriceChange not found: " + priceChangeId));
-        if (!e.getProduct().getId().equals(productId)) {
-            throw new CustomApiException(HttpStatus.NOT_FOUND, "PriceChange not found for product: " + productId);
+        if (e.getProductVariant() == null || !e.getProductVariant().getId().equals(variantId)) {
+            throw new CustomApiException(HttpStatus.NOT_FOUND,
+                    "PriceChange not found for variant: " + variantId);
         }
         validateWindow(request.getStartAt(), request.getEndAt());
+        e.setProductId(productId);
         e.setBasePrice(request.getBasePrice());
         e.setSalePrice(request.getSalePrice());
         e.setStartAt(request.getStartAt());
@@ -79,19 +83,25 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
 
     @Override
     @Transactional
-    public void delete(Long productId, long priceChangeId) {
-        ensureProduct(productId);
+    public void delete(Long productId, Long variantId, long priceChangeId) {
+        ensureVariant(productId, variantId);
         ProductPriceChangeEntity e = priceChangeRepository.findById(priceChangeId)
                 .orElseThrow(() -> new NotFoundEntityException("PriceChange not found: " + priceChangeId));
-        if (!e.getProduct().getId().equals(productId)) {
-            throw new CustomApiException(HttpStatus.NOT_FOUND, "PriceChange not found for product: " + productId);
+        if (e.getProductVariant() == null || !e.getProductVariant().getId().equals(variantId)) {
+            throw new CustomApiException(HttpStatus.NOT_FOUND,
+                    "PriceChange not found for variant: " + variantId);
         }
         priceChangeRepository.delete(e);
     }
 
-    private ProductEntity ensureProduct(Long productId) {
-        return productRepository.findById(productId)
-                .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + productId));
+    private ProductVariantEntity ensureVariant(Long productId, Long variantId) {
+        ProductVariantEntity v = variantRepository.findById(variantId)
+                .orElseThrow(() -> new NotFoundEntityException("Product variant not found with id: " + variantId));
+        if (v.getProduct() == null || !productId.equals(v.getProduct().getId())) {
+            throw new CustomApiException(HttpStatus.NOT_FOUND,
+                    "Variant " + variantId + " does not belong to product " + productId);
+        }
+        return v;
     }
 
     private static void validateWindow(Date startAt, Date endAt) {
@@ -106,7 +116,7 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
     private static ProductPriceChangeResponse toResponse(ProductPriceChangeEntity e) {
         return ProductPriceChangeResponse.builder()
                 .id(e.getId())
-                .productId(e.getProduct().getId())
+                .productVariantId(e.getProductVariant() != null ? e.getProductVariant().getId() : null)
                 .basePrice(e.getBasePrice())
                 .salePrice(e.getSalePrice())
                 .startAt(e.getStartAt())
@@ -115,4 +125,3 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
                 .build();
     }
 }
-

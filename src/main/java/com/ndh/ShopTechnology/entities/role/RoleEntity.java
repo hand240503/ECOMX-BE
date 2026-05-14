@@ -10,7 +10,10 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Role của hệ thống. Mỗi role có một danh sách <b>permission code mặc định</b> (số nguyên)
+ * Định nghĩa role trong hệ thống (bảng {@code roles}). <b>Một role có thể gán cho nhiều user;</b>
+ * mỗi user chỉ trỏ tới một role qua {@code users.role_id} ({@code UserEntity#role}).
+ *
+ * <p>Mỗi role có một danh sách <b>permission code mặc định</b> (số nguyên)
  * được lưu thẳng trên cột {@code permission_codes} (JSON) của bảng {@code roles}.
  *
  * <p>Ví dụ row trong DB:

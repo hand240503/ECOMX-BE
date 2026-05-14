@@ -5,6 +5,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 public interface DocumentService {
 
@@ -41,8 +42,24 @@ public interface DocumentService {
 
     List<DocumentEntity> getAllDocuments();
 
-    DocumentEntity updateDocument(Long id, DocumentEntity document);
+    /**
+     * Cập nhật metadata (description, fileDes) của document — không thay file thực tế.
+     */
+    DocumentEntity updateDocument(Long id, Map<String, String> fields);
 
+    /**
+     * Thay thế file thực tế của document: xóa asset cũ trên Cloudinary, upload file mới,
+     * cập nhật {@code filePath}, {@code cloudinaryPublicId}, {@code fileName}, {@code fileSize}, {@code type}.
+     * Không thay đổi {@code entityId}, {@code entityType}, {@code isMain}.
+     */
+    DocumentEntity replaceDocumentFile(Long id, MultipartFile newFile) throws IOException;
+
+    /**
+     * Xóa document: xóa asset trên Cloudinary (nếu có) rồi xóa bản ghi DB.
+     * Nếu document đang là {@code isMain}, cờ main của entity sẽ không có ảnh nào (caller tự xử lý nếu cần).
+     *
+     * @throws com.ndh.ShopTechnology.exception.NotFoundEntityException nếu không tìm thấy
+     */
     void deleteDocument(Long id);
 
     /**

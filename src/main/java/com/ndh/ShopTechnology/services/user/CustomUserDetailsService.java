@@ -1,6 +1,7 @@
 package com.ndh.ShopTechnology.services.user;
 
 import com.ndh.ShopTechnology.config.MyUser;
+import com.ndh.ShopTechnology.entities.role.RoleEntity;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 import com.ndh.ShopTechnology.entities.user.UserPermissionEntity;
 import com.ndh.ShopTechnology.repository.UserRepository;
@@ -71,13 +72,12 @@ public class CustomUserDetailsService implements UserDetailsService {
         Set<Integer> effective = new LinkedHashSet<>();
         List<GrantedAuthority> authorities = new ArrayList<>();
 
-        if (user.getRoles() != null) {
-            user.getRoles().forEach(role -> {
-                authorities.add(new SimpleGrantedAuthority(AUTHORITY_ROLE_PREFIX + role.getCode()));
-                if (role.getPermissionCodes() != null) {
-                    effective.addAll(role.getPermissionCodes());
-                }
-            });
+        if (user.getRole() != null) {
+            RoleEntity role = user.getRole();
+            authorities.add(new SimpleGrantedAuthority(AUTHORITY_ROLE_PREFIX + role.getCode()));
+            if (role.getPermissionCodes() != null) {
+                effective.addAll(role.getPermissionCodes());
+            }
         }
 
         if (user.getUserPermissions() != null) {

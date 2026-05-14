@@ -7,10 +7,13 @@ import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.PaginationMetadata;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
+import com.ndh.ShopTechnology.exception.CustomApiException;
+import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.services.product.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +21,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * API quản trị sản phẩm — toàn bộ path dưới {@code {api.prefix}/admin/products}.
@@ -216,13 +221,13 @@ public class AdminProductController {
         }
     }
 
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("@perm.check(100003)")
     public ResponseEntity<APIResponse<ProductFullResponse>> updateProduct(
             @PathVariable Long id,
             @Valid @RequestBody UpdateProductRequest request) {
         try {
-            ProductFullResponse product = productService.updateProduct(id, request);
+            ProductFullResponse product = productService.updateProduct(id, request, null);
             APIResponse<ProductFullResponse> response = APIResponse.of(
                     true,
                     "Product updated successfully",
@@ -230,6 +235,28 @@ public class AdminProductController {
                     null,
                     null);
             return ResponseEntity.ok(response);
+        } catch (NotFoundEntityException e) {
+            APIResponse<ProductFullResponse> response = APIResponse.of(
+                    false,
+                    e.getMessage(),
+                    null,
+                    List.of(ErrorResponse.builder()
+                            .field("product")
+                            .message(e.getMessage())
+                            .build()),
+                    null);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        } catch (CustomApiException e) {
+            APIResponse<ProductFullResponse> response = APIResponse.of(
+                    false,
+                    e.getMessage(),
+                    null,
+                    List.of(ErrorResponse.builder()
+                            .field("product")
+                            .message(e.getMessage())
+                            .build()),
+                    null);
+            return ResponseEntity.status(e.getStatus()).body(response);
         } catch (Exception e) {
             APIResponse<ProductFullResponse> response = APIResponse.of(
                     false,
@@ -237,6 +264,117 @@ public class AdminProductController {
                     null,
                     List.of(ErrorResponse.builder()
                             .field("product")
+                            .message(e.getMessage())
+                            .build()),
+                    null);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    /**
+     * Cập nhật sản phẩm kèm ảnh: part JSON {@code product} + optional multipart {@code newImages} (lặp lại cùng tên field).
+     * Các field ảnh trong JSON: {@code removedDocumentIds}, {@code mainDocumentId}, {@code mainNewImageIndex}.
+     */
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(100003)")
+    public ResponseEntity<APIResponse<ProductFullResponse>> updateProductWithImages(
+            @PathVariable Long id,
+            @RequestPart("product") @Valid UpdateProductRequest request,
+            @RequestPart(value = "newImages", required = false) List<MultipartFile> newImages) {
+        try {
+            ProductFullResponse product = productService.updateProduct(id, request, newImages);
+            APIResponse<ProductFullResponse> response = APIResponse.of(
+                    true,
+                    "Product updated successfully",
+                    product,
+                    null,
+                    null);
+            return ResponseEntity.ok(response);
+        } catch (NotFoundEntityException e) {
+            APIResponse<ProductFullResponse> response = APIResponse.of(
+                    false,
+                    e.getMessage(),
+                    null,
+                    List.of(ErrorResponse.builder()
+                            .field("product")
+                            .message(e.getMessage())
+                            .build()),
+                    null);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        } catch (CustomApiException e) {
+            APIResponse<ProductFullResponse> response = APIResponse.of(
+                    false,
+                    e.getMessage(),
+                    null,
+                    List.of(ErrorResponse.builder()
+                            .field("product")
+                            .message(e.getMessage())
+                            .build()),
+                    null);
+            return ResponseEntity.status(e.getStatus()).body(response);
+        } catch (Exception e) {
+            APIResponse<ProductFullResponse> response = APIResponse.of(
+                    false,
+                    "Failed to update product: " + e.getMessage(),
+                    null,
+                    List.of(ErrorResponse.builder()
+                            .field("product")
+                            .message(e.getMessage())
+                            .build()),
+                    null);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    /**
+     * Upload ảnh cho một biến thể: multipart {@code newImages} (lặp field), optional {@code mainNewImageIndex}.
+     */
+    @PostMapping(value = "/{productId}/variants/{variantId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(100003)")
+    public ResponseEntity<APIResponse<ProductFullResponse>> addVariantImages(
+            @PathVariable Long productId,
+            @PathVariable Long variantId,
+            @RequestPart(value = "newImages", required = false) List<MultipartFile> newImages,
+            @RequestParam(value = "mainNewImageIndex", required = false) Integer mainNewImageIndex) {
+        try {
+            ProductFullResponse product =
+                    productService.addVariantImages(productId, variantId, newImages, mainNewImageIndex);
+            APIResponse<ProductFullResponse> response = APIResponse.of(
+                    true,
+                    "Variant images uploaded successfully",
+                    product,
+                    null,
+                    null);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (NotFoundEntityException e) {
+            APIResponse<ProductFullResponse> response = APIResponse.of(
+                    false,
+                    e.getMessage(),
+                    null,
+                    List.of(ErrorResponse.builder()
+                            .field("variant")
+                            .message(e.getMessage())
+                            .build()),
+                    null);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        } catch (CustomApiException e) {
+            APIResponse<ProductFullResponse> response = APIResponse.of(
+                    false,
+                    e.getMessage(),
+                    null,
+                    List.of(ErrorResponse.builder()
+                            .field("images")
+                            .message(e.getMessage())
+                            .build()),
+                    null);
+            return ResponseEntity.status(e.getStatus()).body(response);
+        } catch (Exception e) {
+            APIResponse<ProductFullResponse> response = APIResponse.of(
+                    false,
+                    "Failed to upload variant images: " + e.getMessage(),
+                    null,
+                    List.of(ErrorResponse.builder()
+                            .field("images")
                             .message(e.getMessage())
                             .build()),
                     null);

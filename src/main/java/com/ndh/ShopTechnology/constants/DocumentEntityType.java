@@ -11,6 +11,7 @@ package com.ndh.ShopTechnology.constants;
  *   <tr><th>{@code entity_type}</th><th>Hằng Java</th><th>Bảng</th><th>{@code entity_id}</th></tr>
  *   <tr><td>{@code -1}</td><td>{@link #ID_DOCUMENT_ENTITY_UNASSIGNED}</td><td>—</td><td>không FK</td></tr>
  *   <tr><td>{@code 100000}</td><td>{@link #ID_DOCUMENT_ENTITY_PRODUCT}</td><td>{@code products}</td><td>{@code products.id}</td></tr>
+ *   <tr><td>{@code 105000}</td><td>{@link #ID_DOCUMENT_ENTITY_PRODUCT_VARIANT}</td><td>{@code product_variant}</td><td>{@code product_variant.id}</td></tr>
  *   <tr><td>{@code 200000}</td><td>{@link #ID_DOCUMENT_ENTITY_USER}</td><td>{@code users}</td><td>{@code users.id}</td></tr>
  *   <tr><td>{@code 300000}</td><td>{@link #ID_DOCUMENT_ENTITY_CATEGORY}</td><td>{@code category}</td><td>{@code category.id}</td></tr>
  *   <tr><td>{@code 400000}</td><td>{@link #ID_DOCUMENT_ENTITY_BRAND}</td><td>{@code brands}</td><td>{@code brands.id}</td></tr>
@@ -27,8 +28,11 @@ public final class DocumentEntityType {
     /** Chưa gắn đối tượng / legacy; {@code entity_id} không mang ý nghĩa khóa ngoại. Tương đương ý nghĩa cũ {@code UNASSIGNED}. */
     public static final int ID_DOCUMENT_ENTITY_UNASSIGNED = -1;
 
-    /** Ảnh, video, tài liệu sản phẩm. */
+    /** Ảnh, video, tài liệu sản phẩm (SPU). */
     public static final int ID_DOCUMENT_ENTITY_PRODUCT = 100_000;
+
+    /** Ảnh/media riêng từng biến thể (SKU); {@code entity_id} = {@code product_variant.id}. */
+    public static final int ID_DOCUMENT_ENTITY_PRODUCT_VARIANT = 105_000;
 
     /** Tài liệu / ảnh gắn người dùng. */
     public static final int ID_DOCUMENT_ENTITY_USER = 200_000;
@@ -91,6 +95,7 @@ public final class DocumentEntityType {
         return switch (type) {
             case ID_DOCUMENT_ENTITY_UNASSIGNED,
                     ID_DOCUMENT_ENTITY_PRODUCT,
+                    ID_DOCUMENT_ENTITY_PRODUCT_VARIANT,
                     ID_DOCUMENT_ENTITY_USER,
                     ID_DOCUMENT_ENTITY_CATEGORY,
                     ID_DOCUMENT_ENTITY_BRAND,

@@ -1,6 +1,6 @@
 package com.ndh.ShopTechnology.dto.response.user;
 
-import com.ndh.ShopTechnology.entities.role.RoleEntity;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 import lombok.*;
 
@@ -23,6 +23,9 @@ public class UserResponse {
     private Integer status;
     private Integer type;
 
+    /** ID user quản lý trực tiếp (users.man_id). */
+    private Long manId;
+
     private UserInfoResponse userInfo;
 
     /** Tập role code (vd ADMIN, EMPLOYEE). */
@@ -33,6 +36,12 @@ public class UserResponse {
 
     private UserAddressResponse defaultAddress;
 
+    /**
+     * Chỉ có khi tạo mới / reset mật khẩu: mật khẩu một lần (6 chữ số) để gửi nhân viên.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String temporaryPassword;
+
     public static UserResponse fromEntity(UserEntity entity) {
         if (entity == null) return null;
 
@@ -42,14 +51,15 @@ public class UserResponse {
                 .email(entity.getEmail())
                 .phoneNumber(entity.getPhoneNumber())
                 .status(entity.getStatus())
-                .type(entity.getType());
+                .type(entity.getType())
+                .manId(entity.getManId());
 
         builder.userInfo(UserInfoResponse.fromEntity(entity.getUserInfo()));
 
-        if (entity.getRoles() != null) {
-            builder.roles(entity.getRoles().stream()
-                    .map(RoleEntity::getCode)
-                    .collect(Collectors.toCollection(LinkedHashSet::new)));
+        if (entity.getRole() != null) {
+            LinkedHashSet<String> codes = new LinkedHashSet<>();
+            codes.add(entity.getRole().getCode());
+            builder.roles(codes);
         }
 
         builder.permissions(entity.getAllPermissions());

@@ -41,15 +41,22 @@ public class UserEntity extends BaseEntity {
     @Column(name = "type")
     private Integer type;
 
+    /** ID user quản lý (self-reference tới users.id), có thể null. */
+    @Column(name = "man_id")
+    private Long manId;
+
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @JsonIgnore
     private UserInfoEntity userInfo;
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
+    /**
+     * <b>Một user chỉ có một role;</b> <b>một role có thể được dùng cho nhiều user.</b>
+     * Lưu bằng {@code users.role_id} → {@code roles.id}, không bảng nối. JPA: {@link jakarta.persistence.ManyToOne}.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "role_id", nullable = false)
     @JsonIgnore
-    @Builder.Default
-    private Set<RoleEntity> roles = new HashSet<>();
+    private RoleEntity role;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @JsonIgnore
@@ -83,7 +90,7 @@ public class UserEntity extends BaseEntity {
 
     /**
      * Trả về tập hợp <b>permission code (Integer)</b> đầy đủ của user:
-     * <pre>Effective = (Σ permissions của các role) ∪ (permissions cấp thêm cho user, chưa hết hạn)</pre>
+     * <pre>Effective = (permissions của role) ∪ (permissions cấp thêm cho user, chưa hết hạn)</pre>
      *
      * <p>Lưu ý: hàm này KHÔNG mở rộng wildcard 101..104 thành các permission 6 chữ số tương ứng.
      * Việc kiểm tra wildcard được thực hiện trong {@code PermissionEvaluator#hasPermission}.
@@ -92,12 +99,8 @@ public class UserEntity extends BaseEntity {
     public Set<Integer> getAllPermissions() {
         Set<Integer> permissions = new HashSet<>();
 
-        if (roles != null) {
-            for (RoleEntity role : roles) {
-                if (role.getPermissionCodes() != null) {
-                    permissions.addAll(role.getPermissionCodes());
-                }
-            }
+        if (role != null && role.getPermissionCodes() != null) {
+            permissions.addAll(role.getPermissionCodes());
         }
 
         if (userPermissions != null) {
@@ -116,8 +119,8 @@ public class UserEntity extends BaseEntity {
 
     @Transient
     public boolean hasRole(String roleCode) {
-        if (roles == null || roleCode == null) return false;
-        return roles.stream().anyMatch(r -> roleCode.equals(r.getCode()));
+        if (role == null || roleCode == null) return false;
+        return roleCode.equals(role.getCode());
     }
 
     @Transient

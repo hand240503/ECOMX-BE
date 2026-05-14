@@ -2,6 +2,7 @@ package com.ndh.ShopTechnology.services.permission.impl;
 
 import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.constants.PermissionCode;
+import com.ndh.ShopTechnology.constants.RoleConstant;
 import com.ndh.ShopTechnology.dto.request.permission.GrantPermissionRequest;
 import com.ndh.ShopTechnology.dto.request.permission.RevokePermissionRequest;
 import com.ndh.ShopTechnology.dto.request.role.UpsertRoleRequest;
@@ -127,10 +128,9 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @Transactional(readOnly = true)
     public UserPermissionsResponse getUserPermissions(Long userId) {
         UserEntity actor = currentActor();
-        // Cho phép xem nếu là chính mình HOẶC có quyền đọc user / đọc-tất-cả.
         boolean self = actor.getId() != null && actor.getId().equals(userId);
-        if (!self) {
-            requireActorPermission(actor, PermissionCode.READ_USER);
+        if (!self && !canViewOtherUsersPermissionData(actor)) {
+            throw new CustomApiException(HttpStatus.FORBIDDEN, MessageConstant.NO_PERMISSION_ACTION);
         }
 
         UserEntity user = userRepository.findByIdWithRolesAndPermissions(userId)
@@ -143,7 +143,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @Transactional
     public UserPermissionsResponse grantPermissions(GrantPermissionRequest request) {
         UserEntity actor = currentActor();
-        requireActorPermission(actor, PermissionCode.GRANT_PERMISSION);
+        requireCanDelegateUserPermissions(actor);
 
         UserEntity target = userRepository.findByIdWithRolesAndPermissions(request.getUserId())
                 .orElseThrow(() -> new NotFoundEntityException(
@@ -185,13 +185,16 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @Transactional
     public UserPermissionsResponse revokePermissions(RevokePermissionRequest request) {
         UserEntity actor = currentActor();
-        requireActorPermission(actor, PermissionCode.GRANT_PERMISSION);
+        requireCanDelegateUserPermissions(actor);
 
         UserEntity target = userRepository.findByIdWithRolesAndPermissions(request.getUserId())
                 .orElseThrow(() -> new NotFoundEntityException(
                         String.format(MessageConstant.USER_NOT_FOUND_BY_ID, request.getUserId())));
 
-        Set<Integer> codes = sanitizeCodes(request.getPermissionCodes());
+        Set<Integer> codes = sanitizeAndAuthorizePermissions(actor, request.getPermissionCodes());
+        if (codes.isEmpty()) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "No valid permission codes provided");
+        }
         for (Integer code : codes) {
             userPermissionRepository.deleteByUserIdAndPermissionCode(target.getId(), code);
         }
@@ -203,6 +206,32 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                 .orElseThrow(() -> new NotFoundEntityException(
                         String.format(MessageConstant.USER_NOT_FOUND_BY_ID, target.getId())));
         return toUserPermissionsResponse(refreshed);
+    }
+
+    private void requireCanDelegateUserPermissions(UserEntity actor) {
+        if (actor.hasRole(RoleConstant.ROLE_ADMIN) || actor.hasRole(RoleConstant.ROLE_SUPER_ADMIN)) {
+            return;
+        }
+        if (PermissionEvaluator.hasAnyPermission(actor.getAllPermissions(),
+                PermissionCode.GRANT_PERMISSION,
+                PermissionCode.UPDATE_USER,
+                PermissionCode.UPDATE_ALL)) {
+            return;
+        }
+        throw new CustomApiException(HttpStatus.FORBIDDEN, MessageConstant.NO_PERMISSION_ACTION);
+    }
+
+    /** Xem phần cấp quyền của user khác. */
+    private boolean canViewOtherUsersPermissionData(UserEntity actor) {
+        if (actor.hasRole(RoleConstant.ROLE_ADMIN) || actor.hasRole(RoleConstant.ROLE_SUPER_ADMIN)) {
+            return true;
+        }
+        return PermissionEvaluator.hasAnyPermission(actor.getAllPermissions(),
+                PermissionCode.READ_USER,
+                PermissionCode.READ_ALL,
+                PermissionCode.GRANT_PERMISSION,
+                PermissionCode.UPDATE_USER,
+                PermissionCode.UPDATE_ALL);
     }
 
     // ===================== HELPERS =====================
@@ -264,12 +293,8 @@ public class RolePermissionServiceImpl implements RolePermissionService {
 
     private Set<Integer> rolePermissionsOf(UserEntity user) {
         Set<Integer> rolePerms = new HashSet<>();
-        if (user.getRoles() != null) {
-            for (RoleEntity role : user.getRoles()) {
-                if (role.getPermissionCodes() != null) {
-                    rolePerms.addAll(role.getPermissionCodes());
-                }
-            }
+        if (user.getRole() != null && user.getRole().getPermissionCodes() != null) {
+            rolePerms.addAll(user.getRole().getPermissionCodes());
         }
         return rolePerms;
     }
@@ -291,8 +316,10 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         effective.addAll(rolePerms);
         effective.addAll(userPerms);
 
-        Set<String> roleCodes = user.getRoles() == null ? Set.of()
-                : user.getRoles().stream().map(RoleEntity::getCode).collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<String> roleCodes = new LinkedHashSet<>();
+        if (user.getRole() != null) {
+            roleCodes.add(user.getRole().getCode());
+        }
 
         return UserPermissionsResponse.builder()
                 .userId(user.getId())

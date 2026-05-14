@@ -1,12 +1,16 @@
 package com.ndh.ShopTechnology.services.user.impl;
 
+import com.ndh.ShopTechnology.constants.AdminManagedUserKind;
 import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.constants.PermissionCode;
+import com.ndh.ShopTechnology.constants.RoleConstant;
 import com.ndh.ShopTechnology.constants.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.PaginationRequest;
 import com.ndh.ShopTechnology.dto.request.user.CreateUserRequest;
 import com.ndh.ShopTechnology.dto.request.user.ChangePasswordRequest;
 import com.ndh.ShopTechnology.dto.request.user.ChangeContactRequest;
+import com.ndh.ShopTechnology.dto.request.permission.GrantPermissionRequest;
+import com.ndh.ShopTechnology.dto.request.permission.RevokePermissionRequest;
 import com.ndh.ShopTechnology.dto.request.user.AdminModUserInfoRequest;
 import com.ndh.ShopTechnology.dto.request.user.ModUserInfoRequest;
 
@@ -24,6 +28,7 @@ import com.ndh.ShopTechnology.repository.UserRepository;
 import com.ndh.ShopTechnology.services.auth.TokenFacade;
 import com.ndh.ShopTechnology.services.permission.PermissionEvaluator;
 import com.ndh.ShopTechnology.services.permission.PermissionService;
+import com.ndh.ShopTechnology.services.permission.RolePermissionService;
 import com.ndh.ShopTechnology.services.user.RoleAssignmentService;
 import com.ndh.ShopTechnology.services.user.UserService;
 import com.ndh.ShopTechnology.services.user.helper.UserValidationHelper;
@@ -44,8 +49,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.util.HashSet;
-import java.util.List;
+import java.security.SecureRandom;
 import java.util.Objects;
 import java.util.Set;
 
@@ -61,6 +65,9 @@ public class UserServiceImpl implements UserService {
     private final UserValidationHelper userValidationHelper;
     private final RoleAssignmentService roleAssignmentService;
     private final TokenFacade tokenFacade;
+    private final RolePermissionService rolePermissionService;
+
+    private final SecureRandom secureRandom = new SecureRandom();
 
     private static final String EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
     private static final String PHONE_REGEX = "\\d{10,15}";
@@ -124,6 +131,14 @@ public class UserServiceImpl implements UserService {
         return UserResponse.fromEntity(user);
     }
 
+    protected UserResponse toResponse(UserEntity user, String temporaryPassword) {
+        UserResponse r = UserResponse.fromEntity(user);
+        if (temporaryPassword != null) {
+            r.setTemporaryPassword(temporaryPassword);
+        }
+        return r;
+    }
+
     /**
      * Update profile fields shared by both normal users and admins.
      */
@@ -172,25 +187,28 @@ public class UserServiceImpl implements UserService {
         if (req.getType() != null)
             user.setType(req.getType());
 
+        if (req.getManId() != null)
+            user.setManId(req.getManId());
+
         if (StringUtils.hasText(req.getPassword())) {
             user.setPassword(passwordEncoder.encode(req.getPassword()));
         }
 
-        if (req.getRoleIds() != null && !req.getRoleIds().isEmpty()) {
-            List<RoleEntity> roleList = roleRepository.findAllById(Objects.requireNonNull(req.getRoleIds()));
-            Set<RoleEntity> roles = new HashSet<>(roleList);
-            if (!roles.isEmpty()) {
-                user.setRoles(roles);
-            } else {
-                log.warn("No valid roles found for roleIds: {}", req.getRoleIds());
-            }
+        if (req.getRoleId() != null) {
+            roleRepository.findById(req.getRoleId()).ifPresentOrElse(
+                    user::setRole,
+                    () -> log.warn("No valid role found for roleId: {}", req.getRoleId())
+            );
         }
     }
 
     /**
      * Core method for user update.
-     * Admin can update any user and all fields.
-     * Non-admin can only update profile fields of their own account.
+     * <ul>
+     *   <li>Admin (wildcard 101–104) hoặc quyền UPDATE_USER/UPDATE_ALL: chỉnh mọi trường hợp lệ.</li>
+     *   <li>Người có {@link PermissionCode#LOCK_USER}, hoặc nhân viên có {@code man_id} trỏ về actor: chỉ đổi khóa/mở (status).</li>
+     *   <li>Còn lại: chỉ sửa profile của chính mình.</li>
+     * </ul>
      */
     @Transactional
     protected UserResponse doUpdateUser(AdminModUserInfoRequest req, UserEntity actor) {
@@ -202,46 +220,103 @@ public class UserServiceImpl implements UserService {
         }
 
         final UserEntity target;
-
-        if (isAdmin(actor)) {
-            // Load directly from DB so JPA tracks entity in current session.
-            target = loadUserForWrite(req.getId());
-            applyProfileFields(target, req);
-            applyAdminFields(target, req);
-        } else {
-            // Non-admin can update only their own profile.
-            if (!req.getId().equals(actor.getId())) {
-                throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
-            }
-            // Actor is already managed in current session.
+        if (req.getId().equals(actor.getId())) {
             target = actor;
             applyProfileFields(target, req);
+        } else {
+            UserEntity other = loadUserForWrite(req.getId());
+            boolean fullMgmt = isAdmin(actor)
+                    || PermissionEvaluator.hasAnyPermission(
+                    actor.getAllPermissions(),
+                    PermissionCode.UPDATE_USER,
+                    PermissionCode.UPDATE_ALL);
+            if (fullMgmt) {
+                applyProfileFields(other, req);
+                applyAdminFields(other, req);
+                target = other;
+            } else if (canApplyAccountLock(actor, other, req)) {
+                applyAccountStatusOnly(other, req);
+                target = other;
+            } else {
+                throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+            }
         }
 
         UserEntity saved = userRepository.save(Objects.requireNonNull(target));
         return toResponse(saved);
     }
 
-    /* ================== Services ================== */
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<UserResponse> getAllUsers(PaginationRequest request) {
-        // Permission check must run before paging query.
-        UserEntity currentUser = getCurrentUserEntity();
-        if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
-                PermissionCode.READ_USER, PermissionCode.READ_ALL)) {
-            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+    /** Khóa/mở (status): quản lý trực tiếp theo man_id, hoặc có quyền LOCK_USER — body chỉ gồm id + status. */
+    protected boolean canApplyAccountLock(UserEntity actor, UserEntity other, AdminModUserInfoRequest req) {
+        if (req.getStatus() == null) {
+            return false;
         }
-
-        int page = (request.getPage() == null) ? 0 : request.getPage();
-        int size = (request.getSize() == null) ? 10 : request.getSize();
-
-        Pageable pageable = PageRequest.of(page, size);
-        Page<UserEntity> userPage = userRepository.findAll(pageable);
-
-        return userPage.map(UserResponse::fromEntity);
+        if (!isAdministrativeLockOnlyRequest(req)) {
+            return false;
+        }
+        if (other.getManId() != null && other.getManId().equals(actor.getId())) {
+            return true;
+        }
+        return PermissionEvaluator.hasAnyPermission(
+                actor.getAllPermissions(),
+                PermissionCode.LOCK_USER);
     }
+
+    private boolean isAdministrativeLockOnlyRequest(AdminModUserInfoRequest req) {
+        if (StringUtils.hasText(req.getPassword())) {
+            return false;
+        }
+        if (req.getEmail() != null) {
+            return false;
+        }
+        if (req.getPhoneNumber() != null) {
+            return false;
+        }
+        if (req.getType() != null) {
+            return false;
+        }
+        if (req.getManId() != null) {
+            return false;
+        }
+        if (req.getRoleId() != null) {
+            return false;
+        }
+        if (req.getFullName() != null) {
+            return false;
+        }
+        if (req.getTelephone() != null) {
+            return false;
+        }
+        if (req.getAvatar() != null) {
+            return false;
+        }
+        if (req.getManagerId() != null) {
+            return false;
+        }
+        if (req.getInfo01() != null || req.getInfo02() != null
+                || req.getInfo03() != null || req.getInfo04() != null) {
+            return false;
+        }
+        if (req.getGrantPermissionCodes() != null && !req.getGrantPermissionCodes().isEmpty()) {
+            return false;
+        }
+        if (req.getRevokePermissionCodes() != null && !req.getRevokePermissionCodes().isEmpty()) {
+            return false;
+        }
+        return true;
+    }
+
+    private void applyAccountStatusOnly(UserEntity user, AdminModUserInfoRequest req) {
+        user.setStatus(req.getStatus());
+    }
+
+    /** Admin hoặc SUPER_ADMIN: có thể tạo tài khoản với mọi role. Ngược lại: chỉ MANAGER/EMPLOYEE cho nhân viên. */
+    protected boolean isPrivilegedAccountCreator(UserEntity actor) {
+        return actor.hasRole(RoleConstant.ROLE_ADMIN)
+                || actor.hasRole(RoleConstant.ROLE_SUPER_ADMIN);
+    }
+
+    /* ================== Services ================== */
 
     @Override
     @Transactional(readOnly = true)
@@ -251,15 +326,90 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public UserResponse getUserInfo(Long id) {
-        UserEntity currentUser = getCurrentUser();
+    public Page<UserResponse> getStaffUsers(PaginationRequest request) {
+        UserEntity currentUser = getCurrentUserEntity();
+        if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
+                PermissionCode.READ_USER, PermissionCode.READ_EMPLOYEE, PermissionCode.READ_ALL)) {
+            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+        }
 
+        int page = (request.getPage() == null) ? 0 : request.getPage();
+        int size = (request.getSize() == null) ? 10 : request.getSize();
+        Pageable pageable = PageRequest.of(page, size);
+        Page<UserEntity> userPage = userRepository.findPagedNonCustomerUsers(
+                RoleConstant.ROLE_CUSTOMER, pageable);
+        return userPage.map(UserResponse::fromEntity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getEmployeeUsers(PaginationRequest request) {
+        UserEntity currentUser = getCurrentUserEntity();
+        if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
+                PermissionCode.READ_USER, PermissionCode.READ_EMPLOYEE, PermissionCode.READ_ALL)) {
+            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+        }
+
+        int page = (request.getPage() == null) ? 0 : request.getPage();
+        int size = (request.getSize() == null) ? 10 : request.getSize();
+        Pageable pageable = PageRequest.of(page, size);
+        Page<UserEntity> userPage = userRepository.findByRole_Code(RoleConstant.ROLE_EMPLOYEE, pageable);
+        return userPage.map(UserResponse::fromEntity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getCustomerUsers(PaginationRequest request) {
+        UserEntity currentUser = getCurrentUserEntity();
         if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
                 PermissionCode.READ_USER, PermissionCode.READ_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
 
-        return toResponse(loadUser(id));
+        int page = (request.getPage() == null) ? 0 : request.getPage();
+        int size = (request.getSize() == null) ? 10 : request.getSize();
+        Pageable pageable = PageRequest.of(page, size);
+        Page<UserEntity> userPage = userRepository.findByRole_Code(RoleConstant.ROLE_CUSTOMER, pageable);
+        return userPage.map(UserResponse::fromEntity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getCustomerUser(Long id) {
+        UserEntity currentUser = getCurrentUserEntity();
+        if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
+                PermissionCode.READ_USER, PermissionCode.READ_ALL)) {
+            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+        }
+        UserEntity user = loadUser(id);
+        if (user.getRole() == null || !RoleConstant.ROLE_CUSTOMER.equals(user.getRole().getCode())) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "Tài khoản không phải khách hàng (CUSTOMER).");
+        }
+        return toResponse(user);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getStaffUser(Long id) {
+        return getUserForAdminSegment(id, AdminManagedUserKind.STAFF);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getEmployeeUser(Long id) {
+        return getUserForAdminSegment(id, AdminManagedUserKind.EMPLOYEE);
+    }
+
+    private UserResponse getUserForAdminSegment(Long id, AdminManagedUserKind kind) {
+        UserEntity currentUser = getCurrentUser();
+        if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
+                PermissionCode.READ_USER, PermissionCode.READ_EMPLOYEE, PermissionCode.READ_ALL)) {
+            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+        }
+        UserEntity user = loadUser(id);
+        assertMatchesAdminKind(user, kind);
+        return toResponse(user);
     }
 
     @Override
@@ -271,14 +421,27 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     @CacheEvict(value = { "users", "userPermissions" }, key = "#req.id")
-    public UserResponse updateUserInfo(AdminModUserInfoRequest req) {
+    public UserResponse updateStaffUser(AdminModUserInfoRequest req) {
+        return finalizeAdminUpdate(req, AdminManagedUserKind.STAFF);
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = { "users", "userPermissions" }, key = "#req.id")
+    public UserResponse updateEmployeeUser(AdminModUserInfoRequest req) {
+        return finalizeAdminUpdate(req, AdminManagedUserKind.EMPLOYEE);
+    }
+
+    private UserResponse finalizeAdminUpdate(AdminModUserInfoRequest req, AdminManagedUserKind kind) {
         if (req == null || req.getId() == null) {
             throw new NotFoundEntityException(MessageConstant.USER_NOT_FOUND);
         }
 
         UserEntity actor = getCurrentUserEntity();
+        UserEntity targetSnapshot = loadUserForWrite(req.getId());
+        assertMatchesAdminKind(targetSnapshot, kind);
+        validateRoleChangeForKind(req, kind);
 
-        // Read target username before update to avoid repopulating evicted cache.
         boolean isTargetDifferentFromActor = isAdmin(actor) && !req.getId().equals(actor.getId());
         String targetUsername = null;
         if (isTargetDifferentFromActor) {
@@ -289,16 +452,99 @@ public class UserServiceImpl implements UserService {
 
         UserResponse response = doUpdateUser(req, actor);
 
-        // Clear permission cache for actor.
+        boolean permsTouched = applyPermissionMutationsIfAny(req, actor);
+        if (permsTouched) {
+            response = toResponse(loadUserForWrite(req.getId()));
+            permissionService.clearUserPermissionsCache(response.getUsername());
+        }
+
         permissionService.clearUserPermissionsCache(actor.getUsername());
 
-        // Clear permission cache for target user when different from actor.
         if (isTargetDifferentFromActor && targetUsername != null) {
             permissionService.clearUserPermissionsCache(targetUsername);
         }
 
-        log.info("User updated: actorId={}, targetId={}", actor.getId(), req.getId());
+        log.info("User updated: actorId={}, targetId={}, segment={}", actor.getId(), req.getId(), kind);
         return response;
+    }
+
+    /**
+     * Đồng bộ cấp/thu hồi quyền cấp thêm trong cùng request cập nhật staff/employee.
+     * User không phải {@link RoleConstant#ROLE_SUPER_ADMIN} hoặc {@link RoleConstant#ROLE_ADMIN}
+     * không được tự grant/revoke cho chính mình.
+     */
+    private boolean applyPermissionMutationsIfAny(AdminModUserInfoRequest req, UserEntity actor) {
+        boolean hasGrants = req.getGrantPermissionCodes() != null && !req.getGrantPermissionCodes().isEmpty();
+        boolean hasRevokes = req.getRevokePermissionCodes() != null && !req.getRevokePermissionCodes().isEmpty();
+        if (!hasGrants && !hasRevokes) {
+            return false;
+        }
+
+        if (req.getId().equals(actor.getId()) && !canSelfDelegatePermissions(actor)) {
+            throw new AccessDeniedException(
+                    "Chỉ SUPER_ADMIN hoặc ADMIN được tự cấp hoặc thu hồi quyền cho chính mình.");
+        }
+
+        if (hasRevokes) {
+            rolePermissionService.revokePermissions(RevokePermissionRequest.builder()
+                    .userId(req.getId())
+                    .permissionCodes(req.getRevokePermissionCodes())
+                    .build());
+        }
+        if (hasGrants) {
+            rolePermissionService.grantPermissions(GrantPermissionRequest.builder()
+                    .userId(req.getId())
+                    .permissionCodes(req.getGrantPermissionCodes())
+                    .expiresAt(req.getPermissionGrantExpiresAt())
+                    .build());
+        }
+        return true;
+    }
+
+    private static boolean canSelfDelegatePermissions(UserEntity actor) {
+        return actor.hasRole(RoleConstant.ROLE_SUPER_ADMIN) || actor.hasRole(RoleConstant.ROLE_ADMIN);
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = { "users", "userPermissions" }, key = "#id")
+    public void deleteStaffUser(Long id) {
+        UserEntity actor = getCurrentUserEntity();
+        if (!PermissionEvaluator.hasAnyPermission(actor.getAllPermissions(),
+                PermissionCode.DELETE_USER,
+                PermissionCode.DELETE_EMPLOYEE,
+                PermissionCode.DELETE_ALL)) {
+            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+        }
+        UserEntity target = loadUserForWrite(id);
+        assertMatchesAdminKind(target, AdminManagedUserKind.STAFF);
+        if (target.getId().equals(actor.getId())) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Không thể xóa tài khoản của chính bạn.");
+        }
+        permissionService.clearUserPermissionsCache(target.getUsername());
+        userRepository.delete(target);
+        log.info("Staff user deleted: id={}, by={}", id, actor.getUsername());
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = { "users", "userPermissions" }, key = "#id")
+    public UserResponse resetStaffPassword(Long id) {
+        UserEntity actor = getCurrentUserEntity();
+        if (!PermissionEvaluator.hasAnyPermission(actor.getAllPermissions(),
+                PermissionCode.UPDATE_USER,
+                PermissionCode.UPDATE_EMPLOYEE,
+                PermissionCode.UPDATE_ALL)) {
+            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+        }
+        UserEntity target = loadUserForWrite(id);
+        assertMatchesAdminKind(target, AdminManagedUserKind.STAFF);
+        String plain = generateStaffInitialPassword(target.getPhoneNumber());
+        target.setPassword(passwordEncoder.encode(plain));
+        userRepository.save(target);
+        permissionService.clearUserPermissionsCache(target.getUsername());
+        log.info("Staff password reset: id={}, by={}", id, actor.getUsername());
+        return toResponse(target, plain);
     }
 
     @Override
@@ -449,20 +695,35 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public UserResponse createUser(CreateUserRequest request) {
+    public UserResponse createStaffUser(CreateUserRequest request) {
+        return createUserForAdminSegment(request, AdminManagedUserKind.STAFF);
+    }
+
+    @Override
+    @Transactional
+    public UserResponse createEmployeeUser(CreateUserRequest request) {
+        return createUserForAdminSegment(request, AdminManagedUserKind.EMPLOYEE);
+    }
+
+    private UserResponse createUserForAdminSegment(CreateUserRequest request, AdminManagedUserKind kind) {
         if (request == null) {
             throw new IllegalArgumentException("CreateUserRequest cannot be null");
         }
 
         UserEntity currentUser = getCurrentUserEntity();
         if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
-                PermissionCode.CREATE_USER, PermissionCode.CREATE_ALL)) {
+                PermissionCode.CREATE_USER,
+                PermissionCode.CREATE_EMPLOYEE,
+                PermissionCode.CREATE_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
 
         String username = userValidationHelper.validateAndNormalizeUsername(request.getUsername());
         String phone = userValidationHelper.validateAndNormalizePhone(request.getPhoneNumber());
-        String password = userValidationHelper.validatePassword(request.getPassword());
+        boolean generatedPlain = !StringUtils.hasText(request.getPassword());
+        String passwordPlain = generatedPlain
+                ? generateStaffInitialPassword(phone)
+                : userValidationHelper.validatePassword(request.getPassword());
 
         if (userRepository.existsByUsername(username)) {
             throw new CustomApiException(HttpStatus.CONFLICT, "Username already exists: " + username);
@@ -471,13 +732,58 @@ public class UserServiceImpl implements UserService {
             throw new CustomApiException(HttpStatus.CONFLICT, "Phone number already exists: " + phone);
         }
 
+        RoleEntity role = kind == AdminManagedUserKind.EMPLOYEE
+                ? resolveRoleForEmployeeOnly(request.getRoleId())
+                : resolveRoleForCreate(currentUser, request.getRoleId());
+        if (kind == AdminManagedUserKind.STAFF
+                && RoleConstant.ROLE_CUSTOMER.equals(role.getCode())) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "API nhân viên không tạo tài khoản CUSTOMER; chỉ định role nội bộ.");
+        }
+        validateHighPrivilegeRolesForPrivilegedCreator(currentUser, role);
+
+        String encodedPassword = passwordEncoder.encode(passwordPlain);
+        UserEntity saved = persistNewAdminUser(request, role, currentUser, username, phone, encodedPassword);
+        return toResponse(saved, generatedPlain ? passwordPlain : null);
+    }
+
+    /**
+     * Mật khẩu 6 chữ số: 5 chữ số đầu lấy từ SĐT (bỏ ký tự không phải số), chữ số thứ 6 ngẫu nhiên.
+     * Nếu không đủ 5 chữ số từ SĐT, phần đầu được bù bằng chữ số ngẫu nhiên.
+     */
+    private String generateStaffInitialPassword(String normalizedPhone) {
+        String digits = normalizedPhone == null ? "" : normalizedPhone.replaceAll("\\D", "");
+        StringBuilder prefix = new StringBuilder();
+        for (int i = 0; i < Math.min(5, digits.length()); i++) {
+            prefix.append(digits.charAt(i));
+        }
+        while (prefix.length() < 5) {
+            prefix.append(secureRandom.nextInt(10));
+        }
+        prefix.append(secureRandom.nextInt(10));
+        return prefix.toString();
+    }
+
+    private UserEntity persistNewAdminUser(CreateUserRequest request, RoleEntity role, UserEntity currentUser,
+                                             String username, String phone, String encodedPassword) {
         UserEntity user = UserEntity.builder()
                 .username(username)
-                .password(passwordEncoder.encode(password))
+                .password(encodedPassword)
                 .email(request.getEmail() != null ? request.getEmail().trim() : null)
                 .phoneNumber(phone)
                 .status(SystemConstant.ACTIVE_STATUS)
                 .build();
+
+        if (isPrivilegedAccountCreator(currentUser)) {
+            if (request.getManId() != null) {
+                if (!userRepository.existsById(request.getManId())) {
+                    throw new CustomApiException(HttpStatus.BAD_REQUEST, "manId không tồn tại: " + request.getManId());
+                }
+                user.setManId(request.getManId());
+            }
+        } else {
+            user.setManId(currentUser.getId());
+        }
 
         UserInfoEntity userInfo = UserInfoEntity.builder()
                 .user(user)
@@ -492,15 +798,104 @@ public class UserServiceImpl implements UserService {
                 .build();
 
         user.setUserInfo(userInfo);
-
-        Set<RoleEntity> roles = roleAssignmentService.assignRoles(request.getRoleIds());
-        user.setRoles(roles);
+        user.setRole(role);
 
         user = userRepository.save(user);
 
-        log.info("User created: id={}, username={}, roles={}",
-                user.getId(), user.getUsername(), roles.stream().map(RoleEntity::getCode).toList());
+        log.info("User created: id={}, username={}, role={}",
+                user.getId(), user.getUsername(), role.getCode());
 
-        return toResponse(user);
+        return user;
+    }
+
+    private void assertMatchesAdminKind(UserEntity user, AdminManagedUserKind kind) {
+        if (user.getRole() == null) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Tài khoản chưa gán role.");
+        }
+        String code = user.getRole().getCode();
+        if (kind == AdminManagedUserKind.STAFF) {
+            if (RoleConstant.ROLE_CUSTOMER.equals(code)) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                        "Tài khoản không thuộc nhóm nhân viên nội bộ.");
+            }
+        } else if (kind == AdminManagedUserKind.EMPLOYEE) {
+            if (!RoleConstant.ROLE_EMPLOYEE.equals(code)) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                        "Tài khoản không phải EMPLOYEE.");
+            }
+        }
+    }
+
+    private void validateRoleChangeForKind(AdminModUserInfoRequest req, AdminManagedUserKind kind) {
+        if (req == null || req.getRoleId() == null) {
+            return;
+        }
+        RoleEntity r = roleRepository.findById(req.getRoleId())
+                .orElseThrow(() -> new NotFoundEntityException("Role not found: id=" + req.getRoleId()));
+        if (kind == AdminManagedUserKind.STAFF) {
+            if (RoleConstant.ROLE_CUSTOMER.equals(r.getCode())) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                        "Không gán CUSTOMER qua API nhân viên.");
+            }
+        } else if (kind == AdminManagedUserKind.EMPLOYEE) {
+            if (!RoleConstant.ROLE_EMPLOYEE.equals(r.getCode())) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                        "API employees chỉ gán role EMPLOYEE.");
+            }
+        }
+    }
+
+    protected RoleEntity resolveRoleForEmployeeOnly(Long roleId) {
+        if (roleId != null) {
+            RoleEntity r = roleRepository.findById(roleId)
+                    .orElseThrow(() -> new NotFoundEntityException("Role not found: id=" + roleId));
+            if (!RoleConstant.ROLE_EMPLOYEE.equals(r.getCode())) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                        "API employees chỉ gán role EMPLOYEE (không hợp lệ: " + r.getCode() + ")");
+            }
+            return r;
+        }
+        return roleRepository.findByCode(RoleConstant.ROLE_EMPLOYEE)
+                .orElseThrow(() -> new NotFoundEntityException("Chưa cấu hình role EMPLOYEE trong hệ thống."));
+    }
+
+    /**
+     * Admin/SUPER_ADMIN: như {@link RoleAssignmentService#assignRoleForPrivilegedCreator(Long)} (mặc định CUSTOMER nếu không gửi roleId).
+     * Other: chỉ gán MANAGER / EMPLOYEE, mặc định EMPLOYEE nếu không gửi roleId.
+     */
+    protected RoleEntity resolveRoleForCreate(UserEntity actor, Long roleId) {
+        if (isPrivilegedAccountCreator(actor)) {
+            return roleAssignmentService.assignRoleForPrivilegedCreator(roleId);
+        }
+
+        if (roleId != null) {
+            RoleEntity r = roleRepository.findById(roleId)
+                    .orElseThrow(() -> new NotFoundEntityException("Role not found: id=" + roleId));
+            String code = r.getCode();
+            if (RoleConstant.ROLE_MANAGER.equals(code) || RoleConstant.ROLE_EMPLOYEE.equals(code)) {
+                return r;
+            }
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "Chỉ được gán role MANAGER hoặc EMPLOYEE (không hợp lệ: " + code + ")");
+        }
+        return roleRepository.findByCode(RoleConstant.ROLE_EMPLOYEE)
+                .orElseThrow(() -> new NotFoundEntityException("Chưa cấu hình role EMPLOYEE trong hệ thống."));
+    }
+
+    /**
+     * Thêm tài khoản ADMIN/SUPER_ADMIN chỉ khi người tạo là ADMIN hoặc SUPER_ADMIN.
+     */
+    protected void validateHighPrivilegeRolesForPrivilegedCreator(UserEntity actor, RoleEntity role) {
+        if (role == null) {
+            return;
+        }
+        Set<String> high = Set.of(RoleConstant.ROLE_ADMIN, RoleConstant.ROLE_SUPER_ADMIN);
+        if (!high.contains(role.getCode())) {
+            return;
+        }
+        if (!isPrivilegedAccountCreator(actor)) {
+            throw new CustomApiException(HttpStatus.FORBIDDEN,
+                    "Chỉ ADMIN hoặc SUPER_ADMIN mới được gán role ADMIN/SUPER_ADMIN.");
+        }
     }
 }

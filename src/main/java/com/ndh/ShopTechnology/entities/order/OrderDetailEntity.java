@@ -2,6 +2,7 @@ package com.ndh.ShopTechnology.entities.order;
 
 import com.ndh.ShopTechnology.entities.BaseEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
+import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -19,7 +20,8 @@ public class OrderDetailEntity extends BaseEntity {
     public static final String COL_TOTAL_PRICE      = "total_price";
     public static final String COL_UNIT_PRICE         = "unit_price";
     public static final String COL_ORDER_ID         = "order_id";
-    public static final String COL_PRODUCT_ID       = "product_id";
+    public static final String COL_PRODUCT_ID           = "product_id";
+    public static final String COL_PRODUCT_VARIANT_ID   = "product_variant_id";
 
     @Column(name = COL_DESCRIPTION, nullable = true)
     private String description;
@@ -43,5 +45,10 @@ public class OrderDetailEntity extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = COL_PRODUCT_ID, nullable = false)
     private ProductEntity product;
+
+    /** Biến thể đã chọn khi đặt hàng ({@code null} với dữ liệu đơn cũ trước migration). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = COL_PRODUCT_VARIANT_ID, nullable = true)
+    private ProductVariantEntity productVariant;
 
 }

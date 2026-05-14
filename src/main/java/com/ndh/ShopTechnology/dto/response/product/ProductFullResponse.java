@@ -2,6 +2,7 @@ package com.ndh.ShopTechnology.dto.response.product;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.ndh.ShopTechnology.dto.response.promotion.VolumePriceTierResponse;
 import com.ndh.ShopTechnology.entities.product.PolicyEntity;
 import com.ndh.ShopTechnology.entities.product.PriceEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
@@ -10,12 +11,14 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
 import org.hibernate.Hibernate;
+
+import com.ndh.ShopTechnology.utils.ProductCatalogListing;
 
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -24,6 +27,13 @@ import java.util.stream.Collectors;
  *
  * <p>JSON gồm {@code description}, {@code l_description} (mô tả dài) và các field khác map trực tiếp từ
  * {@link ProductEntity}.
+ *
+ * <p>Trường {@link #prices} là giá catalog (theo đơn vị) của biến thể đại diện — active và rẻ nhất
+ * (ưu tiên {@link #fromEffectiveUnitPrice} / map giá hiển thị khi {@code ProductServiceImpl} truyền map vào overload đầy đủ của {@code fromEntity}).
+ * Chi tiết từng SKU nằm trong {@link #variants}; mỗi variant có thêm {@code effective_unit_price}
+ * (khi có price change hiệu lực thì trùng giá áp dụng PC) và {@code active_price_change}.
+ *
+ * <p>{@link #volumePriceTiers} và {@link #purchaseWithPurchasePrograms} là các chương trình giá kèm SPU đang bật (mix-and-match, PWP).
  *
  * <p>Các URL ảnh ({@code thumbnailUrl}, {@code mainImageUrl}, {@code imageUrls}) và danh sách {@link #documents}
  * được gán từ bảng {@code document} trong service, không được gán trong {@link #fromEntity}.
@@ -55,9 +65,27 @@ public class ProductFullResponse {
 
   private BrandSummaryResponse brand;
   private CategorySummaryResponse category;
+  /** Giá catalog theo đơn vị của biến thể đại diện (active, rẻ nhất — có thể theo giá hiển thị khi đã resolve). */
   private List<ProductPriceResponse> prices;
+  /**
+   * Min của {@code effective_unit_price} trong các biến thể đang {@code active} — tiện gắn nhãn “Từ …” trên card.
+   */
+  @JsonProperty("from_effective_unit_price")
+  private Double fromEffectiveUnitPrice;
+  /** Đầy đủ biến thể (SKU) kèm giá — dùng cho PDP / admin. */
+  private List<ProductVariantResponse> variants;
   /** Có dữ liệu khi entity đã fetch policies (vd. GET /products/{id}, GET /products/{id}/detail). */
   private List<PolicyResponse> policies;
+
+  /** Bậc giá mix-and-match đang bật (theo tổng SL sản phẩm trên đơn). Gán sau {@link #fromEntity}. */
+  @JsonProperty("volume_price_tiers")
+  private List<VolumePriceTierResponse> volumePriceTiers;
+
+  /**
+   * Chương trình PWP đang bật có liên quan đến SPU; {@code role} trong phần tử là {@code companion} hoặc {@code anchor}.
+   */
+  @JsonProperty("purchase_with_purchase_programs")
+  private List<ProductPurchaseWithPurchaseProgramResponse> purchaseWithPurchasePrograms;
 
   /** Chỉ có ý nghĩa với API recommendation — các API khác để null. */
   private Double recommendationScore;
@@ -91,14 +119,14 @@ public class ProductFullResponse {
   }
 
   public static ProductFullResponse fromEntity(ProductEntity entity) {
-    return fromEntity(entity, null, null, null, null);
+    return fromEntity(entity, null, null, null, null, null);
   }
 
   public static ProductFullResponse fromEntity(
       ProductEntity entity,
       Double recommendationScore,
       String recommendationSource) {
-    return fromEntity(entity, recommendationScore, recommendationSource, null, null);
+    return fromEntity(entity, recommendationScore, recommendationSource, null, null, null);
   }
 
   public static ProductFullResponse fromEntity(
@@ -107,15 +135,56 @@ public class ProductFullResponse {
       String recommendationSource,
       Double averageRating,
       Long ratingCount) {
+    return fromEntity(entity, recommendationScore, recommendationSource, averageRating, ratingCount, null);
+  }
+
+  /**
+   * @param variantDisplayUnitPrices map variantId → đơn giá hiển thị (price change + catalog); null = không gắn effective.
+   */
+  public static ProductFullResponse fromEntity(
+      ProductEntity entity,
+      Double recommendationScore,
+      String recommendationSource,
+      Double averageRating,
+      Long ratingCount,
+      Map<Long, Double> variantDisplayUnitPrices) {
     if (entity == null) {
       return null;
     }
     List<ProductPriceResponse> priceList = null;
-    if (entity.getPrices() != null && !entity.getPrices().isEmpty()) {
-      priceList = entity.getPrices().stream()
+    com.ndh.ShopTechnology.entities.product.ProductVariantEntity listing =
+        ProductCatalogListing.pickCheapestActiveVariant(entity, variantDisplayUnitPrices);
+    if (listing != null && listing.getPrices() != null && !listing.getPrices().isEmpty()) {
+      priceList = listing.getPrices().stream()
           .filter(Objects::nonNull)
           .sorted(Comparator.comparing(PriceEntity::getId, Comparator.nullsLast(Long::compareTo)))
           .map(ProductPriceResponse::fromEntity)
+          .collect(Collectors.toList());
+    }
+    Double fromEffective = null;
+    if (variantDisplayUnitPrices != null && entity.getVariants() != null) {
+      fromEffective = entity.getVariants().stream()
+          .filter(Objects::nonNull)
+          .filter(v -> Boolean.TRUE.equals(v.getActive()) && v.getId() != null)
+          .map(v -> variantDisplayUnitPrices.get(v.getId()))
+          .filter(Objects::nonNull)
+          .min(Double::compareTo)
+          .orElse(null);
+    }
+    List<ProductVariantResponse> variantList = null;
+    if (entity.getVariants() != null && !entity.getVariants().isEmpty()) {
+      variantList = entity.getVariants().stream()
+          .filter(Objects::nonNull)
+          .sorted(Comparator
+              .comparing(com.ndh.ShopTechnology.entities.product.ProductVariantEntity::getSortOrder,
+                  Comparator.nullsLast(Integer::compareTo))
+              .thenComparing(com.ndh.ShopTechnology.entities.product.ProductVariantEntity::getId,
+                  Comparator.nullsLast(Long::compareTo)))
+          .map(v -> ProductVariantResponse.fromEntity(
+              v,
+              variantDisplayUnitPrices != null && v.getId() != null
+                  ? variantDisplayUnitPrices.get(v.getId())
+                  : null))
           .collect(Collectors.toList());
     }
     List<PolicyResponse> policyList = null;
@@ -142,6 +211,8 @@ public class ProductFullResponse {
         .brand(BrandSummaryResponse.fromEntity(entity.getBrand()))
         .category(CategorySummaryResponse.fromEntity(entity.getCategory()))
         .prices(priceList)
+        .fromEffectiveUnitPrice(fromEffective)
+        .variants(variantList)
         .policies(policyList)
         .recommendationScore(recommendationScore)
         .recommendationSource(recommendationSource)

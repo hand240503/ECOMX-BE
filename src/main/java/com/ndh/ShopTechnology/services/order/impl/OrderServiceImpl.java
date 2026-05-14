@@ -21,6 +21,7 @@ import com.ndh.ShopTechnology.entities.order.OrderDetailEntity;
 import com.ndh.ShopTechnology.entities.order.OrderEntity;
 import com.ndh.ShopTechnology.entities.order.PaymentMethodEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
+import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.entities.user.AddressType;
 import com.ndh.ShopTechnology.entities.user.UserAddressEntity;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
@@ -31,6 +32,7 @@ import com.ndh.ShopTechnology.repository.OrderDetailRepository;
 import com.ndh.ShopTechnology.repository.OrderRepository;
 import com.ndh.ShopTechnology.repository.PaymentMethodRepository;
 import com.ndh.ShopTechnology.repository.ProductRepository;
+import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.repository.UserAddressRepository;
 import com.ndh.ShopTechnology.utils.ShippingFeeCalculator;
 import com.ndh.ShopTechnology.services.order.OrderService;
@@ -47,6 +49,7 @@ import java.time.Year;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -72,6 +75,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final OrderDetailRepository orderDetailRepository;
     private final ProductRepository productRepository;
+    private final ProductVariantRepository productVariantRepository;
     private final PaymentMethodRepository paymentMethodRepository;
     private final CheckoutSessionRepository checkoutSessionRepository;
     private final UserService userService;
@@ -84,6 +88,7 @@ public class OrderServiceImpl implements OrderService {
             OrderRepository orderRepository,
             OrderDetailRepository orderDetailRepository,
             ProductRepository productRepository,
+            ProductVariantRepository productVariantRepository,
             PaymentMethodRepository paymentMethodRepository,
             CheckoutSessionRepository checkoutSessionRepository,
             UserService userService,
@@ -94,6 +99,7 @@ public class OrderServiceImpl implements OrderService {
         this.orderRepository = orderRepository;
         this.orderDetailRepository = orderDetailRepository;
         this.productRepository = productRepository;
+        this.productVariantRepository = productVariantRepository;
         this.paymentMethodRepository = paymentMethodRepository;
         this.checkoutSessionRepository = checkoutSessionRepository;
         this.userService = userService;
@@ -608,37 +614,86 @@ public class OrderServiceImpl implements OrderService {
                 .build();
     }
 
-    private OrderPlaceDraft buildDraft(CreateOrderRequest request) {
-        List<Long> productIds = request.getOrderDetails().stream()
-                .map(CreateOrderDetailRequest::getProductId)
-                .distinct()
-                .collect(Collectors.toList());
-
-        List<ProductEntity> products = productRepository.findAllWithFullRelationsByIdIn(productIds);
-        Map<Long, ProductEntity> byId = products.stream()
-                .collect(Collectors.toMap(ProductEntity::getId, p -> p));
-
-        for (CreateOrderDetailRequest line : request.getOrderDetails()) {
-            ProductEntity product = byId.get(line.getProductId());
-            if (product == null) {
-                throw new NotFoundEntityException("Product not found with id: " + line.getProductId());
-            }
-            if (product.getStatus() == null || !product.getStatus().equals(SystemConstant.ACTIVE_STATUS)) {
+    private List<PromotionPricingService.OrderVariantLine> resolveOrderLines(CreateOrderRequest request) {
+        List<CreateOrderDetailRequest> lines = request.getOrderDetails();
+        for (CreateOrderDetailRequest line : lines) {
+            if (line.getProductVariantId() == null && line.getProductId() == null) {
                 throw new CustomApiException(HttpStatus.BAD_REQUEST,
-                        "Product is not available: " + line.getProductId());
+                        "Each order line requires productVariantId or productId");
             }
         }
+        List<Long> explicitVariantIds = lines.stream()
+                .map(CreateOrderDetailRequest::getProductVariantId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        List<Long> legacyProductIds = lines.stream()
+                .filter(l -> l.getProductVariantId() == null)
+                .map(CreateOrderDetailRequest::getProductId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
 
-        List<PromotionPricingService.PricedLine> priced =
-                promotionPricingService.priceLines(request.getOrderDetails(), byId);
+        Map<Long, ProductVariantEntity> byVid = productVariantRepository.findAllWithProductAndPricesByIdIn(
+                explicitVariantIds).stream()
+                .collect(Collectors.toMap(ProductVariantEntity::getId, v -> v));
+
+        Map<Long, ProductVariantEntity> defaultByProduct = resolveDefaultVariantsForProducts(legacyProductIds);
+
+        List<PromotionPricingService.OrderVariantLine> out = new ArrayList<>();
+        for (CreateOrderDetailRequest line : lines) {
+            ProductVariantEntity variant;
+            if (line.getProductVariantId() != null) {
+                variant = byVid.get(line.getProductVariantId());
+                if (variant == null) {
+                    throw new NotFoundEntityException("Product variant not found: " + line.getProductVariantId());
+                }
+            } else {
+                variant = defaultByProduct.get(line.getProductId());
+                if (variant == null) {
+                    throw new NotFoundEntityException("No active variant for product: " + line.getProductId());
+                }
+            }
+            ProductEntity product = variant.getProduct();
+            if (product.getStatus() == null || !product.getStatus().equals(SystemConstant.ACTIVE_STATUS)) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST, "Product is not available: " + product.getId());
+            }
+            out.add(new PromotionPricingService.OrderVariantLine(line, variant));
+        }
+        return out;
+    }
+
+    private Map<Long, ProductVariantEntity> resolveDefaultVariantsForProducts(List<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+        List<ProductVariantEntity> list = productVariantRepository.findActiveByProductIdIn(productIds);
+        Map<Long, ProductVariantEntity> first = new LinkedHashMap<>();
+        for (ProductVariantEntity v : list) {
+            first.putIfAbsent(v.getProduct().getId(), v);
+        }
+        for (Long pid : productIds) {
+            if (!first.containsKey(pid)) {
+                throw new NotFoundEntityException("No active variant for product: " + pid);
+            }
+        }
+        return first;
+    }
+
+    private OrderPlaceDraft buildDraft(CreateOrderRequest request) {
+        List<PromotionPricingService.OrderVariantLine> orderLines = resolveOrderLines(request);
+        List<PromotionPricingService.PricedLine> priced = promotionPricingService.priceLines(orderLines);
 
         double orderTotal = 0.0;
         List<OrderDetailResponse> detailResponses = new ArrayList<>();
         List<OrderDetailEntity> detailsToSave = new ArrayList<>();
 
-        for (PromotionPricingService.PricedLine pl : priced) {
+        for (int i = 0; i < priced.size(); i++) {
+            PromotionPricingService.PricedLine pl = priced.get(i);
+            PromotionPricingService.OrderVariantLine ol = orderLines.get(i);
             CreateOrderDetailRequest line = pl.line();
-            ProductEntity product = byId.get(line.getProductId());
+            ProductVariantEntity variant = ol.variant();
+            ProductEntity product = variant.getProduct();
             double unitPrice = pl.unitPrice();
             double lineTotalValue = pl.lineTotal();
             orderTotal += lineTotalValue;
@@ -647,6 +702,7 @@ public class OrderServiceImpl implements OrderService {
             OrderDetailEntity detail = OrderDetailEntity.builder()
                     .order(null)
                     .product(product)
+                    .productVariant(variant)
                     .quantity(line.getQuantity())
                     .unitPrice(unitPrice)
                     .description(line.getDescription())
@@ -656,6 +712,9 @@ public class OrderServiceImpl implements OrderService {
 
             detailResponses.add(OrderDetailResponse.builder()
                     .productId(product.getId())
+                    .productVariantId(variant.getId())
+                    .variantSkuCode(variant.getSkuCode())
+                    .variantOptions(variant.getOptionValues())
                     .productName(product.getProductName())
                     .quantity(line.getQuantity())
                     .unitPrice(unitPrice)
@@ -1014,16 +1073,23 @@ public class OrderServiceImpl implements OrderService {
 
     private static List<OrderDetailResponse> mapDetailResponses(List<OrderDetailEntity> details) {
         return details.stream()
-                .map(d -> OrderDetailResponse.builder()
-                        .id(d.getId())
-                        .productId(d.getProduct().getId())
-                        .productName(d.getProduct().getProductName())
-                        .quantity(d.getQuantity())
-                        .unitPrice(d.getUnitPrice())
-                        .lineTotal(d.getTotalPrice())
-                        .description(d.getDescription())
-                        .lDescription(d.getProduct().getLDescription())
-                        .build())
+                .map(d -> {
+                    var b = OrderDetailResponse.builder()
+                            .id(d.getId())
+                            .productId(d.getProduct().getId())
+                            .productName(d.getProduct().getProductName())
+                            .quantity(d.getQuantity())
+                            .unitPrice(d.getUnitPrice())
+                            .lineTotal(d.getTotalPrice())
+                            .description(d.getDescription())
+                            .lDescription(d.getProduct().getLDescription());
+                    if (d.getProductVariant() != null) {
+                        b.productVariantId(d.getProductVariant().getId())
+                                .variantSkuCode(d.getProductVariant().getSkuCode())
+                                .variantOptions(d.getProductVariant().getOptionValues());
+                    }
+                    return b.build();
+                })
                 .collect(Collectors.toList());
     }
 

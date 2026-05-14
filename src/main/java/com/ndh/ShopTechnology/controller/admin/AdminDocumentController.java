@@ -16,6 +16,7 @@ import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Upload tài liệu / media cho luồng Admin — {@code {api.prefix}/admin/document/upload}.
@@ -97,6 +98,101 @@ public class AdminDocumentController {
         ).withMetadata("totalFiles", documentEntities.size());
 
         return ResponseEntity.status(HttpStatus.OK).body(response);
+    }
+
+    /**
+     * Xóa document (xóa asset Cloudinary + bản ghi DB).
+     * Quyền: DELETE_DOCUMENT (300004).
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("@perm.check(300004)")
+    public ResponseEntity<APIResponse<Void>> deleteDocument(@PathVariable Long id) {
+        try {
+            documentService.deleteDocument(id);
+            return ResponseEntity.ok(APIResponse.of(true, "Document deleted successfully", null, null, null));
+        } catch (NotFoundEntityException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(APIResponse.of(
+                    false, e.getMessage(), null,
+                    List.of(ErrorResponse.builder().field("id").message(e.getMessage()).build()),
+                    null));
+        } catch (CustomApiException e) {
+            return ResponseEntity.status(e.getStatus()).body(APIResponse.of(
+                    false, e.getMessage(), null,
+                    List.of(ErrorResponse.builder().field("id").message(e.getMessage()).build()),
+                    null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(APIResponse.of(
+                    false, "Failed to delete document: " + e.getMessage(), null,
+                    List.of(ErrorResponse.builder().field("id").message(e.getMessage()).build()),
+                    null));
+        }
+    }
+
+    /**
+     * Thay thế file ảnh của document: xóa asset cũ trên Cloudinary, upload file mới.
+     * Các trường metadata (entityId, entityType, isMain, description…) giữ nguyên.
+     * Quyền: UPDATE_DOCUMENT (300003).
+     */
+    @PutMapping(value = "/{id}/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(300003)")
+    public ResponseEntity<APIResponse<DocumentEntity>> replaceDocumentFile(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) {
+        try {
+            if (file == null || file.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(APIResponse.of(
+                        false, "File must not be empty", null,
+                        List.of(ErrorResponse.builder().field("file").message("File is required").build()),
+                        null));
+            }
+            DocumentEntity updated = documentService.replaceDocumentFile(id, file);
+            return ResponseEntity.ok(APIResponse.of(true, "Document file replaced successfully", updated, null, null));
+        } catch (NotFoundEntityException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(APIResponse.of(
+                    false, e.getMessage(), null,
+                    List.of(ErrorResponse.builder().field("id").message(e.getMessage()).build()),
+                    null));
+        } catch (CustomApiException e) {
+            return ResponseEntity.status(e.getStatus()).body(APIResponse.of(
+                    false, e.getMessage(), null,
+                    List.of(ErrorResponse.builder().field("file").message(e.getMessage()).build()),
+                    null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(APIResponse.of(
+                    false, "Failed to replace document file: " + e.getMessage(), null,
+                    List.of(ErrorResponse.builder().field("file").message(e.getMessage()).build()),
+                    null));
+        }
+    }
+
+    /**
+     * Cập nhật metadata (description, fileDes) của document — không thay file thực tế.
+     * Quyền: UPDATE_DOCUMENT (300003).
+     */
+    @PatchMapping("/{id}")
+    @PreAuthorize("@perm.check(300003)")
+    public ResponseEntity<APIResponse<DocumentEntity>> updateDocumentMeta(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> fields) {
+        try {
+            DocumentEntity updated = documentService.updateDocument(id, fields);
+            return ResponseEntity.ok(APIResponse.of(true, "Document updated successfully", updated, null, null));
+        } catch (NotFoundEntityException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(APIResponse.of(
+                    false, e.getMessage(), null,
+                    List.of(ErrorResponse.builder().field("id").message(e.getMessage()).build()),
+                    null));
+        } catch (CustomApiException e) {
+            return ResponseEntity.status(e.getStatus()).body(APIResponse.of(
+                    false, e.getMessage(), null,
+                    List.of(ErrorResponse.builder().field("id").message(e.getMessage()).build()),
+                    null));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(APIResponse.of(
+                    false, "Failed to update document: " + e.getMessage(), null,
+                    List.of(ErrorResponse.builder().field("id").message(e.getMessage()).build()),
+                    null));
+        }
     }
 
     /**

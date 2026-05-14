@@ -339,7 +339,7 @@ public class ProductController {
       @PathVariable Long id,
       @Valid @RequestBody UpdateProductRequest request) {
     try {
-      ProductFullResponse product = productService.updateProduct(id, request);
+      ProductFullResponse product = productService.updateProduct(id, request, null);
       APIResponse<ProductFullResponse> response = APIResponse.of(
           true,
           "Product updated successfully",

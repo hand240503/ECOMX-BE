@@ -7,12 +7,8 @@ import com.ndh.ShopTechnology.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
 /**
- * Resolve {@link RoleEntity} từ list id; fallback về role CUSTOMER nếu input rỗng / không hợp lệ.
+ * Resolve {@link RoleEntity} từ id; fallback về role CUSTOMER nếu không truyền id / không tìm thấy (flow admin).
  */
 @Service
 @RequiredArgsConstructor
@@ -20,22 +16,12 @@ public class RoleAssignmentService {
 
     private final RoleRepository roleRepository;
 
-    public Set<RoleEntity> assignRoles(Set<Long> roleIds) {
-        Set<RoleEntity> roles = new HashSet<>();
-
-        if (roleIds != null && !roleIds.isEmpty()) {
-            List<RoleEntity> roleList = roleRepository.findAllById(roleIds);
-            roles.addAll(roleList);
+    public RoleEntity assignRoleForPrivilegedCreator(Long roleId) {
+        if (roleId != null) {
+            return roleRepository.findById(roleId)
+                    .orElseThrow(() -> new NotFoundEntityException("Role not found: id=" + roleId));
         }
-
-        if (roles.isEmpty()) {
-            roleRepository.findByCode(RoleConstant.ROLE_CUSTOMER).ifPresent(roles::add);
-        }
-
-        if (roles.isEmpty()) {
-            throw new NotFoundEntityException("No valid roles found. Please check role configuration.");
-        }
-
-        return roles;
+        return roleRepository.findByCode(RoleConstant.ROLE_CUSTOMER)
+                .orElseThrow(() -> new NotFoundEntityException("No valid roles found. Please check role configuration."));
     }
 }

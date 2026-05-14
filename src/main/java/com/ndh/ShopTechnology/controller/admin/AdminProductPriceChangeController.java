@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * Quản lý price change theo thời gian cho sản phẩm: giá gốc + giá ưu đãi.
+ * Price change theo thời gian cho từng biến thể (SKU).
  */
 @RestController
-@RequestMapping("${api.prefix}/admin/products/{productId}/price-changes")
+@RequestMapping("${api.prefix}/admin/products/{productId}/variants/{variantId}/price-changes")
 public class AdminProductPriceChangeController {
 
     private final ProductPriceChangeService priceChangeService;
@@ -28,16 +28,20 @@ public class AdminProductPriceChangeController {
 
     @GetMapping
     @PreAuthorize("@perm.check(" + PermissionCode.READ_PRICE + ")")
-    public ResponseEntity<APIResponse<List<ProductPriceChangeResponse>>> list(@PathVariable Long productId) {
-        return ResponseEntity.ok(APIResponse.of(true, "OK", priceChangeService.list(productId), null, null));
+    public ResponseEntity<APIResponse<List<ProductPriceChangeResponse>>> list(
+            @PathVariable Long productId,
+            @PathVariable Long variantId) {
+        return ResponseEntity.ok(APIResponse.of(true, "OK",
+                priceChangeService.list(productId, variantId), null, null));
     }
 
     @PostMapping
     @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRICE + ")")
     public ResponseEntity<APIResponse<ProductPriceChangeResponse>> create(
             @PathVariable Long productId,
+            @PathVariable Long variantId,
             @Valid @RequestBody UpsertPriceChangeRequest request) {
-        ProductPriceChangeResponse data = priceChangeService.create(productId, request);
+        ProductPriceChangeResponse data = priceChangeService.create(productId, variantId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(APIResponse.of(true, "Created", data, null, null));
     }
 
@@ -45,9 +49,10 @@ public class AdminProductPriceChangeController {
     @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRICE + ")")
     public ResponseEntity<APIResponse<ProductPriceChangeResponse>> update(
             @PathVariable Long productId,
+            @PathVariable Long variantId,
             @PathVariable long priceChangeId,
             @Valid @RequestBody UpsertPriceChangeRequest request) {
-        ProductPriceChangeResponse data = priceChangeService.update(productId, priceChangeId, request);
+        ProductPriceChangeResponse data = priceChangeService.update(productId, variantId, priceChangeId, request);
         return ResponseEntity.ok(APIResponse.of(true, "Updated", data, null, null));
     }
 
@@ -55,9 +60,9 @@ public class AdminProductPriceChangeController {
     @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRICE + ")")
     public ResponseEntity<APIResponse<Void>> delete(
             @PathVariable Long productId,
+            @PathVariable Long variantId,
             @PathVariable long priceChangeId) {
-        priceChangeService.delete(productId, priceChangeId);
+        priceChangeService.delete(productId, variantId, priceChangeId);
         return ResponseEntity.ok(APIResponse.of(true, "Deleted", null, null, null));
     }
 }
-

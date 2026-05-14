@@ -1,10 +1,10 @@
 package com.ndh.ShopTechnology.services.product.impl;
 
-import com.ndh.ShopTechnology.entities.product.ProductEntity;
 import com.ndh.ShopTechnology.entities.product.ProductPriceChangeEntity;
+import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.repository.ProductPriceChangeRepository;
 import com.ndh.ShopTechnology.services.product.ProductEffectivePriceService;
-import com.ndh.ShopTechnology.utils.CatalogProductUnitPrice;
+import com.ndh.ShopTechnology.utils.CatalogVariantUnitPrice;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
@@ -19,14 +19,15 @@ public class ProductEffectivePriceServiceImpl implements ProductEffectivePriceSe
     }
 
     @Override
-    public double resolveEffectiveUnitPrice(ProductEntity product, Date at) {
+    public double resolveEffectiveUnitPrice(ProductVariantEntity variant, Date at) {
         Date t = at != null ? at : new Date();
-        if (product == null || product.getId() == null) {
+        if (variant == null || variant.getId() == null) {
             return 0.0;
         }
-        ProductPriceChangeEntity pc = priceChangeRepository.findEffectiveForProductAt(product.getId(), t).orElse(null);
+        ProductPriceChangeEntity pc = priceChangeRepository.findEffectiveForVariantAt(variant.getId(), t)
+                .orElse(null);
         if (pc == null) {
-            return CatalogProductUnitPrice.resolve(product);
+            return CatalogVariantUnitPrice.resolve(variant);
         }
         Double sale = pc.getSalePrice();
         Double base = pc.getBasePrice();
@@ -36,7 +37,6 @@ public class ProductEffectivePriceServiceImpl implements ProductEffectivePriceSe
         if (base != null) {
             return base;
         }
-        return CatalogProductUnitPrice.resolve(product);
+        return CatalogVariantUnitPrice.resolve(variant);
     }
 }
-

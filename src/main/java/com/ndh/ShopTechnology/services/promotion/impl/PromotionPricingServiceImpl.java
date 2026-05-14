@@ -1,7 +1,7 @@
 package com.ndh.ShopTechnology.services.promotion.impl;
 
 import com.ndh.ShopTechnology.dto.request.order.CreateOrderDetailRequest;
-import com.ndh.ShopTechnology.entities.product.ProductEntity;
+import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.entities.promotion.ProductVolumePriceTierEntity;
 import com.ndh.ShopTechnology.entities.promotion.PurchaseWithPurchaseOfferEntity;
 import com.ndh.ShopTechnology.repository.ProductVolumePriceTierRepository;
@@ -12,8 +12,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,18 +36,20 @@ public class PromotionPricingServiceImpl implements PromotionPricingService {
     }
 
     @Override
-    public List<PricedLine> priceLines(List<CreateOrderDetailRequest> lines,
-            Map<Long, ProductEntity> productsById) {
+    public List<PricedLine> priceLines(List<OrderVariantLine> lines) {
         if (lines == null || lines.isEmpty()) {
             return List.of();
         }
 
         Map<Long, Integer> qtyByProduct = new HashMap<>();
-        for (CreateOrderDetailRequest line : lines) {
-            if (line.getProductId() == null || line.getQuantity() == null) {
+        for (OrderVariantLine ol : lines) {
+            CreateOrderDetailRequest line = ol.line();
+            ProductVariantEntity v = ol.variant();
+            if (line == null || line.getQuantity() == null || v == null || v.getProduct() == null) {
                 continue;
             }
-            qtyByProduct.merge(line.getProductId(), line.getQuantity(), (a, b) -> {
+            Long pid = v.getProduct().getId();
+            qtyByProduct.merge(pid, line.getQuantity(), (a, b) -> {
                 int x = a != null ? a : 0;
                 int y = b != null ? b : 0;
                 return x + y;
@@ -84,18 +86,20 @@ public class PromotionPricingServiceImpl implements PromotionPricingService {
 
         Date now = new Date();
         List<PricedLine> out = new ArrayList<>();
-        for (CreateOrderDetailRequest line : lines) {
-            ProductEntity product = productsById.get(line.getProductId());
+        for (OrderVariantLine ol : lines) {
+            CreateOrderDetailRequest line = ol.line();
+            ProductVariantEntity variant = ol.variant();
             int q = line.getQuantity() != null ? line.getQuantity() : 0;
-            int agg = qtyByProduct.getOrDefault(line.getProductId(), q);
-            double baseUnit = effectivePriceService.resolveEffectiveUnitPrice(product, now);
-            double volUnit = volumeTierUnitPrice(baseUnit, agg, tiersByProduct.get(line.getProductId()));
+            Long productId = variant.getProduct().getId();
+            int agg = qtyByProduct.getOrDefault(productId, q);
+            double baseUnit = effectivePriceService.resolveEffectiveUnitPrice(variant, now);
+            double volUnit = volumeTierUnitPrice(baseUnit, agg, tiersByProduct.get(productId));
 
-            PurchaseWithPurchaseOfferEntity pwp = offerByCompanion.get(line.getProductId());
-            if (pwp != null && promoUnitsLeft.containsKey(line.getProductId())) {
-                int left = promoUnitsLeft.get(line.getProductId());
+            PurchaseWithPurchaseOfferEntity pwp = offerByCompanion.get(productId);
+            if (pwp != null && promoUnitsLeft.containsKey(productId)) {
+                int left = promoUnitsLeft.get(productId);
                 int promoTake = Math.min(q, Math.max(0, left));
-                promoUnitsLeft.put(line.getProductId(), left - promoTake);
+                promoUnitsLeft.put(productId, left - promoTake);
                 int regularTake = q - promoTake;
                 double lineTotal = promoTake * pwp.getPromoUnitPrice() + regularTake * volUnit;
                 double unit = q > 0 ? lineTotal / q : 0.0;

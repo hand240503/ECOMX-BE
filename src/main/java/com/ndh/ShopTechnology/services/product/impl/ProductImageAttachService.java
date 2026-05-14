@@ -39,6 +39,7 @@ public class ProductImageAttachService {
     }
 
     private final DocumentRepository documentRepository;
+    private final VariantImageAttachService variantImageAttachService;
 
     public void attach(ProductFullResponse product) {
         if (product == null || product.getId() == null) {
@@ -56,29 +57,29 @@ public class ProductImageAttachService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        if (ids.isEmpty()) {
-            return;
+        if (!ids.isEmpty()) {
+            Map<Long, Resolved> map = resolveByProductIds(ids);
+            for (ProductFullResponse p : products) {
+                if (p.getId() == null) {
+                    continue;
+                }
+                Resolved r = map.get(p.getId());
+                if (r == null) {
+                    continue;
+                }
+                p.setDocuments(List.copyOf(r.documents()));
+                String primary = r.primaryUrl();
+                if (primary != null && !primary.isEmpty()) {
+                    p.setThumbnailUrl(primary);
+                    p.setMainImageUrl(primary);
+                }
+                List<String> imgUrls = r.imageUrlsOrdered();
+                if (!imgUrls.isEmpty()) {
+                    p.setImageUrls(List.copyOf(imgUrls));
+                }
+            }
         }
-        Map<Long, Resolved> map = resolveByProductIds(ids);
-        for (ProductFullResponse p : products) {
-            if (p.getId() == null) {
-                continue;
-            }
-            Resolved r = map.get(p.getId());
-            if (r == null) {
-                continue;
-            }
-            p.setDocuments(List.copyOf(r.documents()));
-            String primary = r.primaryUrl();
-            if (primary != null && !primary.isEmpty()) {
-                p.setThumbnailUrl(primary);
-                p.setMainImageUrl(primary);
-            }
-            List<String> imgUrls = r.imageUrlsOrdered();
-            if (!imgUrls.isEmpty()) {
-                p.setImageUrls(List.copyOf(imgUrls));
-            }
-        }
+        variantImageAttachService.attach(products);
     }
 
     private Map<Long, Resolved> resolveByProductIds(Collection<Long> productIds) {

@@ -23,6 +23,13 @@ import lombok.NoArgsConstructor;
 public class UpsertProductPriceRequest {
 
     /**
+     * Biến thể nhận giá mới. Với POST: bắt buộc nếu sản phẩm có nhiều biến thể;
+     * có thể bỏ qua khi chỉ có một biến thể active (server tự chọn).
+     */
+    @JsonProperty("product_variant_id")
+    private Long productVariantId;
+
+    /**
      * Đơn vị tính (cùng bảng {@code units}).
      * - POST: bắt buộc.
      * - PUT: có thể null (giữ nguyên).

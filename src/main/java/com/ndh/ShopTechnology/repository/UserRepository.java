@@ -1,6 +1,9 @@
 package com.ndh.ShopTechnology.repository;
 
 import com.ndh.ShopTechnology.entities.user.UserEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -28,11 +31,11 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
     boolean existsByPhoneNumberAndIdNot(String phoneNumber, Long id);
 
     /**
-     * Load user kèm roles (permission_codes JSON đã eager), user permission grants, userInfo và default address.
+     * Load user kèm role (permission_codes JSON trên {@code roles}), user permission grants, userInfo và default address.
      * Dùng cho login và authentication.
      */
     @Query("SELECT DISTINCT u FROM UserEntity u " +
-            "LEFT JOIN FETCH u.roles r " +
+            "LEFT JOIN FETCH u.role r " +
             "LEFT JOIN FETCH u.userPermissions " +
             "LEFT JOIN FETCH u.userInfo " +
             "LEFT JOIN FETCH u.addresses addr " +
@@ -41,12 +44,15 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
     Optional<UserEntity> findByUsernameWithRolesAndPermissions(@Param("username") String username);
 
     /**
-     * Load user kèm roles, user permission grants và userInfo theo id.
+     * Load user kèm role (permission_codes JSON), user permission grants, userInfo và địa chỉ.
+     * Đồng bộ với login về độ đầy đủ (roles, permissions, defaultAddress); fetch toàn bộ địa chỉ
+     * để trường hợp chưa có địa chỉ mặc định vẫn trả về user (khác truy vấn login tối ưu theo username).
      */
     @Query("SELECT DISTINCT u FROM UserEntity u " +
-            "LEFT JOIN FETCH u.roles r " +
+            "LEFT JOIN FETCH u.role r " +
             "LEFT JOIN FETCH u.userPermissions " +
             "LEFT JOIN FETCH u.userInfo " +
+            "LEFT JOIN FETCH u.addresses " +
             "WHERE u.id = :id")
     Optional<UserEntity> findByIdWithRolesAndPermissions(@Param("id") Long id);
 
@@ -55,4 +61,11 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     @Query("SELECT u FROM UserEntity u LEFT JOIN FETCH u.userInfo WHERE u.id = :id")
     Optional<UserEntity> findByIdWithInfo(@Param("id") Long id);
+
+    @EntityGraph(attributePaths = {"role", "userPermissions", "userInfo", "addresses"})
+    @Query("SELECT u FROM UserEntity u WHERE u.role IS NOT NULL AND u.role.code <> :customerCode")
+    Page<UserEntity> findPagedNonCustomerUsers(@Param("customerCode") String customerCode, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"role", "userPermissions", "userInfo", "addresses"})
+    Page<UserEntity> findByRole_Code(String roleCode, Pageable pageable);
 }

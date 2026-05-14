@@ -7,12 +7,12 @@ import java.util.List;
 
 public interface ProductPriceChangeService {
 
-    List<ProductPriceChangeResponse> list(Long productId);
+    List<ProductPriceChangeResponse> list(Long productId, Long variantId);
 
-    ProductPriceChangeResponse create(Long productId, UpsertPriceChangeRequest request);
+    ProductPriceChangeResponse create(Long productId, Long variantId, UpsertPriceChangeRequest request);
 
-    ProductPriceChangeResponse update(Long productId, long priceChangeId, UpsertPriceChangeRequest request);
+    ProductPriceChangeResponse update(Long productId, Long variantId, long priceChangeId,
+            UpsertPriceChangeRequest request);
 
-    void delete(Long productId, long priceChangeId);
+    void delete(Long productId, Long variantId, long priceChangeId);
 }
-

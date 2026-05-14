@@ -60,18 +60,17 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>, J
     List<ProductEntity> findTopNByOrderBySoldCountDesc(Pageable pageable);
 
     /**
-     * Full PDP / admin reload: category, brand, prices (+ unit). Policies are
-     * {@link jakarta.persistence.ManyToMany}
-     * and are <strong>not</strong> join-fetched here — combining two collection
-     * fetch joins would Cartesian-multiply
-     * rows and duplicate {@code prices} in memory (one copy per linked policy).
+     * Full PDP / admin reload: category, brand, variants. Catalog {@code price}
+     * (+ {@link com.ndh.ShopTechnology.entities.product.UnitEntity}) is loaded in a
+     * separate query — joining {@code variants} and {@code prices} here hits Hibernate
+     * {@code MultipleBagFetchException} (two {@code List} bags). Policies are
+     * {@link jakarta.persistence.ManyToMany} and stay lazy.
      */
     @Query("SELECT DISTINCT p FROM products p "
             + "LEFT JOIN FETCH p.category c "
             + "LEFT JOIN FETCH c.parent "
             + "LEFT JOIN FETCH p.brand "
-            + "LEFT JOIN FETCH p.prices pr "
-            + "LEFT JOIN FETCH pr.unit "
+            + "LEFT JOIN FETCH p.variants v "
             + "WHERE p.id = :id")
     Optional<ProductEntity> findWithFullRelationsById(@Param("id") Long id);
 
@@ -79,8 +78,7 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>, J
             + "LEFT JOIN FETCH p.category c "
             + "LEFT JOIN FETCH c.parent "
             + "LEFT JOIN FETCH p.brand "
-            + "LEFT JOIN FETCH p.prices pr "
-            + "LEFT JOIN FETCH pr.unit "
+            + "LEFT JOIN FETCH p.variants v "
             + "WHERE p.id IN :ids")
     List<ProductEntity> findAllWithFullRelationsByIdIn(@Param("ids") Collection<Long> ids);
 

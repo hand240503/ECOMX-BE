@@ -70,9 +70,10 @@ public class ProductEntity extends BaseEntity {
     private Long sku;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("sortOrder ASC, id ASC")
     @BatchSize(size = 32)
     @Builder.Default
-    private java.util.List<PriceEntity> prices = new java.util.ArrayList<>();
+    private java.util.List<ProductVariantEntity> variants = new java.util.ArrayList<>();
 
     /**
      * Chính sách áp dụng cho sản phẩm (cùng một bản ghi {@link PolicyEntity} có thể dùng cho nhiều SP).

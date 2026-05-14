@@ -16,6 +16,10 @@ public class OrderDetailResponse {
 
     private Long id;
     private Long productId;
+    /** Biến thể đã mua (null với đơn cũ). */
+    private Long productVariantId;
+    private java.util.Map<String, String> variantOptions;
+    private String variantSkuCode;
     private String productName;
     private Integer quantity;
     private Double unitPrice;

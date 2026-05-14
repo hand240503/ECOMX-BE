@@ -10,6 +10,7 @@ import com.ndh.ShopTechnology.repository.CategoryRepository;
 import com.ndh.ShopTechnology.repository.DocumentRepository;
 import com.ndh.ShopTechnology.repository.OrderRepository;
 import com.ndh.ShopTechnology.repository.ProductRepository;
+import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.repository.UserRepository;
 import com.ndh.ShopTechnology.services.doc.DocumentService;
 import com.ndh.ShopTechnology.services.storage.CloudinaryService;
@@ -23,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
@@ -30,6 +32,7 @@ public class DocumentServiceImpl implements DocumentService {
 
     private final DocumentRepository documentRepository;
     private final ProductRepository productRepository;
+    private final ProductVariantRepository productVariantRepository;
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
     private final BrandRepository brandRepository;
@@ -39,6 +42,7 @@ public class DocumentServiceImpl implements DocumentService {
     public DocumentServiceImpl(
             DocumentRepository documentRepository,
             ProductRepository productRepository,
+            ProductVariantRepository productVariantRepository,
             UserRepository userRepository,
             CategoryRepository categoryRepository,
             BrandRepository brandRepository,
@@ -46,6 +50,7 @@ public class DocumentServiceImpl implements DocumentService {
             CloudinaryService cloudinaryService) {
         this.documentRepository = documentRepository;
         this.productRepository = productRepository;
+        this.productVariantRepository = productVariantRepository;
         this.userRepository = userRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
@@ -125,6 +130,11 @@ public class DocumentServiceImpl implements DocumentService {
                     throw new NotFoundEntityException("Product not found with id: " + entityId);
                 }
             }
+            case DocumentEntityType.ID_DOCUMENT_ENTITY_PRODUCT_VARIANT -> {
+                if (!productVariantRepository.existsById(entityId)) {
+                    throw new NotFoundEntityException("Product variant not found with id: " + entityId);
+                }
+            }
             case DocumentEntityType.ID_DOCUMENT_ENTITY_USER -> {
                 if (!userRepository.existsById(entityId)) {
                     throw new NotFoundEntityException("User not found with id: " + entityId);
@@ -162,7 +172,10 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     public DocumentEntity getDocumentById(Long id) {
-        return null;
+        if (id == null) {
+            return null;
+        }
+        return documentRepository.findById(id).orElse(null);
     }
 
     @Override
@@ -171,8 +184,52 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public DocumentEntity updateDocument(Long id, DocumentEntity document) {
-        return null;
+    @Transactional
+    public DocumentEntity updateDocument(Long id, Map<String, String> fields) {
+        DocumentEntity doc = documentRepository.findById(id)
+                .orElseThrow(() -> new NotFoundEntityException("Document not found with id: " + id));
+        if (fields == null) {
+            return doc;
+        }
+        if (fields.containsKey("description")) {
+            doc.setDescription(fields.get("description"));
+        }
+        if (fields.containsKey("fileDes")) {
+            doc.setFileDes(fields.get("fileDes"));
+        }
+        return documentRepository.save(doc);
+    }
+
+    @Override
+    @Transactional
+    public DocumentEntity replaceDocumentFile(Long id, MultipartFile newFile) throws IOException {
+        if (newFile == null || newFile.isEmpty()) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "New file must not be empty");
+        }
+        DocumentEntity doc = documentRepository.findById(id)
+                .orElseThrow(() -> new NotFoundEntityException("Document not found with id: " + id));
+
+        String oldPublicId = doc.getCloudinaryPublicId();
+
+        CloudinaryService.UploadResult uploaded = cloudinaryService.uploadDocument(newFile);
+
+        if (oldPublicId != null && !oldPublicId.isBlank()) {
+            cloudinaryService.deleteByPublicId(oldPublicId);
+        }
+
+        String original = newFile.getOriginalFilename();
+        String safeName = original != null ? StringUtils.cleanPath(original) : null;
+        String displayName = (safeName == null || safeName.isBlank())
+                ? FilenameUtils.getName(uploaded.url())
+                : safeName;
+
+        doc.setFilePath(uploaded.url());
+        doc.setCloudinaryPublicId(uploaded.publicId());
+        doc.setFileName(displayName);
+        doc.setFileSize(String.valueOf(newFile.getSize()));
+        doc.setType(DocumentKind.resolve(newFile));
+
+        return documentRepository.save(doc);
     }
 
     @Override
@@ -214,16 +271,17 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
+    @Transactional
     public void deleteDocument(Long id) {
         if (id == null) {
-            return;
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Document id is required");
         }
-        documentRepository.findById(id).ifPresent(doc -> {
-            String pid = doc.getCloudinaryPublicId();
-            if (pid != null && !pid.isBlank()) {
-                cloudinaryService.deleteByPublicId(pid);
-            }
-            documentRepository.delete(doc);
-        });
+        DocumentEntity doc = documentRepository.findById(id)
+                .orElseThrow(() -> new NotFoundEntityException("Document not found with id: " + id));
+        String pid = doc.getCloudinaryPublicId();
+        if (pid != null && !pid.isBlank()) {
+            cloudinaryService.deleteByPublicId(pid);
+        }
+        documentRepository.delete(doc);
     }
 }

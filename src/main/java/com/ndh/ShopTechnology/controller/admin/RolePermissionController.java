@@ -14,7 +14,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,8 +22,7 @@ import java.util.Map;
 /**
  * Admin endpoints quản lý role và permission.
  *
- * <p>Mỗi endpoint mở đầu bằng một call vào {@link PermissionService#requireAnyPermission(int...)}
- * hoặc {@code @PreAuthorize("@perm.check(...)")} (single code) để kiểm tra quyền — xem {@link PermissionCode}.
+ * <p>Phần lớn endpoint gọi {@link PermissionService#requireAnyPermission(int...)}; service nghiệp vụ kiểm tra bổ sung.
  * Customer không truy cập được do không được seed quyền nào trong nhóm này.
  */
 @RestController
@@ -45,7 +43,6 @@ public class RolePermissionController {
     }
 
     @PostMapping("/roles")
-    @PreAuthorize("@perm.check(111)")
     public ResponseEntity<APIResponse<RoleResponse>> createRole(@Valid @RequestBody UpsertRoleRequest request) {
         RoleResponse role = rolePermissionService.createRole(request);
         return ResponseEntity
@@ -54,7 +51,6 @@ public class RolePermissionController {
     }
 
     @PutMapping("/roles/{id}")
-    @PreAuthorize("@perm.check(111)")
     public ResponseEntity<APIResponse<RoleResponse>> updateRole(
             @PathVariable Long id,
             @Valid @RequestBody UpsertRoleRequest request) {
@@ -63,7 +59,6 @@ public class RolePermissionController {
     }
 
     @DeleteMapping("/roles/{id}")
-    @PreAuthorize("@perm.check(111)")
     public ResponseEntity<APIResponse<Void>> deleteRole(@PathVariable Long id) {
         rolePermissionService.deleteRole(id);
         return ResponseEntity.ok(APIResponse.of(true, "Role deleted successfully", null, null, null));
@@ -74,13 +69,15 @@ public class RolePermissionController {
     @GetMapping("/users/{userId}/permissions")
     public ResponseEntity<APIResponse<UserPermissionsResponse>> getUserPermissions(@PathVariable Long userId) {
         permissionService.requireAnyPermission(
-                PermissionCode.GRANT_PERMISSION, PermissionCode.READ_USER, PermissionCode.READ_ALL);
+                PermissionCode.GRANT_PERMISSION,
+                PermissionCode.READ_USER,
+                PermissionCode.READ_ALL,
+                PermissionCode.UPDATE_USER);
         UserPermissionsResponse data = rolePermissionService.getUserPermissions(userId);
         return ResponseEntity.ok(APIResponse.of(true, "User permissions retrieved", data, null, null));
     }
 
     @PostMapping("/users/permissions/grant")
-    @PreAuthorize("@perm.check(112)")
     public ResponseEntity<APIResponse<UserPermissionsResponse>> grantPermissions(
             @Valid @RequestBody GrantPermissionRequest request) {
         UserPermissionsResponse data = rolePermissionService.grantPermissions(request);
@@ -88,7 +85,6 @@ public class RolePermissionController {
     }
 
     @PostMapping("/users/permissions/revoke")
-    @PreAuthorize("@perm.check(112)")
     public ResponseEntity<APIResponse<UserPermissionsResponse>> revokePermissions(
             @Valid @RequestBody RevokePermissionRequest request) {
         UserPermissionsResponse data = rolePermissionService.revokePermissions(request);
@@ -104,7 +100,10 @@ public class RolePermissionController {
     @GetMapping("/permissions/catalog")
     public ResponseEntity<APIResponse<Map<String, Object>>> permissionCatalog() {
         permissionService.requireAnyPermission(
-                PermissionCode.MANAGE_ROLE, PermissionCode.GRANT_PERMISSION, PermissionCode.READ_ALL);
+                PermissionCode.MANAGE_ROLE,
+                PermissionCode.GRANT_PERMISSION,
+                PermissionCode.READ_ALL,
+                PermissionCode.UPDATE_USER);
         List<Map<String, Object>> systemWide = List.of(
                 describeEntry(PermissionCode.CREATE_ALL,        "Create all"),
                 describeEntry(PermissionCode.READ_ALL,          "Read all"),

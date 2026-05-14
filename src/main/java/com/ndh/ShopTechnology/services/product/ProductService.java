@@ -7,6 +7,7 @@ import com.ndh.ShopTechnology.dto.response.product.ProductDetailResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 
 import org.springframework.data.domain.Page;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -56,7 +57,21 @@ public interface ProductService {
      */
     ProductSearchResult searchProducts(String query, int page, int limit);
 
-    ProductFullResponse updateProduct(Long id, UpdateProductRequest request);
+    /**
+     * Cập nhật sản phẩm; tùy chọn đổi ảnh trong cùng giao dịch.
+     *
+     * @param newImages danh sách file multipart (field {@code newImages}); {@code null} hoặc rỗng nếu chỉ JSON
+     */
+    ProductFullResponse updateProduct(Long id, UpdateProductRequest request, List<MultipartFile> newImages);
+
+    /**
+     * Upload ảnh cho một SKU; {@code document.entity_type} = {@code 105000} ({@code PRODUCT_VARIANT}).
+     */
+    ProductFullResponse addVariantImages(
+            Long productId,
+            Long variantId,
+            List<MultipartFile> newImages,
+            Integer mainNewImageIndex);
 
     void deleteProduct(Long id);
 }

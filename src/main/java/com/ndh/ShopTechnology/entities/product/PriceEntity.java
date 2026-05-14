@@ -14,7 +14,7 @@ public class PriceEntity extends BaseEntity {
 
     public static final String COL_CURRENT_VALUE = "current_value";
     public static final String COL_OLD_VALUE = "old_value";
-    public static final String COL_PRODUCT_ID = "product_id";
+    public static final String COL_PRODUCT_VARIANT_ID = "product_variant_id";
     public static final String COL_UNIT_ID = "unit_id";
 
     @Column(name = COL_CURRENT_VALUE, nullable = false)
@@ -28,6 +28,6 @@ public class PriceEntity extends BaseEntity {
     private UnitEntity unit;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = COL_PRODUCT_ID, nullable = false)
-    private ProductEntity product;
+    @JoinColumn(name = COL_PRODUCT_VARIANT_ID, nullable = false)
+    private ProductVariantEntity variant;
 }

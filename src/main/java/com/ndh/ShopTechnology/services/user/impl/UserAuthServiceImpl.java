@@ -39,9 +39,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
-import java.util.HashSet;
 import java.util.Optional;
-import java.util.Set;
 
 @Slf4j
 @Service
@@ -139,10 +137,7 @@ public class UserAuthServiceImpl implements UserAuthService {
 
         user.setUserInfo(userInfo);
 
-        // ==================== SET ROLES ====================
-        Set<RoleEntity> roles = new HashSet<>();
-        roles.add(role);
-        user.setRoles(roles);
+        user.setRole(role);
 
         // ==================== SAVE USER ====================
         user = userRepository.save(user);
