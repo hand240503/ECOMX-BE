@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface ProductVolumePriceTierService {
 
-    List<VolumePriceTierResponse> listByProductId(Long productId);
+    List<VolumePriceTierResponse> listByVariant(Long productId, Long variantId);
 
-    List<VolumePriceTierResponse> replaceTiers(Long productId, List<VolumePriceTierItemRequest> tiers);
+    List<VolumePriceTierResponse> replaceTiers(Long productId, Long variantId, List<VolumePriceTierItemRequest> tiers);
 }

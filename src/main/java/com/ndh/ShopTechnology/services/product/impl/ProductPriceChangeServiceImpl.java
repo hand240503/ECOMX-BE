@@ -2,6 +2,7 @@ package com.ndh.ShopTechnology.services.product.impl;
 
 import com.ndh.ShopTechnology.dto.request.product.UpsertPriceChangeRequest;
 import com.ndh.ShopTechnology.dto.response.product.ProductPriceChangeResponse;
+import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.entities.product.ProductPriceChangeEntity;
 import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
@@ -91,6 +92,7 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
             throw new CustomApiException(HttpStatus.NOT_FOUND,
                     "PriceChange not found for variant: " + variantId);
         }
+        assertDeletablePriceChange(e);
         priceChangeRepository.delete(e);
     }
 
@@ -102,6 +104,16 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
                     "Variant " + variantId + " does not belong to product " + productId);
         }
         return v;
+    }
+
+    /**
+     * Đợt PC đã đến hoặc đang/đã trong khoảng áp dụng thì không xóa — chỉ dừng bằng {@code enabled=false}.
+     */
+    private static void assertDeletablePriceChange(ProductPriceChangeEntity e) {
+        Date now = new Date();
+        if (e.getStartAt() != null && !e.getStartAt().after(now)) {
+            throw new CustomApiException(HttpStatus.CONFLICT, MessageConstant.PRICE_CHANGE_CANNOT_DELETE_AFTER_START);
+        }
     }
 
     private static void validateWindow(Date startAt, Date endAt) {

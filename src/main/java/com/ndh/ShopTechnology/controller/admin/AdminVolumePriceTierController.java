@@ -13,10 +13,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * Mix-and-match: bậc giá theo tổng số lượng sản phẩm trên đơn (ví dụ 1 cái 100k, 2 cái 150k).
+ * Mix-and-match theo **phân loại (SKU)**: bậc giá theo tổng SL đúng {@code variantId} trên đơn.
  */
 @RestController
-@RequestMapping("${api.prefix}/admin/products/{productId}/volume-price-tiers")
+@RequestMapping("${api.prefix}/admin/products/{productId}/variants/{variantId}/volume-price-tiers")
 public class AdminVolumePriceTierController {
 
     private final ProductVolumePriceTierService volumePriceTierService;
@@ -26,25 +26,21 @@ public class AdminVolumePriceTierController {
     }
 
     @GetMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRICE + ")")
-    public ResponseEntity<APIResponse<List<VolumePriceTierResponse>>> list(@PathVariable Long productId) {
-        List<VolumePriceTierResponse> data = volumePriceTierService.listByProductId(productId);
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
+    public ResponseEntity<APIResponse<List<VolumePriceTierResponse>>> list(
+            @PathVariable Long productId,
+            @PathVariable Long variantId) {
+        List<VolumePriceTierResponse> data = volumePriceTierService.listByVariant(productId, variantId);
         return ResponseEntity.ok(APIResponse.of(true, "OK", data, null, null));
     }
 
-    /**
-     * Thay toàn bộ bậc giá của sản phẩm (body rỗng = xóa hết bậc, chỉ còn giá catalog).
-     *
-     * <p>PUT replace = vừa create vừa delete tier ⇒ yêu cầu cả {@code CREATE_PRICE}
-     * và {@code DELETE_PRICE} (kèm {@code UPDATE_PRICE}) sẽ chặt chẽ; nhưng để FE
-     * dễ giao quyền, chỉ check {@code UPDATE_PRICE} (semantic "update toàn bộ tier list").
-     */
     @PutMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<List<VolumePriceTierResponse>>> replace(
             @PathVariable Long productId,
+            @PathVariable Long variantId,
             @Valid @RequestBody List<VolumePriceTierItemRequest> tiers) {
-        List<VolumePriceTierResponse> data = volumePriceTierService.replaceTiers(productId, tiers);
+        List<VolumePriceTierResponse> data = volumePriceTierService.replaceTiers(productId, variantId, tiers);
         return ResponseEntity.ok(APIResponse.of(true, "Volume tiers updated", data, null, null));
     }
 }

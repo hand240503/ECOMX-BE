@@ -31,7 +31,7 @@ public class DocumentController {
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("@perm.check(300001)")
+    @PreAuthorize("@perm.checkDocumentUpload(#entityType)")
     public ResponseEntity<APIResponse<List<DocumentEntity>>> uploadImages(
             @RequestParam("files") List<MultipartFile> files,
             @RequestParam(value = "entityId", required = false) Long entityId,

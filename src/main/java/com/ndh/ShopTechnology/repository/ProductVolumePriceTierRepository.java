@@ -12,14 +12,24 @@ import java.util.List;
 @Repository
 public interface ProductVolumePriceTierRepository extends JpaRepository<ProductVolumePriceTierEntity, Long> {
 
-    List<ProductVolumePriceTierEntity> findByProduct_IdInAndEnabledTrue(Collection<Long> productIds);
+    List<ProductVolumePriceTierEntity> findByProductVariant_IdInAndEnabledTrue(Collection<Long> variantIds);
 
     @Query("""
-            SELECT t FROM ProductVolumePriceTierEntity t
-            JOIN FETCH t.product p
-            WHERE p.id IN :productIds AND t.enabled = true
+            SELECT DISTINCT t FROM ProductVolumePriceTierEntity t
+            JOIN FETCH t.productVariant pv
+            JOIN FETCH pv.product p
+            WHERE pv.id IN :variantIds AND t.enabled = true
             """)
-    List<ProductVolumePriceTierEntity> findActiveFetchedByProductIdIn(@Param("productIds") Collection<Long> productIds);
+    List<ProductVolumePriceTierEntity> findActiveFetchedByProductVariantIdIn(@Param("variantIds") Collection<Long> variantIds);
 
-    List<ProductVolumePriceTierEntity> findByProduct_IdOrderByMinQuantityAsc(Long productId);
+    List<ProductVolumePriceTierEntity> findByProductVariant_IdIn(Collection<Long> variantIds);
+
+    List<ProductVolumePriceTierEntity> findByProductVariant_IdOrderByMinQuantityAsc(Long variantId);
+
+    /** Distinct product IDs có ít nhất một volume tier được bật. */
+    @Query("""
+            SELECT DISTINCT t.productVariant.product.id FROM ProductVolumePriceTierEntity t
+            WHERE t.enabled = true
+            """)
+    List<Long> findDistinctProductIdsWithEnabledTiers();
 }

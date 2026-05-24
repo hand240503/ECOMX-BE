@@ -1,8 +1,10 @@
 package com.ndh.ShopTechnology.constants;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -19,7 +21,10 @@ import java.util.Set;
  *   </li>
  * </ul>
  *
- * <p>Ví dụ: <code>100002</code> = Read Product. <code>200003</code> = Update Category.
+ * <p>Ví dụ: <code>100002</code> = đọc toàn nhóm catalogue sản phẩm (gồm sản phẩm,
+ * giá, đơn vị tính, thương hiệu, danh mục). {@code normalizeGrantPermissionCode}
+ * và {@link #expandedMergedCodesEqualToCanonical} gom các mã cũ ({@code 150xxx}…{@code 200xxx})
+ * vào một mã chuẩn {@code 100xxx}.
  *
  * <p>Lưu ý: User có quyền hệ thống <code>102</code> (Read all) sẽ tự động đọc được mọi module
  * (xem {@code PermissionEvaluator#hasPermission}).
@@ -36,24 +41,14 @@ public final class PermissionCode {
     public static final int READ_ALL   = 102;
     public static final int UPDATE_ALL = 103;
     public static final int DELETE_ALL = 104;
-
-    /** Khóa / mở khóa tài khoản user (dành cho Super Admin / Admin). */
-    public static final int LOCK_USER          = 110;
-    /** Quản lý role (tạo / sửa / xóa role + permission mặc định của role). */
-    public static final int MANAGE_ROLE        = 111;
-    /** Cấp / thu hồi quyền cho user khác. */
-    public static final int GRANT_PERMISSION   = 112;
+    public static final int LOCK_USER  = 110;
+    public static final int MANAGE_ROLE = 111;
 
     // =====================================================================
     // MODULE CODES (MMM)
     // =====================================================================
     public static final int MODULE_PRODUCT    = 100;
-    /**
-     * Module quản trị giá: bao trùm 4 nghiệp vụ giá của sản phẩm
-     * (giá catalog hằng ngày, price change theo thời gian, volume tier mix-and-match,
-     * purchase-with-purchase). Tách riêng khỏi MODULE_PRODUCT để có thể giao
-     * quyền "đổi giá / chạy khuyến mãi" mà không cần mở quyền sửa toàn bộ sản phẩm.
-     */
+    /** Mã module giá trong DB/ghi nhật ký — về catalogue cấp quyền được gộp vào {@link #MODULE_PRODUCT}. */
     public static final int MODULE_PRICE      = 150;
     /** Đơn vị tính sản phẩm (cái, thùng, kg, …) — dùng khi tạo giá catalog. */
     public static final int MODULE_UNIT       = 160;
@@ -67,6 +62,12 @@ public final class PermissionCode {
     public static final int MODULE_USER       = 700;
     public static final int MODULE_ROLE       = 800;
     public static final int MODULE_PERMISSION = 900;
+
+    /** Các mã nhánh “sản phẩm” (giá / đơn vị / hãng / danh mục) được gộp vào {@link #MODULE_PRODUCT}. */
+    private static final int[] PRODUCT_MERGED_SOURCE_MODULES =
+            new int[]{MODULE_PRODUCT, MODULE_PRICE, MODULE_UNIT, MODULE_BRAND, MODULE_CATEGORY};
+    /** Nhân viên + user admin gộp thành quản lý user ({@link #MODULE_USER}). */
+    private static final int[] USER_MERGED_SOURCE_MODULES = new int[]{MODULE_USER, MODULE_EMPLOYEE};
 
     // =====================================================================
     // ACTION CODES (AAA)
@@ -196,6 +197,67 @@ public final class PermissionCode {
     }
 
     /**
+     * Chuẩn hoá mã cấp quyền / lưu grant: các nhánh sản phẩm ({@code 100..200}) và
+     * nhánh nhân viên ({@link #MODULE_EMPLOYEE}) gộp lần lượt thành {@code 100xxx} và {@code 700xxx}.
+     */
+    public static int normalizeGrantPermissionCode(int code) {
+        if (!isModuleSpecific(code)) {
+            return code;
+        }
+        int m = extractModule(code);
+        int a = extractAction(code);
+        for (int merged : PRODUCT_MERGED_SOURCE_MODULES) {
+            if (m == merged) {
+                return moduleAction(MODULE_PRODUCT, a);
+            }
+        }
+        for (int merged : USER_MERGED_SOURCE_MODULES) {
+            if (m == merged) {
+                return moduleAction(MODULE_USER, a);
+            }
+        }
+        return code;
+    }
+
+    /**
+     * Mọi mã trong cùng nhóm merge (chuẩn + nhánh legacy) có cùng năng lực — revoke nên quét đủ tập.
+     */
+    public static LinkedHashSet<Integer> expandedMergedCodesEqualToCanonical(int canonOrLegacy) {
+        int canon = normalizeGrantPermissionCode(canonOrLegacy);
+        LinkedHashSet<Integer> out = new LinkedHashSet<>();
+        if (!isModuleSpecific(canon)) {
+            out.add(canon);
+            return out;
+        }
+        int module = extractModule(canon);
+        int action = extractAction(canon);
+        if (module == MODULE_PRODUCT) {
+            for (int merged : PRODUCT_MERGED_SOURCE_MODULES) {
+                out.add(moduleAction(merged, action));
+            }
+        } else if (module == MODULE_USER) {
+            for (int merged : USER_MERGED_SOURCE_MODULES) {
+                out.add(moduleAction(merged, action));
+            }
+        } else {
+            out.add(canon);
+        }
+        return out;
+    }
+
+    /** Thứ tự hàng/phân hệ trên catalogue cấp quyền (mỗi năng lực chỉ một mã 6 chữ số). */
+    public static List<Integer> catalogGrantableModuleSpecificCodesOrdered() {
+        List<Integer> out = new ArrayList<>(20);
+        int[] modules = new int[]{MODULE_PRODUCT, MODULE_DOCUMENT, MODULE_ORDER, MODULE_REPORT, MODULE_USER};
+        for (int module : modules) {
+            for (int action = ACTION_CREATE; action <= ACTION_DELETE; action++) {
+                out.add(moduleAction(module, action));
+            }
+        }
+        return out;
+    }
+
+    /**
      * Tập hợp tất cả mã quyền hợp lệ (đã được khai báo). Dùng để validate input từ client.
      */
     public static Set<Integer> allKnownCodes() {
@@ -205,8 +267,7 @@ public final class PermissionCode {
     private static final Set<Integer> KNOWN_CODES;
     static {
         Set<Integer> s = new LinkedHashSet<>(Arrays.asList(
-                CREATE_ALL, READ_ALL, UPDATE_ALL, DELETE_ALL,
-                LOCK_USER, MANAGE_ROLE, GRANT_PERMISSION,
+                CREATE_ALL, READ_ALL, UPDATE_ALL, DELETE_ALL, LOCK_USER, MANAGE_ROLE,
                 CREATE_PRODUCT, READ_PRODUCT, UPDATE_PRODUCT, DELETE_PRODUCT,
                 CREATE_PRICE, READ_PRICE, UPDATE_PRICE, DELETE_PRICE,
                 CREATE_UNIT, READ_UNIT, UPDATE_UNIT, DELETE_UNIT,

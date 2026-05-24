@@ -1,6 +1,7 @@
 package com.ndh.ShopTechnology.controller.category;
 
 import com.ndh.ShopTechnology.constants.MessageConstant;
+import com.ndh.ShopTechnology.constants.PermissionCode;
 import com.ndh.ShopTechnology.dto.request.category.CreateCategoryRequest;
 import com.ndh.ShopTechnology.dto.request.category.UpdateCategoryRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
@@ -28,7 +29,7 @@ public class CategoryController {
   }
 
   @PostMapping
-  @PreAuthorize("@perm.check(200001)")
+  @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
   public ResponseEntity<APIResponse<CategoryResponse>> createCategory(
       @Valid @RequestBody CreateCategoryRequest req) {
     try {
@@ -137,7 +138,7 @@ public class CategoryController {
   }
 
   @PutMapping("/{id}")
-  @PreAuthorize("@perm.check(200003)")
+  @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRODUCT + ")")
   public ResponseEntity<APIResponse<CategoryResponse>> updateCategory(
       @PathVariable Long id,
       @Valid @RequestBody UpdateCategoryRequest req) {
@@ -165,7 +166,7 @@ public class CategoryController {
   }
 
   @DeleteMapping("/{id}")
-  @PreAuthorize("@perm.check(200004)")
+  @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRODUCT + ")")
   public ResponseEntity<APIResponse<Void>> deleteCategory(@PathVariable Long id) {
     try {
       categoryService.deleteCategory(id);

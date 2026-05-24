@@ -1,12 +1,13 @@
 package com.ndh.ShopTechnology.services.promotion.impl;
 
+import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.dto.request.promotion.UpsertPurchaseWithPurchaseRequest;
 import com.ndh.ShopTechnology.dto.response.promotion.PurchaseWithPurchaseOfferResponse;
-import com.ndh.ShopTechnology.entities.product.ProductEntity;
+import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.entities.promotion.PurchaseWithPurchaseOfferEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
-import com.ndh.ShopTechnology.repository.ProductRepository;
+import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.repository.PurchaseWithPurchaseOfferRepository;
 import com.ndh.ShopTechnology.services.promotion.PurchaseWithPurchaseOfferService;
 import org.springframework.http.HttpStatus;
@@ -20,13 +21,13 @@ import java.util.stream.Collectors;
 public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchaseOfferService {
 
     private final PurchaseWithPurchaseOfferRepository pwpRepository;
-    private final ProductRepository productRepository;
+    private final ProductVariantRepository variantRepository;
 
     public PurchaseWithPurchaseOfferServiceImpl(
             PurchaseWithPurchaseOfferRepository pwpRepository,
-            ProductRepository productRepository) {
+            ProductVariantRepository variantRepository) {
         this.pwpRepository = pwpRepository;
-        this.productRepository = productRepository;
+        this.variantRepository = variantRepository;
     }
 
     @Override
@@ -41,15 +42,16 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
     @Transactional
     public PurchaseWithPurchaseOfferResponse create(UpsertPurchaseWithPurchaseRequest request) {
         validateIds(request.getAnchorProductId(), request.getCompanionProductId());
-        if (pwpRepository.findByCompanionProduct_Id(request.getCompanionProductId()).isPresent()) {
-            throw new CustomApiException(HttpStatus.CONFLICT,
-                    "Companion product already has a purchase-with-purchase offer: " + request.getCompanionProductId());
-        }
-        ProductEntity anchor = loadProduct(request.getAnchorProductId());
-        ProductEntity companion = loadProduct(request.getCompanionProductId());
+        ProductVariantEntity anchorVar = loadVariantStrict(
+                request.getAnchorVariantId(), request.getAnchorProductId(), "anchor");
+        ProductVariantEntity companionVar = loadVariantStrict(
+                request.getCompanionVariantId(), request.getCompanionProductId(), "companion");
+        assertCompanionVariantFree(request.getCompanionVariantId(), null);
         PurchaseWithPurchaseOfferEntity e = PurchaseWithPurchaseOfferEntity.builder()
-                .anchorProduct(anchor)
-                .companionProduct(companion)
+                .anchorProduct(anchorVar.getProduct())
+                .anchorVariant(anchorVar)
+                .companionProduct(companionVar.getProduct())
+                .companionVariant(companionVar)
                 .promoUnitPrice(request.getPromoUnitPrice())
                 .minAnchorQuantity(request.getMinAnchorQuantity() != null ? request.getMinAnchorQuantity() : 1)
                 .companionPromoUnitsPerAnchor(
@@ -67,14 +69,15 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
         PurchaseWithPurchaseOfferEntity e = pwpRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Purchase-with-purchase offer not found: " + id));
         validateIds(request.getAnchorProductId(), request.getCompanionProductId());
-        pwpRepository.findByCompanionProduct_Id(request.getCompanionProductId()).ifPresent(other -> {
-            if (!other.getId().equals(id)) {
-                throw new CustomApiException(HttpStatus.CONFLICT,
-                        "Companion product already linked to another offer: " + request.getCompanionProductId());
-            }
-        });
-        e.setAnchorProduct(loadProduct(request.getAnchorProductId()));
-        e.setCompanionProduct(loadProduct(request.getCompanionProductId()));
+        ProductVariantEntity anchorVar = loadVariantStrict(
+                request.getAnchorVariantId(), request.getAnchorProductId(), "anchor");
+        ProductVariantEntity companionVar = loadVariantStrict(
+                request.getCompanionVariantId(), request.getCompanionProductId(), "companion");
+        assertCompanionVariantFree(request.getCompanionVariantId(), id);
+        e.setAnchorProduct(anchorVar.getProduct());
+        e.setAnchorVariant(anchorVar);
+        e.setCompanionProduct(companionVar.getProduct());
+        e.setCompanionVariant(companionVar);
         e.setPromoUnitPrice(request.getPromoUnitPrice());
         if (request.getMinAnchorQuantity() != null) {
             e.setMinAnchorQuantity(request.getMinAnchorQuantity());
@@ -93,10 +96,21 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
     @Override
     @Transactional
     public void delete(long id) {
-        if (!pwpRepository.existsById(id)) {
-            throw new NotFoundEntityException("Purchase-with-purchase offer not found: " + id);
+        PurchaseWithPurchaseOfferEntity e = pwpRepository.findById(id)
+                .orElseThrow(() -> new NotFoundEntityException("Purchase-with-purchase offer not found: " + id));
+        if (Boolean.TRUE.equals(e.getEnabled())) {
+            throw new CustomApiException(HttpStatus.CONFLICT, MessageConstant.PWP_CANNOT_DELETE_WHILE_ACTIVE);
         }
-        pwpRepository.deleteById(id);
+        pwpRepository.delete(e);
+    }
+
+    private void assertCompanionVariantFree(Long companionVariantId, Long excludeOfferId) {
+        pwpRepository.findByCompanionVariant_Id(companionVariantId).ifPresent(o -> {
+            if (excludeOfferId == null || !o.getId().equals(excludeOfferId)) {
+                throw new CustomApiException(HttpStatus.CONFLICT,
+                        "Companion variant already has a PwP: " + companionVariantId);
+            }
+        });
     }
 
     private static void validateIds(Long anchorId, Long companionId) {
@@ -106,9 +120,15 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
         }
     }
 
-    private ProductEntity loadProduct(Long id) {
-        return productRepository.findById(id)
-                .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + id));
+    private ProductVariantEntity loadVariantStrict(Long variantId, Long productId, String role) {
+        ProductVariantEntity v = variantRepository.findById(variantId)
+                .orElseThrow(() -> new NotFoundEntityException(
+                        role + " variant not found: " + variantId));
+        if (v.getProduct() == null || !v.getProduct().getId().equals(productId)) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    role + " variant " + variantId + " does not belong to product " + productId);
+        }
+        return v;
     }
 
     private static PurchaseWithPurchaseOfferResponse toResponse(PurchaseWithPurchaseOfferEntity e) {
@@ -116,6 +136,8 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
                 .id(e.getId())
                 .anchorProductId(e.getAnchorProduct().getId())
                 .companionProductId(e.getCompanionProduct().getId())
+                .anchorVariantId(e.getAnchorVariant().getId())
+                .companionVariantId(e.getCompanionVariant().getId())
                 .promoUnitPrice(e.getPromoUnitPrice())
                 .minAnchorQuantity(e.getMinAnchorQuantity())
                 .companionPromoUnitsPerAnchor(e.getCompanionPromoUnitsPerAnchor())

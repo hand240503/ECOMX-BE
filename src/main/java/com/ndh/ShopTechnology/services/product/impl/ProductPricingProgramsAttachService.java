@@ -14,20 +14,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Gắn snapshot chương trình giá đang chạy (mix-and-match / volume tier, PWP, price change) vào DTO sản phẩm trả API.
- *
- * <p>Đơn giá hiển thị ({@link ProductVariantResponse#getEffectiveUnitPrice()}) đã resolve PC trước đó trong
- * {@link VariantDisplayPriceResolver}; trường {@link ProductVariantResponse#getActivePriceChange()} chỉ để FE hiển thị ngữ cảnh.
+ * Gắn snapshot chương trình giá (mix-and-match theo SKU, PWP, price change) vào DTO trả API.
  */
 @Component
 @RequiredArgsConstructor
@@ -36,6 +35,7 @@ public class ProductPricingProgramsAttachService {
     private final ProductVolumePriceTierRepository volumeTierRepository;
     private final PurchaseWithPurchaseOfferRepository purchaseWithPurchaseOfferRepository;
     private final VariantDisplayPriceResolver variantDisplayPriceResolver;
+    private final ProductImageAttachService productImageAttachService;
 
     public void attach(List<ProductFullResponse> products) {
         if (products == null || products.isEmpty()) {
@@ -50,10 +50,6 @@ public class ProductPricingProgramsAttachService {
             return;
         }
 
-        Date at = new Date();
-        Map<Long, List<VolumePriceTierResponse>> tiersByProduct = loadVolumeTiers(productIds);
-        Map<Long, List<ProductPurchaseWithPurchaseProgramResponse>> pwpByProduct = loadPwpPrograms(productIds);
-
         List<Long> variantIds = products.stream()
                 .flatMap(p -> p.getVariants() == null ? Stream.of() : p.getVariants().stream())
                 .filter(Objects::nonNull)
@@ -62,6 +58,11 @@ public class ProductPricingProgramsAttachService {
                 .distinct()
                 .toList();
 
+        Date at = new Date();
+        Map<Long, List<VolumePriceTierResponse>> tiersByVariant = loadVolumeTiersByVariantId(variantIds);
+        Map<Long, List<ProductPurchaseWithPurchaseProgramResponse>> pwpByProduct =
+                loadPwpPrograms(products, variantIds);
+
         Map<Long, ProductPriceChangeEntity> pcByVariantId =
                 variantDisplayPriceResolver.effectiveActivePriceChangesByVariantId(variantIds, at);
 
@@ -69,7 +70,7 @@ public class ProductPricingProgramsAttachService {
             if (p.getId() == null) {
                 continue;
             }
-            p.setVolumePriceTiers(List.copyOf(tiersByProduct.getOrDefault(p.getId(), List.of())));
+            p.setVolumePriceTiers(null);
             p.setPurchaseWithPurchasePrograms(List.copyOf(pwpByProduct.getOrDefault(p.getId(), List.of())));
             if (p.getVariants() == null) {
                 continue;
@@ -80,20 +81,23 @@ public class ProductPricingProgramsAttachService {
                 }
                 ProductPriceChangeEntity pc = pcByVariantId.get(v.getId());
                 v.setActivePriceChange(pc != null ? toPriceChangeResponse(pc) : null);
+                v.setVolumePriceTiers(List.copyOf(tiersByVariant.getOrDefault(v.getId(), List.of())));
             }
         }
     }
 
-    private Map<Long, List<VolumePriceTierResponse>> loadVolumeTiers(Collection<Long> productIds) {
-        List<ProductVolumePriceTierEntity> rows =
-                volumeTierRepository.findActiveFetchedByProductIdIn(productIds);
+    private Map<Long, List<VolumePriceTierResponse>> loadVolumeTiersByVariantId(List<Long> variantIds) {
         Map<Long, List<VolumePriceTierResponse>> map = new LinkedHashMap<>();
+        if (variantIds == null || variantIds.isEmpty()) {
+            return map;
+        }
+        List<ProductVolumePriceTierEntity> rows = volumeTierRepository.findByProductVariant_IdIn(variantIds);
         for (ProductVolumePriceTierEntity e : rows) {
-            if (e.getProduct() == null || e.getProduct().getId() == null) {
+            if (e.getProductVariant() == null || e.getProductVariant().getId() == null) {
                 continue;
             }
-            Long pid = e.getProduct().getId();
-            map.computeIfAbsent(pid, k -> new ArrayList<>()).add(toVolumeTierResponse(e));
+            Long vid = e.getProductVariant().getId();
+            map.computeIfAbsent(vid, k -> new ArrayList<>()).add(toVolumeTierResponse(e));
         }
         for (List<VolumePriceTierResponse> list : map.values()) {
             list.sort(Comparator.comparing(VolumePriceTierResponse::getMinQuantity,
@@ -102,31 +106,55 @@ public class ProductPricingProgramsAttachService {
         return map;
     }
 
-    private Map<Long, List<ProductPurchaseWithPurchaseProgramResponse>> loadPwpPrograms(Collection<Long> productIds) {
+    private Map<Long, List<ProductPurchaseWithPurchaseProgramResponse>> loadPwpPrograms(
+            List<ProductFullResponse> products, List<Long> variantIds) {
         Map<Long, List<ProductPurchaseWithPurchaseProgramResponse>> map = new LinkedHashMap<>();
-        for (PurchaseWithPurchaseOfferEntity o :
-                purchaseWithPurchaseOfferRepository.findActiveFetchedByCompanionProductIdIn(productIds)) {
-            if (o.getCompanionProduct() == null || o.getCompanionProduct().getId() == null) {
-                continue;
-            }
-            Long pid = o.getCompanionProduct().getId();
-            map.computeIfAbsent(pid, k -> new ArrayList<>()).add(toPwpProgram(o, "companion"));
+        Set<Long> productIdSet =
+                products.stream().map(ProductFullResponse::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (variantIds == null || variantIds.isEmpty()) {
+            return map;
         }
-        for (PurchaseWithPurchaseOfferEntity o :
-                purchaseWithPurchaseOfferRepository.findActiveFetchedByAnchorProductIdIn(productIds)) {
-            if (o.getAnchorProduct() == null || o.getAnchorProduct().getId() == null) {
-                continue;
+        Set<PurchaseWithPurchaseOfferEntity> offers = new LinkedHashSet<>();
+        offers.addAll(purchaseWithPurchaseOfferRepository.findActiveFetchedByCompanionVariantIdIn(variantIds));
+        offers.addAll(purchaseWithPurchaseOfferRepository.findActiveFetchedByAnchorVariantIdIn(variantIds));
+        
+        Set<Long> relatedProductIds = new LinkedHashSet<>();
+        for (PurchaseWithPurchaseOfferEntity o : offers) {
+            if (o.getCompanionProduct() != null && o.getCompanionProduct().getId() != null) {
+                relatedProductIds.add(o.getCompanionProduct().getId());
             }
-            Long pid = o.getAnchorProduct().getId();
-            map.computeIfAbsent(pid, k -> new ArrayList<>()).add(toPwpProgram(o, "anchor"));
+            if (o.getAnchorProduct() != null && o.getAnchorProduct().getId() != null) {
+                relatedProductIds.add(o.getAnchorProduct().getId());
+            }
+        }
+        Map<Long, String> imageUrls = productImageAttachService.getPrimaryImageUrlsByProductIds(relatedProductIds);
+
+        for (PurchaseWithPurchaseOfferEntity o : offers) {
+            String anchorImage = o.getAnchorProduct() != null ? imageUrls.get(o.getAnchorProduct().getId()) : null;
+            String companionImage = o.getCompanionProduct() != null ? imageUrls.get(o.getCompanionProduct().getId()) : null;
+
+            if (o.getCompanionProduct() != null && o.getCompanionProduct().getId() != null
+                    && productIdSet.contains(o.getCompanionProduct().getId())) {
+                map.computeIfAbsent(o.getCompanionProduct().getId(), k -> new ArrayList<>())
+                        .add(toPwpProgram(o, "companion", anchorImage, companionImage));
+            }
+            if (o.getAnchorProduct() != null && o.getAnchorProduct().getId() != null
+                    && productIdSet.contains(o.getAnchorProduct().getId())) {
+                map.computeIfAbsent(o.getAnchorProduct().getId(), k -> new ArrayList<>())
+                        .add(toPwpProgram(o, "anchor", anchorImage, companionImage));
+            }
         }
         return map;
     }
 
     private static VolumePriceTierResponse toVolumeTierResponse(ProductVolumePriceTierEntity e) {
+        var pv = e.getProductVariant();
+        Long vid = pv != null ? pv.getId() : null;
+        Long pid = pv != null && pv.getProduct() != null ? pv.getProduct().getId() : null;
         return VolumePriceTierResponse.builder()
                 .id(e.getId())
-                .productId(e.getProduct() != null ? e.getProduct().getId() : null)
+                .productVariantId(vid)
+                .productId(pid)
                 .minQuantity(e.getMinQuantity())
                 .unitPrice(e.getUnitPrice())
                 .enabled(e.getEnabled())
@@ -134,16 +162,22 @@ public class ProductPricingProgramsAttachService {
     }
 
     private static ProductPurchaseWithPurchaseProgramResponse toPwpProgram(
-            PurchaseWithPurchaseOfferEntity o, String role) {
+            PurchaseWithPurchaseOfferEntity o, String role, String anchorImage, String companionImage) {
         return ProductPurchaseWithPurchaseProgramResponse.builder()
                 .role(role)
                 .id(o.getId())
                 .anchorProductId(o.getAnchorProduct() != null ? o.getAnchorProduct().getId() : null)
+                .anchorProductName(o.getAnchorProduct() != null ? o.getAnchorProduct().getProductName() : null)
                 .companionProductId(o.getCompanionProduct() != null ? o.getCompanionProduct().getId() : null)
+                .companionProductName(o.getCompanionProduct() != null ? o.getCompanionProduct().getProductName() : null)
+                .anchorVariantId(o.getAnchorVariant() != null ? o.getAnchorVariant().getId() : null)
+                .companionVariantId(o.getCompanionVariant() != null ? o.getCompanionVariant().getId() : null)
                 .promoUnitPrice(o.getPromoUnitPrice())
                 .minAnchorQuantity(o.getMinAnchorQuantity())
                 .companionPromoUnitsPerAnchor(o.getCompanionPromoUnitsPerAnchor())
                 .maxCompanionPromoUnits(o.getMaxCompanionPromoUnits())
+                .anchorProductMainImageUrl(anchorImage)
+                .companionProductMainImageUrl(companionImage)
                 .enabled(o.getEnabled())
                 .build();
     }

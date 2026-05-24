@@ -27,55 +27,52 @@ public final class PermissionDescriptions {
         Map<Integer, String> m = new LinkedHashMap<>();
 
         // ----- System-wide -----
-        m.put(PermissionCode.CREATE_ALL,        "Tạo dữ liệu trên toàn bộ module (Product, Category, Document, Employee, Order, Report, ...)");
+        m.put(PermissionCode.CREATE_ALL,        "Tạo dữ liệu trên toàn bộ phân hệ (kể cả nhóm catalogue sản phẩm và quản lý user đã gộp trong bảng phân quyền)");
         m.put(PermissionCode.READ_ALL,          "Đọc dữ liệu trên toàn bộ module");
         m.put(PermissionCode.UPDATE_ALL,        "Cập nhật dữ liệu trên toàn bộ module");
         m.put(PermissionCode.DELETE_ALL,        "Xoá dữ liệu trên toàn bộ module");
-        m.put(PermissionCode.LOCK_USER,         "Khoá / mở khoá tài khoản user");
-        m.put(PermissionCode.MANAGE_ROLE,       "Quản lý role: tạo / sửa / xoá role và permission mặc định của role");
-        m.put(PermissionCode.GRANT_PERMISSION,  "Cấp / thu hồi quyền cho user khác (không vượt quá quyền của bản thân)");
 
-        // ----- Product (100xxx) -----
-        m.put(PermissionCode.CREATE_PRODUCT,    "Tạo sản phẩm mới");
-        m.put(PermissionCode.READ_PRODUCT,      "Xem danh sách / chi tiết sản phẩm (catalog)");
-        m.put(PermissionCode.UPDATE_PRODUCT,    "Cập nhật thông tin sản phẩm");
-        m.put(PermissionCode.DELETE_PRODUCT,    "Xoá sản phẩm");
+        // ----- Product (100xxx): catalogue gộp sản phẩm + giá + đơn vị + hãng + danh mục -----
+        m.put(PermissionCode.CREATE_PRODUCT, "Tạo dữ liệu nhóm catalogue: sản phẩm, ảnh/media gắn sản phẩm·variant·danh mục·hãng, giá catalog / price change / volume tier / PwP, đơn vị tính, thương hiệu, danh mục");
+        m.put(PermissionCode.READ_PRODUCT,     "Xem toàn nhóm catalogue: sản phẩm, ảnh đính kèm, cấu hình giá, đơn vị tính, hãng, danh mục");
+        m.put(PermissionCode.UPDATE_PRODUCT,   "Cập nhật dữ liệu nhóm catalogue: sản phẩm, ảnh/media gắn catalogue (thay file, đặt main, meta), giá và chương trình khuyến mãi liên quan giá, đơn vị, hãng, danh mục");
+        m.put(PermissionCode.DELETE_PRODUCT,  "Xoá dữ liệu trong nhóm catalogue (sản phẩm, bản media gắn catalogue trong kho lưu tài liệu, giá và cấu hình liên quan, đơn vị — khi không còn ràng buộc, hãng, danh mục)");
 
-        // ----- Price (150xxx) -----
-        m.put(PermissionCode.CREATE_PRICE,      "Thêm giá cho sản phẩm: giá catalog, price change, mix-and-match (volume tier), purchase-with-purchase");
-        m.put(PermissionCode.READ_PRICE,        "Xem cấu hình giá sản phẩm: giá catalog, price change, volume tier, PwP");
-        m.put(PermissionCode.UPDATE_PRICE,      "Cập nhật cấu hình giá sản phẩm: chỉnh giá catalog, price change, volume tier, PwP");
-        m.put(PermissionCode.DELETE_PRICE,      "Xoá cấu hình giá sản phẩm: gỡ giá catalog, price change, volume tier, PwP");
-
-        // ----- Unit (160xxx) -----
-        m.put(PermissionCode.CREATE_UNIT,       "Tạo đơn vị tính (cái, thùng, kg, …)");
-        m.put(PermissionCode.READ_UNIT,         "Xem danh mục đơn vị tính");
-        m.put(PermissionCode.UPDATE_UNIT,       "Cập nhật đơn vị tính");
-        m.put(PermissionCode.DELETE_UNIT,       "Xoá đơn vị tính (chặn nếu đang gắn giá sản phẩm)");
-
-        // ----- Brand (170xxx) -----
-        m.put(PermissionCode.CREATE_BRAND,      "Tạo thương hiệu / hãng sản phẩm");
-        m.put(PermissionCode.READ_BRAND,       "Xem danh mục hãng sản phẩm");
-        m.put(PermissionCode.UPDATE_BRAND,     "Cập nhật hãng sản phẩm");
-        m.put(PermissionCode.DELETE_BRAND,     "Xoá hãng (chặn nếu còn sản phẩm gắn hãng này)");
-
-        // ----- Category (200xxx) -----
-        m.put(PermissionCode.CREATE_CATEGORY,   "Tạo danh mục mới");
-        m.put(PermissionCode.READ_CATEGORY,     "Xem danh mục");
-        m.put(PermissionCode.UPDATE_CATEGORY,   "Cập nhật danh mục");
-        m.put(PermissionCode.DELETE_CATEGORY,   "Xoá danh mục");
+        // ----- Legacy branch codes (still valid in grants / DB until migrated); mô tả trùng nhóm -----
+        m.put(PermissionCode.CREATE_PRICE,    m.get(PermissionCode.CREATE_PRODUCT));
+        m.put(PermissionCode.READ_PRICE,       m.get(PermissionCode.READ_PRODUCT));
+        m.put(PermissionCode.UPDATE_PRICE,     m.get(PermissionCode.UPDATE_PRODUCT));
+        m.put(PermissionCode.DELETE_PRICE,     m.get(PermissionCode.DELETE_PRODUCT));
+        m.put(PermissionCode.CREATE_UNIT,     m.get(PermissionCode.CREATE_PRODUCT));
+        m.put(PermissionCode.READ_UNIT,        m.get(PermissionCode.READ_PRODUCT));
+        m.put(PermissionCode.UPDATE_UNIT,      m.get(PermissionCode.UPDATE_PRODUCT));
+        m.put(PermissionCode.DELETE_UNIT,      m.get(PermissionCode.DELETE_PRODUCT));
+        m.put(PermissionCode.CREATE_BRAND,     m.get(PermissionCode.CREATE_PRODUCT));
+        m.put(PermissionCode.READ_BRAND,      m.get(PermissionCode.READ_PRODUCT));
+        m.put(PermissionCode.UPDATE_BRAND,     m.get(PermissionCode.UPDATE_PRODUCT));
+        m.put(PermissionCode.DELETE_BRAND,     m.get(PermissionCode.DELETE_PRODUCT));
+        m.put(PermissionCode.CREATE_CATEGORY,  m.get(PermissionCode.CREATE_PRODUCT));
+        m.put(PermissionCode.READ_CATEGORY,    m.get(PermissionCode.READ_PRODUCT));
+        m.put(PermissionCode.UPDATE_CATEGORY,  m.get(PermissionCode.UPDATE_PRODUCT));
+        m.put(PermissionCode.DELETE_CATEGORY,  m.get(PermissionCode.DELETE_PRODUCT));
 
         // ----- Document (300xxx) -----
-        m.put(PermissionCode.CREATE_DOCUMENT,   "Upload tài liệu / hình ảnh");
+        m.put(PermissionCode.CREATE_DOCUMENT,   "Upload tài liệu / ảnh khi không dùng quyền nhóm catalogue; hoặc media gắn đơn hàng / hồ sơ user riêng (ảnh SKU·danh mục·hãng có thể chỉ cần quyền sản phẩm)");
         m.put(PermissionCode.READ_DOCUMENT,     "Xem / tải tài liệu");
         m.put(PermissionCode.UPDATE_DOCUMENT,   "Cập nhật tài liệu");
         m.put(PermissionCode.DELETE_DOCUMENT,   "Xoá tài liệu");
 
-        // ----- Employee (400xxx) -----
-        m.put(PermissionCode.CREATE_EMPLOYEE,   "Tạo nhân viên mới (user không phải Customer)");
-        m.put(PermissionCode.READ_EMPLOYEE,     "Xem danh sách nhân viên");
-        m.put(PermissionCode.UPDATE_EMPLOYEE,   "Cập nhật thông tin nhân viên");
-        m.put(PermissionCode.DELETE_EMPLOYEE,   "Xoá nhân viên");
+        // ----- User admin (700xxx): mọi tài khoản trong hệ thống -----
+        m.put(PermissionCode.CREATE_USER, "Tạo tài khoản qua API quản trị nơi có hỗ trợ (staff/employee/v.v.); quyền này không thay thế luồng đăng ký khách trên storefront.");
+        m.put(PermissionCode.READ_USER,   "Xem và liệt kê toàn bộ user trong hệ thống (khách và nội bộ)");
+        m.put(PermissionCode.UPDATE_USER, "Cập nhật thông tin user bất kỳ (profile, khóa, role trong API admin, …)");
+        m.put(PermissionCode.DELETE_USER,  "Xoá / vô hiệu hoá user bất kỳ trong phạm vi API admin được phép");
+
+        // ----- Employee (400xxx): legacy branch — đồng nghĩa catalogue nhóm USER (700xxx), phạm vi mọi user -----
+        m.put(PermissionCode.CREATE_EMPLOYEE, m.get(PermissionCode.CREATE_USER));
+        m.put(PermissionCode.READ_EMPLOYEE,     m.get(PermissionCode.READ_USER));
+        m.put(PermissionCode.UPDATE_EMPLOYEE,   m.get(PermissionCode.UPDATE_USER));
+        m.put(PermissionCode.DELETE_EMPLOYEE,   m.get(PermissionCode.DELETE_USER));
 
         // ----- Order (500xxx) -----
         m.put(PermissionCode.CREATE_ORDER,      "Tạo đơn hàng");
@@ -89,12 +86,6 @@ public final class PermissionDescriptions {
         m.put(PermissionCode.UPDATE_REPORT,     "Cập nhật chi tiết báo cáo");
         m.put(PermissionCode.DELETE_REPORT,     "Xoá báo cáo");
 
-        // ----- User (700xxx) -----
-        m.put(PermissionCode.CREATE_USER,       "Tạo user (admin)");
-        m.put(PermissionCode.READ_USER,         "Xem thông tin user");
-        m.put(PermissionCode.UPDATE_USER,       "Cập nhật thông tin user");
-        m.put(PermissionCode.DELETE_USER,       "Xoá user");
-
         DESCRIPTIONS = Collections.unmodifiableMap(m);
     }
 
@@ -104,7 +95,13 @@ public final class PermissionDescriptions {
     public static String describe(Integer code) {
         if (code == null) return "";
         String d = DESCRIPTIONS.get(code);
-        return d != null ? d : "Permission #" + code;
+        if (d != null) return d;
+        int canon = PermissionCode.normalizeGrantPermissionCode(code);
+        if (canon != code) {
+            d = DESCRIPTIONS.get(canon);
+            if (d != null) return d;
+        }
+        return "Permission #" + code;
     }
 
     /** Bản đồ đầy đủ (read-only). */

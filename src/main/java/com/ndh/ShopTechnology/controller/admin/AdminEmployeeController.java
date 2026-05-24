@@ -32,7 +32,7 @@ public class AdminEmployeeController {
     public ResponseEntity<APIResponse<List<UserResponse>>> getEmployees(
             @RequestParam(value = "page", defaultValue = "0", required = false) int page,
             @RequestParam(value = "size", defaultValue = "10", required = false) int size) {
-        permissionService.requireAnyPermission(400002, 700002);
+        permissionService.requireAnyPermission(PermissionCode.READ_USER);
 
         PaginationRequest request = new PaginationRequest();
         request.setPage(page);
@@ -63,7 +63,6 @@ public class AdminEmployeeController {
     @PostMapping("")
     public ResponseEntity<APIResponse<UserResponse>> createEmployee(@RequestBody CreateUserRequest request) {
         permissionService.requireAnyPermission(
-                PermissionCode.CREATE_EMPLOYEE,
                 PermissionCode.CREATE_USER,
                 PermissionCode.CREATE_ALL);
 
@@ -76,7 +75,7 @@ public class AdminEmployeeController {
 
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<UserResponse>> getEmployee(@PathVariable Long id) {
-        permissionService.requireAnyPermission(400002, 700002);
+        permissionService.requireAnyPermission(PermissionCode.READ_USER);
 
         UserResponse userResponse = userService.getEmployeeUser(id);
 
@@ -88,9 +87,6 @@ public class AdminEmployeeController {
     public ResponseEntity<APIResponse<UserResponse>> updateEmployee(
             @RequestBody AdminModUserInfoRequest request) {
         permissionService.requireAnyPermission(
-                400003,
-                700003,
-                PermissionCode.LOCK_USER,
                 PermissionCode.UPDATE_ALL,
                 PermissionCode.UPDATE_USER);
 

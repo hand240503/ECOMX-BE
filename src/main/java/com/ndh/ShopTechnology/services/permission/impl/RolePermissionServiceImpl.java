@@ -52,7 +52,8 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @Override
     @Transactional(readOnly = true)
     public List<RoleResponse> listRoles() {
-        requireActorPermission(PermissionCode.MANAGE_ROLE, PermissionCode.READ_ALL);
+        UserEntity actor = currentActor();
+        requireAdminOrSuperAdmin(actor);
         return RoleResponse.fromList(roleRepository.findAll());
     }
 
@@ -60,7 +61,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @Transactional
     public RoleResponse createRole(UpsertRoleRequest request) {
         UserEntity actor = currentActor();
-        requireActorPermission(actor, PermissionCode.MANAGE_ROLE);
+        requireAdminOrSuperAdmin(actor);
 
         String code = normalizeRoleCode(request.getCode());
         if (roleRepository.existsByCode(code)) {
@@ -87,7 +88,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @Transactional
     public RoleResponse updateRole(Long roleId, UpsertRoleRequest request) {
         UserEntity actor = currentActor();
-        requireActorPermission(actor, PermissionCode.MANAGE_ROLE);
+        requireAdminOrSuperAdmin(actor);
 
         RoleEntity role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new NotFoundEntityException("Role not found: id=" + roleId));
@@ -112,7 +113,7 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     @Transactional
     public void deleteRole(Long roleId) {
         UserEntity actor = currentActor();
-        requireActorPermission(actor, PermissionCode.MANAGE_ROLE);
+        requireAdminOrSuperAdmin(actor);
 
         RoleEntity role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new NotFoundEntityException("Role not found: id=" + roleId));
@@ -155,14 +156,11 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         }
 
         for (Integer code : requested) {
-            // Bỏ qua nếu role mặc định đã có (để khỏi tạo grant trùng vô nghĩa).
-            if (rolePermissionsOf(target).contains(code)) {
+            // Bỏ qua nếu role mặc định hoặc grant hiện có đã bao phủ (kể cả mã nhánh legacy).
+            if (hasEquivalentPermission(target, code)) {
                 continue;
             }
-            // Bỏ qua nếu đã từng cấp.
-            if (userPermissionRepository.findByUser_IdAndPermissionCode(target.getId(), code).isPresent()) {
-                continue;
-            }
+
             UserPermissionEntity grant = UserPermissionEntity.builder()
                     .user(target)
                     .permissionCode(code)
@@ -196,7 +194,9 @@ public class RolePermissionServiceImpl implements RolePermissionService {
             throw new CustomApiException(HttpStatus.BAD_REQUEST, "No valid permission codes provided");
         }
         for (Integer code : codes) {
-            userPermissionRepository.deleteByUserIdAndPermissionCode(target.getId(), code);
+            for (int variant : PermissionCode.expandedMergedCodesEqualToCanonical(code)) {
+                userPermissionRepository.deleteByUserIdAndPermissionCode(target.getId(), variant);
+            }
         }
 
         permissionService.clearUserPermissionsCache(target.getUsername());
@@ -213,7 +213,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
             return;
         }
         if (PermissionEvaluator.hasAnyPermission(actor.getAllPermissions(),
-                PermissionCode.GRANT_PERMISSION,
                 PermissionCode.UPDATE_USER,
                 PermissionCode.UPDATE_ALL)) {
             return;
@@ -229,7 +228,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         return PermissionEvaluator.hasAnyPermission(actor.getAllPermissions(),
                 PermissionCode.READ_USER,
                 PermissionCode.READ_ALL,
-                PermissionCode.GRANT_PERMISSION,
                 PermissionCode.UPDATE_USER,
                 PermissionCode.UPDATE_ALL);
     }
@@ -257,16 +255,24 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         }
     }
 
+    private void requireAdminOrSuperAdmin(UserEntity actor) {
+        if (!actor.hasRole(RoleConstant.ROLE_ADMIN) && !actor.hasRole(RoleConstant.ROLE_SUPER_ADMIN)) {
+            throw new CustomApiException(HttpStatus.FORBIDDEN, MessageConstant.NO_PERMISSION_ACTION);
+        }
+    }
+
     /**
      * Validate codes (tồn tại trong PermissionCode) và đảm bảo actor đang có TẤT CẢ các code này.
-     * Trả về tập đã chuẩn hoá (loại trùng + bỏ null/0).
+     * Trả về tập đã chuẩn hoá (merge nhóm catalogue) + loại trùng + bỏ null/0.
      */
     private Set<Integer> sanitizeAndAuthorizePermissions(UserEntity actor, Collection<Integer> rawCodes) {
-        Set<Integer> codes = sanitizeCodes(rawCodes);
-        if (codes.isEmpty()) return codes;
+        Set<Integer> cleaned = sanitizeCodes(rawCodes);
+        if (cleaned.isEmpty()) return cleaned;
+
+        Set<Integer> codes = normalizedPermissionCodes(cleaned);
 
         Set<Integer> known = PermissionCode.allKnownCodes();
-        Set<Integer> unknown = codes.stream().filter(c -> !known.contains(c)).collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<Integer> unknown = cleaned.stream().filter(c -> !known.contains(c)).collect(Collectors.toCollection(LinkedHashSet::new));
         if (!unknown.isEmpty()) {
             throw new CustomApiException(HttpStatus.BAD_REQUEST, "Unknown permission codes: " + unknown);
         }
@@ -285,6 +291,35 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     private Set<Integer> sanitizeCodes(Collection<Integer> raw) {
         if (raw == null || raw.isEmpty()) return new LinkedHashSet<>();
         return raw.stream().filter(c -> c != null && c > 0).collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private static Set<Integer> normalizedPermissionCodes(Collection<Integer> cleaned) {
+        return cleaned.stream()
+                .map(PermissionCode::normalizeGrantPermissionCode)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private boolean overlapsMerged(Set<Integer> pool, int canonPermission) {
+        for (int v : PermissionCode.expandedMergedCodesEqualToCanonical(canonPermission)) {
+            if (pool.contains(v)) return true;
+        }
+        return false;
+    }
+
+    private boolean hasEquivalentPermission(UserEntity target, int canonPermission) {
+        if (overlapsMerged(rolePermissionsOf(target), canonPermission)) {
+            return true;
+        }
+        if (target.getUserPermissions() == null) return false;
+        LocalDateTime now = LocalDateTime.now();
+        for (UserPermissionEntity up : target.getUserPermissions()) {
+            if (up.getPermissionCode() == null) continue;
+            if (up.getExpiresAt() != null && up.getExpiresAt().isBefore(now)) continue;
+            if (PermissionCode.normalizeGrantPermissionCode(up.getPermissionCode()) == canonPermission) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String normalizeRoleCode(String code) {

@@ -1,5 +1,6 @@
 package com.ndh.ShopTechnology.services.permission;
 
+import com.ndh.ShopTechnology.constants.PermissionCode;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 import com.ndh.ShopTechnology.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,18 +21,10 @@ import java.util.Set;
 /**
  * Service đọc quyền hiệu lực của user (có cache theo username).
  *
- * <p>Toàn bộ kiểm tra wildcard (101..104) được uỷ quyền cho {@link PermissionEvaluator}.
+ * <p>Toàn bộ kiểm tra wildcard (101..104) và gộp nhánh quyền được uỷ quyền cho {@link PermissionEvaluator}.
  *
- * <p>Trong code (controller/service), thay vì viết
- * {@code @PreAuthorize("@perm.checkAny(400002, 700002)")} ở đầu method, dùng
- * {@link #requireAnyPermission(int...)} ngay trong thân method:
- *
- * <pre>
- *     public ResponseEntity&lt;...&gt; getAllUser(...) {
- *         permissionService.requireAnyPermission(400002, 700002);
- *         ...
- *     }
- * </pre>
+ * <p>Trong controller/service, thay vì biến SpEL phức tạp, gọi
+ * {@link #requireAnyPermission(int...)} / {@link #requirePermission(int)} trong thân method.
  */
 @Slf4j
 @Service
@@ -80,17 +73,11 @@ public class PermissionService {
         return PermissionEvaluator.hasAllPermissions(permissions, codes);
     }
 
-    // ====================================================================
-    // Imperative guards — dùng trong controller/service thay cho @PreAuthorize.
-    // ====================================================================
-
     /**
      * Đảm bảo user hiện tại có ÍT NHẤT 1 trong các quyền {@code codes}, ngược lại ném
-     * {@link AccessDeniedException} (sẽ được Spring map về HTTP 403 qua {@code GlobalExceptionHandler}).
+     * {@link AccessDeniedException} (Spring map HTTP 403 qua handler toàn cục nếu có).
      *
-     * <p>Đây là hàm thay thế cho {@code @PreAuthorize("@perm.checkAny(...)")}.
-     *
-     * @param codes danh sách permission code yêu cầu (vd {@code 400002, 700002}).
+     * @param codes danh sách permission code yêu cầu (vd {@link PermissionCode#READ_USER})
      */
     public void requireAnyPermission(int... codes) {
         String username = currentUsername();
@@ -108,7 +95,7 @@ public class PermissionService {
     }
 
     /**
-     * Đảm bảo user hiện tại có 1 quyền cụ thể (xét cả wildcard system-wide).
+     * Đảm bảo user hiện tại có 1 quyền cụ thể (xét cả wildcard system-wide và gộp nhánh).
      */
     public void requirePermission(int code) {
         String username = currentUsername();
@@ -139,9 +126,6 @@ public class PermissionService {
         }
     }
 
-    /**
-     * Lấy username của user đang đăng nhập, hoặc {@code null} nếu chưa đăng nhập (anonymous).
-     */
     private String currentUsername() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {

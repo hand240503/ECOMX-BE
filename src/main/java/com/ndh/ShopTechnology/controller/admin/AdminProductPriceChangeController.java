@@ -27,7 +27,7 @@ public class AdminProductPriceChangeController {
     }
 
     @GetMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
     public ResponseEntity<APIResponse<List<ProductPriceChangeResponse>>> list(
             @PathVariable Long productId,
             @PathVariable Long variantId) {
@@ -36,7 +36,7 @@ public class AdminProductPriceChangeController {
     }
 
     @PostMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<ProductPriceChangeResponse>> create(
             @PathVariable Long productId,
             @PathVariable Long variantId,
@@ -46,7 +46,7 @@ public class AdminProductPriceChangeController {
     }
 
     @PutMapping("/{priceChangeId}")
-    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<ProductPriceChangeResponse>> update(
             @PathVariable Long productId,
             @PathVariable Long variantId,
@@ -57,7 +57,7 @@ public class AdminProductPriceChangeController {
     }
 
     @DeleteMapping("/{priceChangeId}")
-    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRODUCT + ")")
     public ResponseEntity<APIResponse<Void>> delete(
             @PathVariable Long productId,
             @PathVariable Long variantId,

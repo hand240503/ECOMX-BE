@@ -26,4 +26,16 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long> {
 
     @EntityGraph(attributePaths = {"paymentMethod", "user"})
     Optional<OrderEntity> findByVnpayCheckoutTxnRef(Long vnpayCheckoutTxnRef);
+
+    // =====================================================================
+    // ADMIN queries — toàn bộ đơn (không filter theo user)
+    // =====================================================================
+
+    /** Tất cả đơn hàng, sắp xếp mới nhất lên trước — dành cho admin. */
+    @EntityGraph(attributePaths = {"paymentMethod", "user"})
+    List<OrderEntity> findAllByOrderByIdDesc();
+
+    /** Lọc theo status — dành cho admin. */
+    @EntityGraph(attributePaths = {"paymentMethod", "user"})
+    List<OrderEntity> findByStatusOrderByIdDesc(Integer status);
 }

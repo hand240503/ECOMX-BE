@@ -3,6 +3,7 @@ package com.ndh.ShopTechnology.services.product;
 import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
 import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
 import com.ndh.ShopTechnology.dto.search.ProductSearchResult;
+import com.ndh.ShopTechnology.dto.response.product.ActivePromotionsResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductDetailResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 
@@ -74,4 +75,10 @@ public interface ProductService {
             Integer mainNewImageIndex);
 
     void deleteProduct(Long id);
+
+    /**
+     * Trả về tất cả sản phẩm đang có chương trình khuyến mãi đang hoạt động,
+     * nhóm theo loại chương trình: Price Change / Volume Tier / PwP.
+     */
+    ActivePromotionsResponse getActivePromotions();
 }

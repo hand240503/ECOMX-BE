@@ -93,7 +93,7 @@ public class UserServiceImpl implements UserService {
         if (user == null) return false;
         return PermissionEvaluator.hasAnyPermission(
                 user.getAllPermissions(),
-                PermissionCode.UPDATE_ALL,
+                PermissionCode.UPDATE_USER,
                 PermissionCode.READ_ALL,
                 PermissionCode.CREATE_ALL,
                 PermissionCode.DELETE_ALL);
@@ -206,7 +206,7 @@ public class UserServiceImpl implements UserService {
      * Core method for user update.
      * <ul>
      *   <li>Admin (wildcard 101–104) hoặc quyền UPDATE_USER/UPDATE_ALL: chỉnh mọi trường hợp lệ.</li>
-     *   <li>Người có {@link PermissionCode#LOCK_USER}, hoặc nhân viên có {@code man_id} trỏ về actor: chỉ đổi khóa/mở (status).</li>
+     *   <li>Người có {@link PermissionCode#UPDATE_USER}, hoặc nhân viên có {@code man_id} trỏ về actor: chỉ đổi khóa/mở (status).</li>
      *   <li>Còn lại: chỉ sửa profile của chính mình.</li>
      * </ul>
      */
@@ -246,7 +246,7 @@ public class UserServiceImpl implements UserService {
         return toResponse(saved);
     }
 
-    /** Khóa/mở (status): quản lý trực tiếp theo man_id, hoặc có quyền LOCK_USER — body chỉ gồm id + status. */
+    /** Khóa/mở (status): quản lý trực tiếp theo man_id, hoặc có quyền UPDATE_USER — body chỉ gồm id + status. */
     protected boolean canApplyAccountLock(UserEntity actor, UserEntity other, AdminModUserInfoRequest req) {
         if (req.getStatus() == null) {
             return false;
@@ -329,7 +329,7 @@ public class UserServiceImpl implements UserService {
     public Page<UserResponse> getStaffUsers(PaginationRequest request) {
         UserEntity currentUser = getCurrentUserEntity();
         if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
-                PermissionCode.READ_USER, PermissionCode.READ_EMPLOYEE, PermissionCode.READ_ALL)) {
+                PermissionCode.READ_USER, PermissionCode.READ_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
 
@@ -346,7 +346,7 @@ public class UserServiceImpl implements UserService {
     public Page<UserResponse> getEmployeeUsers(PaginationRequest request) {
         UserEntity currentUser = getCurrentUserEntity();
         if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
-                PermissionCode.READ_USER, PermissionCode.READ_EMPLOYEE, PermissionCode.READ_ALL)) {
+                PermissionCode.READ_USER, PermissionCode.READ_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
 
@@ -391,6 +391,81 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<UserResponse> getAllUsersForAdmin(PaginationRequest request) {
+        UserEntity currentUser = getCurrentUserEntity();
+        if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
+                PermissionCode.READ_USER, PermissionCode.READ_ALL)) {
+            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+        }
+
+        int page = (request.getPage() == null) ? 0 : request.getPage();
+        int size = (request.getSize() == null) ? 10 : request.getSize();
+        Pageable pageable = PageRequest.of(page, size);
+        Page<UserEntity> userPage = userRepository.findAllPagedForAdmin(pageable);
+        return userPage.map(UserResponse::fromEntity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getUserForAdmin(Long id) {
+        UserEntity currentUser = getCurrentUserEntity();
+        if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
+                PermissionCode.READ_USER, PermissionCode.READ_ALL)) {
+            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+        }
+        UserEntity user = loadUser(id);
+        return toResponse(user);
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = { "users", "userPermissions" }, key = "#req.id")
+    public UserResponse updateUserForAdmin(AdminModUserInfoRequest req) {
+        return finalizeAdminUpdate(req, AdminManagedUserKind.ANY);
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = { "users", "userPermissions" }, key = "#id")
+    public void deleteUserForAdmin(Long id) {
+        UserEntity actor = getCurrentUserEntity();
+        if (!PermissionEvaluator.hasAnyPermission(actor.getAllPermissions(),
+                PermissionCode.DELETE_USER,
+                PermissionCode.DELETE_ALL)) {
+            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+        }
+        UserEntity target = loadUserForWrite(id);
+        assertMatchesAdminKind(target, AdminManagedUserKind.ANY);
+        if (target.getId().equals(actor.getId())) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Không thể xóa tài khoản của chính bạn.");
+        }
+        permissionService.clearUserPermissionsCache(target.getUsername());
+        userRepository.delete(target);
+        log.info("User deleted (unified admin): id={}, by={}", id, actor.getUsername());
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = { "users", "userPermissions" }, key = "#id")
+    public UserResponse resetUserPasswordForAdmin(Long id) {
+        UserEntity actor = getCurrentUserEntity();
+        if (!PermissionEvaluator.hasAnyPermission(actor.getAllPermissions(),
+                PermissionCode.UPDATE_USER,
+                PermissionCode.UPDATE_ALL)) {
+            throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
+        }
+        UserEntity target = loadUserForWrite(id);
+        assertMatchesAdminKind(target, AdminManagedUserKind.ANY);
+        String plain = generateStaffInitialPassword(target.getPhoneNumber());
+        target.setPassword(passwordEncoder.encode(plain));
+        userRepository.save(target);
+        permissionService.clearUserPermissionsCache(target.getUsername());
+        log.info("User password reset (unified admin): id={}, by={}", id, actor.getUsername());
+        return toResponse(target, plain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public UserResponse getStaffUser(Long id) {
         return getUserForAdminSegment(id, AdminManagedUserKind.STAFF);
     }
@@ -404,7 +479,7 @@ public class UserServiceImpl implements UserService {
     private UserResponse getUserForAdminSegment(Long id, AdminManagedUserKind kind) {
         UserEntity currentUser = getCurrentUser();
         if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
-                PermissionCode.READ_USER, PermissionCode.READ_EMPLOYEE, PermissionCode.READ_ALL)) {
+                PermissionCode.READ_USER, PermissionCode.READ_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
         UserEntity user = loadUser(id);
@@ -512,7 +587,6 @@ public class UserServiceImpl implements UserService {
         UserEntity actor = getCurrentUserEntity();
         if (!PermissionEvaluator.hasAnyPermission(actor.getAllPermissions(),
                 PermissionCode.DELETE_USER,
-                PermissionCode.DELETE_EMPLOYEE,
                 PermissionCode.DELETE_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
@@ -533,7 +607,6 @@ public class UserServiceImpl implements UserService {
         UserEntity actor = getCurrentUserEntity();
         if (!PermissionEvaluator.hasAnyPermission(actor.getAllPermissions(),
                 PermissionCode.UPDATE_USER,
-                PermissionCode.UPDATE_EMPLOYEE,
                 PermissionCode.UPDATE_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
@@ -713,7 +786,6 @@ public class UserServiceImpl implements UserService {
         UserEntity currentUser = getCurrentUserEntity();
         if (!PermissionEvaluator.hasAnyPermission(currentUser.getAllPermissions(),
                 PermissionCode.CREATE_USER,
-                PermissionCode.CREATE_EMPLOYEE,
                 PermissionCode.CREATE_ALL)) {
             throw new AccessDeniedException(MessageConstant.NO_PERMISSION_ACTION);
         }
@@ -809,6 +881,9 @@ public class UserServiceImpl implements UserService {
     }
 
     private void assertMatchesAdminKind(UserEntity user, AdminManagedUserKind kind) {
+        if (kind == AdminManagedUserKind.ANY) {
+            return;
+        }
         if (user.getRole() == null) {
             throw new CustomApiException(HttpStatus.BAD_REQUEST, "Tài khoản chưa gán role.");
         }
@@ -832,6 +907,10 @@ public class UserServiceImpl implements UserService {
         }
         RoleEntity r = roleRepository.findById(req.getRoleId())
                 .orElseThrow(() -> new NotFoundEntityException("Role not found: id=" + req.getRoleId()));
+        if (kind == AdminManagedUserKind.ANY) {
+            validateHighPrivilegeRolesForPrivilegedCreator(getCurrentUserEntity(), r);
+            return;
+        }
         if (kind == AdminManagedUserKind.STAFF) {
             if (RoleConstant.ROLE_CUSTOMER.equals(r.getCode())) {
                 throw new CustomApiException(HttpStatus.BAD_REQUEST,

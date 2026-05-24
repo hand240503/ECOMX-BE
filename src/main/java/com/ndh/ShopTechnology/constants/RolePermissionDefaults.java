@@ -26,22 +26,19 @@ public final class RolePermissionDefaults {
     }
 
     public static final Set<Integer> SUPER_ADMIN_PERMISSIONS = unmodifiableSetOf(
-            CREATE_ALL, READ_ALL, UPDATE_ALL, DELETE_ALL,
-            LOCK_USER, MANAGE_ROLE, GRANT_PERMISSION
+            CREATE_ALL, READ_ALL, UPDATE_ALL, DELETE_ALL
     );
 
     public static final Set<Integer> ADMIN_PERMISSIONS = unmodifiableSetOf(
-            CREATE_ALL, READ_ALL, UPDATE_ALL, DELETE_ALL,
-            GRANT_PERMISSION
+            CREATE_ALL, READ_ALL, UPDATE_ALL, DELETE_ALL
     );
 
     public static final Set<Integer> MANAGER_PERMISSIONS = unmodifiableSetOf(
-            CREATE_ALL, READ_ALL, UPDATE_ALL,
-            GRANT_PERMISSION
+            CREATE_ALL, READ_ALL, UPDATE_ALL
     );
 
     public static final Set<Integer> EMPLOYEE_PERMISSIONS = unmodifiableSetOf(
-            READ_PRODUCT, READ_PRICE, READ_UNIT, READ_BRAND, READ_CATEGORY
+            READ_PRODUCT
     );
 
     public static final Set<Integer> CUSTOMER_PERMISSIONS = unmodifiableSetOf(

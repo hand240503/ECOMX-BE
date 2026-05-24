@@ -8,12 +8,14 @@ import com.ndh.ShopTechnology.dto.search.ProductSearchResult;
 import com.ndh.ShopTechnology.dto.response.product.ProductDetailResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 import com.ndh.ShopTechnology.entities.doc.DocumentEntity;
+import com.ndh.ShopTechnology.entities.product.BrandEntity;
 import com.ndh.ShopTechnology.entities.product.CategoryEntity;
 import com.ndh.ShopTechnology.entities.product.PriceEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
 import com.ndh.ShopTechnology.entities.product.UnitEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
+import com.ndh.ShopTechnology.repository.BrandRepository;
 import com.ndh.ShopTechnology.repository.CategoryRepository;
 import com.ndh.ShopTechnology.repository.ProductRepository;
 import com.ndh.ShopTechnology.repository.spec.ProductSearchSpecifications;
@@ -31,7 +33,11 @@ import com.ndh.ShopTechnology.dto.request.product.UpdateProductVariantItemReques
 import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.dto.request.product.UpdateProductPriceItemRequest;
 import com.ndh.ShopTechnology.dto.request.product.UpsertProductPriceRequest;
+import com.ndh.ShopTechnology.repository.ProductPriceChangeRepository;
 import com.ndh.ShopTechnology.repository.ProductVariantRepository;
+import com.ndh.ShopTechnology.repository.ProductVolumePriceTierRepository;
+import com.ndh.ShopTechnology.repository.PurchaseWithPurchaseOfferRepository;
+import com.ndh.ShopTechnology.dto.response.product.ActivePromotionsResponse;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -70,6 +76,7 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final BrandRepository brandRepository;
     private final UnitRepository unitRepository;
     private final UserRatingRepository userRatingRepository;
     private final HybridRecommendationService hybridRecommendationService;
@@ -81,12 +88,16 @@ public class ProductServiceImpl implements ProductService {
     private final VariantDisplayPriceResolver variantDisplayPriceResolver;
     private final ProductPricingProgramsAttachService productPricingProgramsAttachService;
     private final ProductVariantRepository productVariantRepository;
+    private final ProductPriceChangeRepository productPriceChangeRepository;
+    private final ProductVolumePriceTierRepository productVolumePriceTierRepository;
+    private final PurchaseWithPurchaseOfferRepository purchaseWithPurchaseOfferRepository;
 
     /** Legacy {@code entity_type} trong bảng document cho sản phẩm (đồng bộ {@link ProductImageAttachService}). */
     private static final int LEGACY_PRODUCT_DOCUMENT_ENTITY_TYPE = 1;
 
     public ProductServiceImpl(ProductRepository productRepository,
             CategoryRepository categoryRepository,
+            BrandRepository brandRepository,
             UnitRepository unitRepository,
             UserRatingRepository userRatingRepository,
             HybridRecommendationService hybridRecommendationService,
@@ -97,9 +108,13 @@ public class ProductServiceImpl implements ProductService {
             ProductVariantPriceHydrator productVariantPriceHydrator,
             VariantDisplayPriceResolver variantDisplayPriceResolver,
             ProductPricingProgramsAttachService productPricingProgramsAttachService,
-            ProductVariantRepository productVariantRepository) {
+            ProductVariantRepository productVariantRepository,
+            ProductPriceChangeRepository productPriceChangeRepository,
+            ProductVolumePriceTierRepository productVolumePriceTierRepository,
+            PurchaseWithPurchaseOfferRepository purchaseWithPurchaseOfferRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.brandRepository = brandRepository;
         this.unitRepository = unitRepository;
         this.userRatingRepository = userRatingRepository;
         this.hybridRecommendationService = hybridRecommendationService;
@@ -111,6 +126,9 @@ public class ProductServiceImpl implements ProductService {
         this.variantDisplayPriceResolver = variantDisplayPriceResolver;
         this.productPricingProgramsAttachService = productPricingProgramsAttachService;
         this.productVariantRepository = productVariantRepository;
+        this.productPriceChangeRepository = productPriceChangeRepository;
+        this.productVolumePriceTierRepository = productVolumePriceTierRepository;
+        this.purchaseWithPurchaseOfferRepository = purchaseWithPurchaseOfferRepository;
     }
 
     @Override
@@ -119,6 +137,13 @@ public class ProductServiceImpl implements ProductService {
         CategoryEntity category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(
                         () -> new NotFoundEntityException("Category not found with id: " + request.getCategoryId()));
+
+        BrandEntity brand = null;
+        if (request.getBrandId() != null) {
+            brand = brandRepository.findById(request.getBrandId())
+                    .orElseThrow(() -> new NotFoundEntityException(
+                            "Brand not found with id: " + request.getBrandId()));
+        }
 
         ProductEntity product = ProductEntity.builder()
                 .productName(request.getProductName())
@@ -129,6 +154,7 @@ public class ProductServiceImpl implements ProductService {
                 .isFeatured(request.getIsFeatured() != null ? request.getIsFeatured() : false)
                 .hotSale(request.getHotSale() != null ? request.getHotSale() : false)
                 .category(category)
+                .brand(brand)
                 .build();
 
         if (request.getVariants() != null && !request.getVariants().isEmpty()) {
@@ -552,6 +578,13 @@ public class ProductServiceImpl implements ProductService {
             product.setCategory(category);
         }
 
+        if (request.getBrandId() != null) {
+            BrandEntity brand = brandRepository.findById(request.getBrandId())
+                    .orElseThrow(() -> new NotFoundEntityException(
+                            "Brand not found with id: " + request.getBrandId()));
+            product.setBrand(brand);
+        }
+
         if (request.getTag() != null) {
             product.setTag(request.getTag());
         }
@@ -877,5 +910,31 @@ public class ProductServiceImpl implements ProductService {
         Double avg = a != null ? a.getAverageRating() : null;
         Long cnt = a != null ? a.getRatingCount() : null;
         return ProductFullResponse.fromEntity(p, null, null, avg, cnt, variantDisplayUnitPrices);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ActivePromotionsResponse getActivePromotions() {
+        java.util.Date now = new java.util.Date();
+
+        // 1. Price Change: dùng cột productId lưu sẵn trong entity → không cần join
+        List<Long> pcIds = productPriceChangeRepository.findDistinctProductIdsWithActivePCAt(now);
+
+        // 2. Volume Tier
+        List<Long> vtIds = productVolumePriceTierRepository.findDistinctProductIdsWithEnabledTiers();
+
+        // 3. PwP: gộp anchor + companion, loại trùng
+        List<Long> pwpAnchorIds = purchaseWithPurchaseOfferRepository.findDistinctAnchorProductIdsEnabled();
+        List<Long> pwpCompanionIds = purchaseWithPurchaseOfferRepository.findDistinctCompanionProductIdsEnabled();
+        Set<Long> pwpSet = new LinkedHashSet<>();
+        pwpSet.addAll(pwpAnchorIds);
+        pwpSet.addAll(pwpCompanionIds);
+        List<Long> pwpIds = new ArrayList<>(pwpSet);
+
+        return ActivePromotionsResponse.builder()
+                .priceChange(getProductsByIds(pcIds))
+                .volumeTier(getProductsByIds(vtIds))
+                .purchaseWithPurchase(getProductsByIds(pwpIds))
+                .build();
     }
 }

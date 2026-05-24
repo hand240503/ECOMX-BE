@@ -1,19 +1,24 @@
 package com.ndh.ShopTechnology.services.order.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ndh.ShopTechnology.config.VnpayProperties;
 import com.ndh.ShopTechnology.constants.OrderConstants;
 import com.ndh.ShopTechnology.constants.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.order.CreateOrderDetailRequest;
 import com.ndh.ShopTechnology.dto.request.order.CreateOrderHeaderRequest;
+import com.ndh.ShopTechnology.dto.request.order.CheckoutPricingPreviewRequest;
 import com.ndh.ShopTechnology.dto.request.order.CreateOrderRequest;
 import com.ndh.ShopTechnology.dto.request.order.OrderReturnRequest;
+import com.ndh.ShopTechnology.dto.response.order.CheckoutPricingLineItemResponse;
+import com.ndh.ShopTechnology.dto.response.order.CheckoutPricingPreviewResponse;
 import com.ndh.ShopTechnology.dto.response.order.CreateOrderResultResponse;
 import com.ndh.ShopTechnology.dto.response.order.OrderDetailResponse;
 import com.ndh.ShopTechnology.dto.response.order.OrderResponse;
 import com.ndh.ShopTechnology.dto.response.order.PaymentMethodSummaryResponse;
 import com.ndh.ShopTechnology.dto.response.order.VnpayCheckoutOrderInfoResponse;
 import com.ndh.ShopTechnology.dto.response.order.VnpayPendingTransactionResponse;
+import com.ndh.ShopTechnology.dto.response.order.OrderLinePricingProgramsDto;
 import com.ndh.ShopTechnology.dto.response.order.VnpayTransactionStatusResponse;
 import com.ndh.ShopTechnology.entities.order.CheckoutSessionEntity;
 import com.ndh.ShopTechnology.entities.order.CheckoutSessionStatus;
@@ -107,6 +112,41 @@ public class OrderServiceImpl implements OrderService {
         this.vnpayProperties = vnpayProperties;
         this.userAddressRepository = userAddressRepository;
         this.promotionPricingService = promotionPricingService;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CheckoutPricingPreviewResponse previewCheckoutPricing(CheckoutPricingPreviewRequest request) {
+        List<PromotionPricingService.OrderVariantLine> orderLines = resolveOrderLinesFromDetails(request.getLines());
+        PromotionPricingService.PricingWithSuggestionsResult result =
+                promotionPricingService.priceLinesWithProgramsAndSuggestions(orderLines);
+        List<PromotionPricingService.PricedLineWithPrograms> priced = result.pricedLines();
+        double subtotal = 0.0;
+        List<CheckoutPricingLineItemResponse> out = new ArrayList<>();
+        for (int i = 0; i < priced.size(); i++) {
+            PromotionPricingService.PricedLineWithPrograms p = priced.get(i);
+            PromotionPricingService.OrderVariantLine ol = orderLines.get(i);
+            ProductVariantEntity v = ol.variant();
+            ProductEntity prod = v.getProduct();
+            subtotal += p.lineTotal();
+            out.add(CheckoutPricingLineItemResponse.builder()
+                    .productId(prod.getId())
+                    .productVariantId(v.getId())
+                    .productName(prod.getProductName())
+                    .variantSkuCode(v.getSkuCode())
+                    .variantOptions(v.getOptionValues())
+                    .quantity(p.line().getQuantity())
+                    .description(p.line().getDescription())
+                    .unitPrice(p.finalUnitPrice())
+                    .lineTotal(p.lineTotal())
+                    .pricingPrograms(p.programs())
+                    .build());
+        }
+        return CheckoutPricingPreviewResponse.builder()
+                .lines(out)
+                .itemsSubtotal(subtotal)
+                .pwpSuggestions(result.pwpSuggestions())
+                .build();
     }
 
     @Override
@@ -615,7 +655,14 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private List<PromotionPricingService.OrderVariantLine> resolveOrderLines(CreateOrderRequest request) {
-        List<CreateOrderDetailRequest> lines = request.getOrderDetails();
+        return resolveOrderLinesFromDetails(request.getOrderDetails());
+    }
+
+    private List<PromotionPricingService.OrderVariantLine> resolveOrderLinesFromDetails(
+            List<CreateOrderDetailRequest> lines) {
+        if (lines == null || lines.isEmpty()) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "order lines must not be empty");
+        }
         for (CreateOrderDetailRequest line : lines) {
             if (line.getProductVariantId() == null && line.getProductId() == null) {
                 throw new CustomApiException(HttpStatus.BAD_REQUEST,
@@ -682,22 +729,31 @@ public class OrderServiceImpl implements OrderService {
 
     private OrderPlaceDraft buildDraft(CreateOrderRequest request) {
         List<PromotionPricingService.OrderVariantLine> orderLines = resolveOrderLines(request);
-        List<PromotionPricingService.PricedLine> priced = promotionPricingService.priceLines(orderLines);
+        List<PromotionPricingService.PricedLineWithPrograms> priced =
+                promotionPricingService.priceLinesWithPrograms(orderLines);
 
         double orderTotal = 0.0;
         List<OrderDetailResponse> detailResponses = new ArrayList<>();
         List<OrderDetailEntity> detailsToSave = new ArrayList<>();
 
         for (int i = 0; i < priced.size(); i++) {
-            PromotionPricingService.PricedLine pl = priced.get(i);
+            PromotionPricingService.PricedLineWithPrograms pl = priced.get(i);
             PromotionPricingService.OrderVariantLine ol = orderLines.get(i);
             CreateOrderDetailRequest line = pl.line();
             ProductVariantEntity variant = ol.variant();
             ProductEntity product = variant.getProduct();
-            double unitPrice = pl.unitPrice();
+            double unitPrice = pl.finalUnitPrice();
             double lineTotalValue = pl.lineTotal();
             orderTotal += lineTotalValue;
             String lineTotalStr = String.valueOf(lineTotalValue);
+
+            String programsJson;
+            try {
+                programsJson = objectMapper.writeValueAsString(pl.programs());
+            } catch (JsonProcessingException e) {
+                throw new CustomApiException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Could not serialize pricing programs");
+            }
 
             OrderDetailEntity detail = OrderDetailEntity.builder()
                     .order(null)
@@ -707,6 +763,7 @@ public class OrderServiceImpl implements OrderService {
                     .unitPrice(unitPrice)
                     .description(line.getDescription())
                     .totalPrice(lineTotalStr)
+                    .pricingProgramsJson(programsJson)
                     .build();
             detailsToSave.add(detail);
 
@@ -721,6 +778,7 @@ public class OrderServiceImpl implements OrderService {
                     .lineTotal(lineTotalStr)
                     .description(line.getDescription())
                     .lDescription(product.getLDescription())
+                    .pricingPrograms(pl.programs())
                     .build());
         }
 
@@ -1035,6 +1093,86 @@ public class OrderServiceImpl implements OrderService {
         return buildOrderResponse(order, mapDetailResponses(details));
     }
 
+    // =====================================================================
+    // ADMIN METHODS
+    // =====================================================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderResponse> adminGetAllOrders(Integer status) {
+        List<OrderEntity> orders = (status != null)
+                ? orderRepository.findByStatusOrderByIdDesc(status)
+                : orderRepository.findAllByOrderByIdDesc();
+        return orders.stream().map(o -> {
+            List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(o.getId());
+            return buildOrderResponse(o, mapDetailResponses(details));
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderResponse adminGetOrderById(Long orderId) {
+        OrderEntity order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundEntityException("Không tìm thấy đơn hàng id=" + orderId));
+        List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(orderId);
+        return buildOrderResponse(order, mapDetailResponses(details));
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse adminUpdateOrderStatus(Long orderId, Integer newStatus) {
+        OrderEntity order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundEntityException("Không tìm thấy đơn hàng id=" + orderId));
+
+        int current = order.getStatus() != null ? order.getStatus() : 0;
+
+        // Trạng thái khoá — không cho chỉnh thêm
+        if (current == OrderConstants.STATUS_COMPLETED || current == OrderConstants.STATUS_CANCELLED) {
+            throw new CustomApiException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Đơn hàng đã ở trạng thái '" + orderStatusLabel(current) + "' — không thể cập nhật.");
+        }
+
+        if (!isValidAdminTransition(current, newStatus)) {
+            throw new CustomApiException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Không thể chuyển trạng thái từ '" + orderStatusLabel(current)
+                            + "' sang '" + orderStatusLabel(newStatus) + "'.");
+        }
+
+        order.setStatus(newStatus);
+        order = orderRepository.save(order);
+        log.info("Admin updated order status: orderId={}, {} → {}", orderId, current, newStatus);
+
+        List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(orderId);
+        return buildOrderResponse(order, mapDetailResponses(details));
+    }
+
+    /** Luồng chuyển hợp lệ: 1→2/5, 2→3/5, 3→4/5. */
+    private static boolean isValidAdminTransition(int from, int to) {
+        switch (from) {
+            case OrderConstants.STATUS_AWAITING_CONFIRM:
+                return to == OrderConstants.STATUS_AWAITING_SHIPMENT || to == OrderConstants.STATUS_CANCELLED;
+            case OrderConstants.STATUS_AWAITING_SHIPMENT:
+                return to == OrderConstants.STATUS_AWAITING_DELIVERY || to == OrderConstants.STATUS_CANCELLED;
+            case OrderConstants.STATUS_AWAITING_DELIVERY:
+                return to == OrderConstants.STATUS_COMPLETED || to == OrderConstants.STATUS_CANCELLED;
+            default:
+                return false;
+        }
+    }
+
+    private static String orderStatusLabel(int status) {
+        switch (status) {
+            case 1: return "Chờ chuẩn bị";
+            case 2: return "Chờ vận chuyển";
+            case 3: return "Chờ giao hàng";
+            case 4: return "Hoàn thành";
+            case 5: return "Đã hủy";
+            default: return "Không xác định (" + status + ")";
+        }
+    }
+
     private static boolean isWithinReturnWindowAfterPaid(Date paidAt) {
         if (paidAt == null) {
             return false;
@@ -1071,9 +1209,18 @@ public class OrderServiceImpl implements OrderService {
                 .build();
     }
 
-    private static List<OrderDetailResponse> mapDetailResponses(List<OrderDetailEntity> details) {
+    private List<OrderDetailResponse> mapDetailResponses(List<OrderDetailEntity> details) {
         return details.stream()
                 .map(d -> {
+                    OrderLinePricingProgramsDto programs = null;
+                    String raw = d.getPricingProgramsJson();
+                    if (raw != null && !raw.isBlank()) {
+                        try {
+                            programs = objectMapper.readValue(raw, OrderLinePricingProgramsDto.class);
+                        } catch (Exception e) {
+                            log.warn("order_detail id={}: could not parse pricing_programs_json", d.getId(), e);
+                        }
+                    }
                     var b = OrderDetailResponse.builder()
                             .id(d.getId())
                             .productId(d.getProduct().getId())
@@ -1082,7 +1229,8 @@ public class OrderServiceImpl implements OrderService {
                             .unitPrice(d.getUnitPrice())
                             .lineTotal(d.getTotalPrice())
                             .description(d.getDescription())
-                            .lDescription(d.getProduct().getLDescription());
+                            .lDescription(d.getProduct().getLDescription())
+                            .pricingPrograms(programs);
                     if (d.getProductVariant() != null) {
                         b.productVariantId(d.getProductVariant().getId())
                                 .variantSkuCode(d.getProductVariant().getSkuCode())

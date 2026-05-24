@@ -1,8 +1,10 @@
 package com.ndh.ShopTechnology.controller.order;
 
+import com.ndh.ShopTechnology.dto.request.order.CheckoutPricingPreviewRequest;
 import com.ndh.ShopTechnology.dto.request.order.CreateOrderRequest;
 import com.ndh.ShopTechnology.dto.request.order.OrderReturnRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
+import com.ndh.ShopTechnology.dto.response.order.CheckoutPricingPreviewResponse;
 import com.ndh.ShopTechnology.dto.response.order.CreateOrderResultResponse;
 import com.ndh.ShopTechnology.dto.response.order.OrderResponse;
 import com.ndh.ShopTechnology.dto.response.order.VnpayPendingTransactionResponse;
@@ -87,6 +89,16 @@ public class OrderController {
             @PathVariable String transactionPublicId) {
         OrderResponse data = orderService.devSimulateVnpayPaymentSuccess(transactionPublicId);
         return ResponseEntity.ok(APIResponse.of(true, "Dev: VNPAY success simulated; order created", data, null, null));
+    }
+
+    /**
+     * Preview giá checkout: price change, mix-and-match (volume tier), PWP — cùng engine với {@link #createOrder}.
+     */
+    @PostMapping("/checkout-pricing-preview")
+    public ResponseEntity<APIResponse<CheckoutPricingPreviewResponse>> previewCheckoutPricing(
+            @Valid @RequestBody CheckoutPricingPreviewRequest request) {
+        CheckoutPricingPreviewResponse data = orderService.previewCheckoutPricing(request);
+        return ResponseEntity.ok(APIResponse.of(true, "OK", data, null, null));
     }
 
     @PostMapping

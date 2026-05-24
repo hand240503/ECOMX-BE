@@ -28,6 +28,9 @@ public class CreateProductRequest {
   @NotNull(message = "Category ID is required")
   private Long categoryId;
 
+  /** Hãng (tùy chọn). */
+  private Long brandId;
+
   /** Mã SKU (số), tùy chọn. */
   private Long sku;
 

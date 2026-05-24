@@ -1,22 +1,30 @@
 package com.ndh.ShopTechnology.services.promotion.impl;
 
 import com.ndh.ShopTechnology.dto.request.order.CreateOrderDetailRequest;
+import com.ndh.ShopTechnology.dto.response.order.CheckoutPwpSuggestionDto;
+import com.ndh.ShopTechnology.dto.response.order.OrderLinePricingProgramsDto;
+import com.ndh.ShopTechnology.entities.product.ProductPriceChangeEntity;
 import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.entities.promotion.ProductVolumePriceTierEntity;
 import com.ndh.ShopTechnology.entities.promotion.PurchaseWithPurchaseOfferEntity;
 import com.ndh.ShopTechnology.repository.ProductVolumePriceTierRepository;
 import com.ndh.ShopTechnology.repository.PurchaseWithPurchaseOfferRepository;
 import com.ndh.ShopTechnology.services.product.ProductEffectivePriceService;
+import com.ndh.ShopTechnology.services.product.impl.ProductImageAttachService;
+import com.ndh.ShopTechnology.services.product.impl.VariantDisplayPriceResolver;
 import com.ndh.ShopTechnology.services.promotion.PromotionPricingService;
+import com.ndh.ShopTechnology.utils.CatalogVariantUnitPrice;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,91 +33,167 @@ public class PromotionPricingServiceImpl implements PromotionPricingService {
     private final ProductVolumePriceTierRepository volumeTierRepository;
     private final PurchaseWithPurchaseOfferRepository pwpRepository;
     private final ProductEffectivePriceService effectivePriceService;
+    private final VariantDisplayPriceResolver variantDisplayPriceResolver;
+    private final ProductImageAttachService productImageAttachService;
 
     public PromotionPricingServiceImpl(
             ProductVolumePriceTierRepository volumeTierRepository,
             PurchaseWithPurchaseOfferRepository pwpRepository,
-            ProductEffectivePriceService effectivePriceService) {
+            ProductEffectivePriceService effectivePriceService,
+            VariantDisplayPriceResolver variantDisplayPriceResolver,
+            ProductImageAttachService productImageAttachService) {
         this.volumeTierRepository = volumeTierRepository;
         this.pwpRepository = pwpRepository;
         this.effectivePriceService = effectivePriceService;
+        this.variantDisplayPriceResolver = variantDisplayPriceResolver;
+        this.productImageAttachService = productImageAttachService;
     }
 
     @Override
     public List<PricedLine> priceLines(List<OrderVariantLine> lines) {
+        return priceLinesWithPrograms(lines).stream()
+                .map(p -> new PricedLine(p.line(), p.finalUnitPrice(), p.lineTotal()))
+                .toList();
+    }
+
+    @Override
+    public List<PricedLineWithPrograms> priceLinesWithPrograms(List<OrderVariantLine> lines) {
         if (lines == null || lines.isEmpty()) {
             return List.of();
         }
 
-        Map<Long, Integer> qtyByProduct = new HashMap<>();
+        Map<Long, Integer> qtyByVariant = new HashMap<>();
         for (OrderVariantLine ol : lines) {
             CreateOrderDetailRequest line = ol.line();
             ProductVariantEntity v = ol.variant();
-            if (line == null || line.getQuantity() == null || v == null || v.getProduct() == null) {
+            if (line == null || line.getQuantity() == null || v == null || v.getId() == null) {
                 continue;
             }
-            Long pid = v.getProduct().getId();
-            qtyByProduct.merge(pid, line.getQuantity(), (a, b) -> {
+            qtyByVariant.merge(v.getId(), line.getQuantity(), (a, b) -> {
                 int x = a != null ? a : 0;
                 int y = b != null ? b : 0;
                 return x + y;
             });
         }
 
-        List<Long> ids = new ArrayList<>(qtyByProduct.keySet());
-        List<ProductVolumePriceTierEntity> allTiers = ids.isEmpty()
-                ? List.of()
-                : volumeTierRepository.findByProduct_IdInAndEnabledTrue(ids);
-        Map<Long, List<ProductVolumePriceTierEntity>> tiersByProduct = allTiers.stream()
-                .collect(Collectors.groupingBy(t -> t.getProduct().getId()));
+        List<Long> variantIds = new ArrayList<>(qtyByVariant.keySet());
 
-        List<PurchaseWithPurchaseOfferEntity> pwpOffers = ids.isEmpty()
+        List<ProductVolumePriceTierEntity> allTiers = variantIds.isEmpty()
                 ? List.of()
-                : pwpRepository.findByCompanionProduct_IdInAndEnabledTrue(ids);
-        Map<Long, PurchaseWithPurchaseOfferEntity> offerByCompanion = new HashMap<>();
-        for (PurchaseWithPurchaseOfferEntity o : pwpOffers) {
-            offerByCompanion.putIfAbsent(o.getCompanionProduct().getId(), o);
+                : volumeTierRepository.findByProductVariant_IdInAndEnabledTrue(variantIds);
+        Map<Long, List<ProductVolumePriceTierEntity>> tiersByVariantId = allTiers.stream()
+                .collect(Collectors.groupingBy(t -> t.getProductVariant().getId()));
+
+        List<PurchaseWithPurchaseOfferEntity> pwpOfferRows = new ArrayList<>();
+        if (!variantIds.isEmpty()) {
+            pwpOfferRows.addAll(pwpRepository.findActiveFetchedByCompanionVariantIdIn(variantIds));
+            pwpOfferRows.addAll(pwpRepository.findActiveFetchedByAnchorVariantIdIn(variantIds));
         }
+        Map<Long, PurchaseWithPurchaseOfferEntity> uniquePwpById = new LinkedHashMap<>();
+        for (PurchaseWithPurchaseOfferEntity o : pwpOfferRows) {
+            uniquePwpById.putIfAbsent(o.getId(), o);
+        }
+        List<PurchaseWithPurchaseOfferEntity> pwpOffers = new ArrayList<>(uniquePwpById.values());
 
-        Map<Long, Integer> promoUnitsLeft = new HashMap<>();
-        for (Map.Entry<Long, PurchaseWithPurchaseOfferEntity> e : offerByCompanion.entrySet()) {
-            Long companionId = e.getKey();
-            PurchaseWithPurchaseOfferEntity offer = e.getValue();
-            long anchorId = offer.getAnchorProduct().getId();
-            int anchorQ = qtyByProduct.getOrDefault(anchorId, 0);
-            int companionQ = qtyByProduct.getOrDefault(companionId, 0);
-            int promo = eligiblePromoUnits(offer, anchorQ, companionQ);
+        Map<Long, Integer> promoPoolByOfferId = new HashMap<>();
+        for (PurchaseWithPurchaseOfferEntity o : pwpOffers) {
+            int anchorQ = anchorQtyForOffer(o, lines);
+            int companionQ = companionQtyForOffer(o, lines);
+            int promo = eligiblePromoUnits(o, anchorQ, companionQ);
             if (promo > 0) {
-                promoUnitsLeft.put(companionId, promo);
+                promoPoolByOfferId.put(o.getId(), promo);
             }
         }
 
         Date now = new Date();
-        List<PricedLine> out = new ArrayList<>();
+        long pricedAt = now.getTime();
+        Map<Long, ProductPriceChangeEntity> pcByVariantId =
+                variantDisplayPriceResolver.effectiveActivePriceChangesByVariantId(variantIds, now);
+
+        List<PricedLineWithPrograms> out = new ArrayList<>();
         for (OrderVariantLine ol : lines) {
             CreateOrderDetailRequest line = ol.line();
             ProductVariantEntity variant = ol.variant();
             int q = line.getQuantity() != null ? line.getQuantity() : 0;
-            Long productId = variant.getProduct().getId();
-            int agg = qtyByProduct.getOrDefault(productId, q);
-            double baseUnit = effectivePriceService.resolveEffectiveUnitPrice(variant, now);
-            double volUnit = volumeTierUnitPrice(baseUnit, agg, tiersByProduct.get(productId));
+            int agg = qtyByVariant.getOrDefault(variant.getId(), q);
 
-            PurchaseWithPurchaseOfferEntity pwp = offerByCompanion.get(productId);
-            if (pwp != null && promoUnitsLeft.containsKey(productId)) {
-                int left = promoUnitsLeft.get(productId);
-                int promoTake = Math.min(q, Math.max(0, left));
-                promoUnitsLeft.put(productId, left - promoTake);
-                int regularTake = q - promoTake;
-                double lineTotal = promoTake * pwp.getPromoUnitPrice() + regularTake * volUnit;
-                double unit = q > 0 ? lineTotal / q : 0.0;
-                out.add(new PricedLine(line, unit, lineTotal));
-            } else {
-                double lineTotal = volUnit * q;
-                out.add(new PricedLine(line, volUnit, lineTotal));
+            double catalogUnit = CatalogVariantUnitPrice.resolve(variant);
+            double effectiveBeforeTier = effectivePriceService.resolveEffectiveUnitPrice(variant, now);
+            VolumeTierPick volPick = pickVolumeTier(
+                    effectiveBeforeTier, agg, tiersByVariantId.get(variant.getId()));
+            double volUnit = volPick.unitPrice;
+
+            ProductPriceChangeEntity pc = pcByVariantId.get(variant.getId());
+            OrderLinePricingProgramsDto.PriceChangeProgramDto priceChangeSnap = null;
+            if (pc != null) {
+                Double resolvedFromPc = pc.getSalePrice() != null ? pc.getSalePrice() : pc.getBasePrice();
+                priceChangeSnap = OrderLinePricingProgramsDto.PriceChangeProgramDto.builder()
+                        .id(pc.getId())
+                        .productVariantId(variant.getId())
+                        .basePrice(pc.getBasePrice())
+                        .salePrice(pc.getSalePrice())
+                        .resolvedUnitPrice(resolvedFromPc)
+                        .startAtEpochMillis(epoch(pc.getStartAt()))
+                        .endAtEpochMillis(epoch(pc.getEndAt()))
+                        .build();
             }
+
+            OrderLinePricingProgramsDto.VolumeTierProgramDto volumeSnap = null;
+            if (volPick.tier != null) {
+                volumeSnap = OrderLinePricingProgramsDto.VolumeTierProgramDto.builder()
+                        .id(volPick.tier.getId())
+                        .minQuantity(volPick.tier.getMinQuantity())
+                        .tierUnitPrice(volPick.tier.getUnitPrice())
+                        .aggregateQuantityForVariantOnOrder(agg)
+                        .build();
+            }
+
+            PurchaseWithPurchaseOfferEntity pwp = selectPwpForCompanionLine(ol, pwpOffers, promoPoolByOfferId);
+            double finalUnit;
+            double lineTotal;
+            OrderLinePricingProgramsDto.PwpProgramDto pwpSnap = null;
+
+            if (pwp != null) {
+                int left = promoPoolByOfferId.getOrDefault(pwp.getId(), 0);
+                int promoTake = Math.min(q, Math.max(0, left));
+                promoPoolByOfferId.put(pwp.getId(), left - promoTake);
+                int regularTake = q - promoTake;
+                lineTotal = promoTake * pwp.getPromoUnitPrice() + regularTake * volUnit;
+                finalUnit = q > 0 ? lineTotal / q : 0.0;
+                pwpSnap = OrderLinePricingProgramsDto.PwpProgramDto.builder()
+                        .offerId(pwp.getId())
+                        .anchorProductId(pwp.getAnchorProduct().getId())
+                        .companionProductId(pwp.getCompanionProduct().getId())
+                        .anchorVariantId(pwp.getAnchorVariant() != null ? pwp.getAnchorVariant().getId() : null)
+                        .companionVariantId(pwp.getCompanionVariant() != null ? pwp.getCompanionVariant().getId() : null)
+                        .promoUnitPrice(pwp.getPromoUnitPrice())
+                        .promoQuantity(promoTake)
+                        .regularQuantity(regularTake)
+                        .regularUnitPriceAfterPrograms(volUnit)
+                        .build();
+            } else {
+                lineTotal = volUnit * q;
+                finalUnit = volUnit;
+            }
+
+            OrderLinePricingProgramsDto programs = OrderLinePricingProgramsDto.builder()
+                    .pricedAtEpochMillis(pricedAt)
+                    .catalogUnitPrice(catalogUnit)
+                    .effectiveUnitBeforeVolumeTier(effectiveBeforeTier)
+                    .finalUnitPrice(finalUnit)
+                    .lineTotal(lineTotal)
+                    .priceChange(priceChangeSnap)
+                    .volumeTier(volumeSnap)
+                    .purchaseWithPurchase(pwpSnap)
+                    .build();
+
+            out.add(new PricedLineWithPrograms(line, finalUnit, lineTotal, programs));
         }
         return out;
+    }
+
+    private static Long epoch(Date d) {
+        return d != null ? d.getTime() : null;
     }
 
     private static int eligiblePromoUnits(PurchaseWithPurchaseOfferEntity offer, int anchorQty, int companionQty) {
@@ -128,20 +212,183 @@ public class PromotionPricingServiceImpl implements PromotionPricingService {
         return (int) Math.min(companionQty, cap);
     }
 
-    private static double volumeTierUnitPrice(
+    private static int lineQty(OrderVariantLine ol) {
+        if (ol == null || ol.line() == null || ol.line().getQuantity() == null) {
+            return 0;
+        }
+        return ol.line().getQuantity();
+    }
+
+    private static int anchorQtyForOffer(PurchaseWithPurchaseOfferEntity o, List<OrderVariantLine> lines) {
+        Long avId = o.getAnchorVariant().getId();
+        int sum = 0;
+        for (OrderVariantLine ol : lines) {
+            ProductVariantEntity v = ol.variant();
+            if (v == null || !v.getId().equals(avId)) {
+                continue;
+            }
+            sum += lineQty(ol);
+        }
+        return sum;
+    }
+
+    private static int companionQtyForOffer(PurchaseWithPurchaseOfferEntity o, List<OrderVariantLine> lines) {
+        Long cvId = o.getCompanionVariant().getId();
+        int sum = 0;
+        for (OrderVariantLine ol : lines) {
+            ProductVariantEntity v = ol.variant();
+            if (v == null || !v.getId().equals(cvId)) {
+                continue;
+            }
+            sum += lineQty(ol);
+        }
+        return sum;
+    }
+
+    private static PurchaseWithPurchaseOfferEntity selectPwpForCompanionLine(
+            OrderVariantLine ol,
+            List<PurchaseWithPurchaseOfferEntity> offers,
+            Map<Long, Integer> promoPoolByOfferId) {
+        ProductVariantEntity v = ol.variant();
+        if (v == null) {
+            return null;
+        }
+        return offers.stream()
+                .filter(o -> o.getCompanionVariant().getId().equals(v.getId()))
+                .filter(o -> promoPoolByOfferId.getOrDefault(o.getId(), 0) > 0)
+                .findFirst()
+                .orElse(null);
+    }
+
+    // ─── priceLinesWithProgramsAndSuggestions ────────────────────────────────────
+
+    @Override
+    public PricingWithSuggestionsResult priceLinesWithProgramsAndSuggestions(List<OrderVariantLine> lines) {
+        List<PricedLineWithPrograms> pricedLines = priceLinesWithPrograms(lines);
+        List<CheckoutPwpSuggestionDto> suggestions = buildPwpSuggestions(lines);
+        return new PricingWithSuggestionsResult(pricedLines, suggestions);
+    }
+
+    /**
+     * Tìm các PwP offer có SP neo đang trong giỏ nhưng SP companion chưa được thêm vào.
+     * Trả về danh sách gợi ý mua kèm để FE hiển thị.
+     */
+    private List<CheckoutPwpSuggestionDto> buildPwpSuggestions(List<OrderVariantLine> lines) {
+        if (lines == null || lines.isEmpty()) {
+            return List.of();
+        }
+
+        // Tập variant id đang có trong giỏ
+        Set<Long> variantIdsInCart = lines.stream()
+                .map(ol -> ol.variant() != null ? ol.variant().getId() : null)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // Load các offer có anchor variant trong giỏ
+        List<PurchaseWithPurchaseOfferEntity> anchorOffers =
+                variantIdsInCart.isEmpty()
+                        ? List.of()
+                        : pwpRepository.findActiveFetchedByAnchorVariantIdIn(variantIdsInCart);
+
+        if (anchorOffers.isEmpty()) {
+            return List.of();
+        }
+
+        // Tính SL anchor cho mỗi offer
+        // Chỉ giữ offer có: companion chưa trong giỏ VÀ đủ SL anchor tối thiểu
+        List<PurchaseWithPurchaseOfferEntity> eligibleOffers = new ArrayList<>();
+        for (PurchaseWithPurchaseOfferEntity offer : anchorOffers) {
+            Long companionVarId = offer.getCompanionVariant() != null
+                    ? offer.getCompanionVariant().getId()
+                    : null;
+            // Bỏ qua nếu companion đã có trong giỏ (đã áp PwP qua priceLinesWithPrograms)
+            if (companionVarId != null && variantIdsInCart.contains(companionVarId)) {
+                continue;
+            }
+            int anchorQty = anchorQtyForOffer(offer, lines);
+            int minA = offer.getMinAnchorQuantity() != null ? offer.getMinAnchorQuantity() : 1;
+            if (anchorQty >= minA) {
+                eligibleOffers.add(offer);
+            }
+        }
+
+        if (eligibleOffers.isEmpty()) {
+            return List.of();
+        }
+
+        // Lấy thumbnail cho companion products
+        List<Long> companionProductIds = eligibleOffers.stream()
+                .map(o -> o.getCompanionProduct() != null ? o.getCompanionProduct().getId() : null)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, String> thumbnailByProductId =
+                productImageAttachService.getPrimaryImageUrlsByProductIds(companionProductIds);
+
+        // Xây dựng suggestion DTO
+        List<CheckoutPwpSuggestionDto> result = new ArrayList<>();
+        Date now = new Date();
+        for (PurchaseWithPurchaseOfferEntity offer : eligibleOffers) {
+            ProductVariantEntity companionVariant = offer.getCompanionVariant();
+            if (companionVariant == null) continue;
+
+            Long companionProductId = offer.getCompanionProduct() != null
+                    ? offer.getCompanionProduct().getId()
+                    : null;
+            String companionProductName = offer.getCompanionProduct() != null
+                    ? offer.getCompanionProduct().getProductName()
+                    : null;
+            String thumbnailUrl = companionProductId != null
+                    ? thumbnailByProductId.get(companionProductId)
+                    : null;
+
+            // Giá catalog companion để so sánh (giá effective — có PC nếu đang chạy)
+            double companionRegularPrice = effectivePriceService
+                    .resolveEffectiveUnitPrice(companionVariant, now);
+
+            result.add(CheckoutPwpSuggestionDto.builder()
+                    .offerId(offer.getId())
+                    .anchorProductId(offer.getAnchorProduct() != null ? offer.getAnchorProduct().getId() : null)
+                    .anchorVariantId(offer.getAnchorVariant() != null ? offer.getAnchorVariant().getId() : null)
+                    .companionProductId(companionProductId)
+                    .companionVariantId(companionVariant.getId())
+                    .companionProductName(companionProductName)
+                    .companionVariantSkuCode(companionVariant.getSkuCode())
+                    .companionVariantOptions(companionVariant.getOptionValues())
+                    .companionThumbnailUrl(thumbnailUrl)
+                    .promoUnitPrice(offer.getPromoUnitPrice())
+                    .companionRegularPrice(companionRegularPrice)
+                    .minAnchorQuantity(offer.getMinAnchorQuantity())
+                    .companionPromoUnitsPerAnchor(offer.getCompanionPromoUnitsPerAnchor())
+                    .maxCompanionPromoUnits(offer.getMaxCompanionPromoUnits())
+                    .build());
+        }
+        return result;
+    }
+
+    // ─── Volume tier pick ─────────────────────────────────────────────────────
+
+    private record VolumeTierPick(double unitPrice, ProductVolumePriceTierEntity tier) {
+    }
+
+    private static VolumeTierPick pickVolumeTier(
             double fallbackUnitPrice,
             int aggregateQty,
             List<ProductVolumePriceTierEntity> tiers) {
         if (tiers == null || tiers.isEmpty()) {
-            return fallbackUnitPrice;
+            return new VolumeTierPick(fallbackUnitPrice, null);
         }
         return tiers.stream()
                 .filter(t -> Boolean.TRUE.equals(t.getEnabled())
                         && t.getMinQuantity() != null
                         && aggregateQty >= t.getMinQuantity())
                 .max(Comparator.comparingInt(ProductVolumePriceTierEntity::getMinQuantity))
-                .map(ProductVolumePriceTierEntity::getUnitPrice)
-                .filter(Objects::nonNull)
-                .orElse(fallbackUnitPrice);
+                .map(t -> {
+                    if (t.getUnitPrice() == null) {
+                        return new VolumeTierPick(fallbackUnitPrice, null);
+                    }
+                    return new VolumeTierPick(t.getUnitPrice(), t);
+                })
+                .orElse(new VolumeTierPick(fallbackUnitPrice, null));
     }
 }

@@ -43,5 +43,14 @@ public interface ProductPriceChangeRepository extends JpaRepository<ProductPrice
     List<ProductPriceChangeEntity> findAllActiveCandidatesForVariantIdsAt(
             @Param("variantIds") Collection<Long> variantIds,
             @Param("at") Date at);
+
+    /** Distinct product IDs có ít nhất một price change đang hiệu lực tại {@code at}. */
+    @Query("""
+            SELECT DISTINCT pc.productId FROM ProductPriceChangeEntity pc
+            WHERE pc.enabled = true
+              AND pc.startAt <= :at
+              AND (pc.endAt IS NULL OR pc.endAt >= :at)
+            """)
+    List<Long> findDistinctProductIdsWithActivePCAt(@Param("at") Date at);
 }
 

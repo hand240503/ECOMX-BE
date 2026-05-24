@@ -22,6 +22,7 @@ public class OrderDetailEntity extends BaseEntity {
     public static final String COL_ORDER_ID         = "order_id";
     public static final String COL_PRODUCT_ID           = "product_id";
     public static final String COL_PRODUCT_VARIANT_ID   = "product_variant_id";
+    public static final String COL_PRICING_PROGRAMS_JSON = "pricing_programs_json";
 
     @Column(name = COL_DESCRIPTION, nullable = true)
     private String description;
@@ -50,5 +51,12 @@ public class OrderDetailEntity extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = COL_PRODUCT_VARIANT_ID, nullable = true)
     private ProductVariantEntity productVariant;
+
+    /**
+     * JSON snapshot {@link com.ndh.ShopTechnology.dto.response.order.OrderLinePricingProgramsDto} tại thời điểm đặt —
+     * PC, volume tier, PWP. Null với dòng đơn cũ trước khi có cột này.
+     */
+    @Column(name = COL_PRICING_PROGRAMS_JSON, columnDefinition = "TEXT")
+    private String pricingProgramsJson;
 
 }

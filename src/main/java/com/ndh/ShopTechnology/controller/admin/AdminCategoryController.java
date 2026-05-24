@@ -29,19 +29,19 @@ public class AdminCategoryController {
     }
 
     @GetMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.READ_CATEGORY + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
     public ResponseEntity<APIResponse<List<CategoryResponse>>> list() {
         return ResponseEntity.ok(APIResponse.of(true, "OK", categoryService.getAllCategories(), null, null));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.READ_CATEGORY + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
     public ResponseEntity<APIResponse<CategoryResponse>> getById(@PathVariable long id) {
         return ResponseEntity.ok(APIResponse.of(true, "OK", categoryService.getCategoryById(id), null, null));
     }
 
     @PostMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_CATEGORY + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<CategoryResponse>> create(@Valid @RequestBody CreateCategoryRequest request) {
         CategoryResponse data = categoryService.createCategory(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -49,7 +49,7 @@ public class AdminCategoryController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_CATEGORY + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<CategoryResponse>> update(
             @PathVariable long id,
             @Valid @RequestBody UpdateCategoryRequest request) {
@@ -57,7 +57,7 @@ public class AdminCategoryController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_CATEGORY + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRODUCT + ")")
     public ResponseEntity<APIResponse<Void>> delete(@PathVariable long id) {
         categoryService.deleteCategory(id);
         return ResponseEntity.ok(APIResponse.of(true, "Deleted", null, null, null));

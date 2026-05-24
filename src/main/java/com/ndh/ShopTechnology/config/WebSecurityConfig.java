@@ -137,6 +137,10 @@ public class WebSecurityConfig {
                             .requestMatchers(HttpMethod.POST, String.format("%s/products/by-ids", base))
                             .permitAll()
 
+                            // Danh sách comment sản phẩm — public (không cần đăng nhập)
+                            .requestMatchers(HttpMethod.GET, String.format("%s/product-comments/product/**", base))
+                            .permitAll()
+
                             .requestMatchers(HttpMethod.GET, String.format("%s/categories/**", base))
                             .permitAll()
 

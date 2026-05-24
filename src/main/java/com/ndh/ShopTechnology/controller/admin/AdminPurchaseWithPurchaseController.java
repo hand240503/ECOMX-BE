@@ -27,13 +27,13 @@ public class AdminPurchaseWithPurchaseController {
     }
 
     @GetMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
     public ResponseEntity<APIResponse<List<PurchaseWithPurchaseOfferResponse>>> list() {
         return ResponseEntity.ok(APIResponse.of(true, "OK", pwpService.listAll(), null, null));
     }
 
     @PostMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<PurchaseWithPurchaseOfferResponse>> create(
             @Valid @RequestBody UpsertPurchaseWithPurchaseRequest request) {
         PurchaseWithPurchaseOfferResponse data = pwpService.create(request);
@@ -42,7 +42,7 @@ public class AdminPurchaseWithPurchaseController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<PurchaseWithPurchaseOfferResponse>> update(
             @PathVariable long id,
             @Valid @RequestBody UpsertPurchaseWithPurchaseRequest request) {
@@ -51,7 +51,7 @@ public class AdminPurchaseWithPurchaseController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRODUCT + ")")
     public ResponseEntity<APIResponse<Void>> delete(@PathVariable long id) {
         pwpService.delete(id);
         return ResponseEntity.ok(APIResponse.of(true, "Deleted", null, null, null));

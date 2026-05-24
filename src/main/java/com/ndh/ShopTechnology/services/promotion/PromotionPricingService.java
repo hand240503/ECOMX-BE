@@ -1,6 +1,8 @@
 package com.ndh.ShopTechnology.services.promotion;
 
 import com.ndh.ShopTechnology.dto.request.order.CreateOrderDetailRequest;
+import com.ndh.ShopTechnology.dto.response.order.CheckoutPwpSuggestionDto;
+import com.ndh.ShopTechnology.dto.response.order.OrderLinePricingProgramsDto;
 import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 
 import java.util.List;
@@ -22,5 +24,35 @@ public interface PromotionPricingService {
     record PricedLine(CreateOrderDetailRequest line, double unitPrice, double lineTotal) {
     }
 
+    /**
+     * Giống {@link PricedLine} kèm snapshot chương trình (PC / volume tier / PWP) để preview và lưu đơn.
+     */
+    record PricedLineWithPrograms(
+            CreateOrderDetailRequest line,
+            double finalUnitPrice,
+            double lineTotal,
+            OrderLinePricingProgramsDto programs) {
+    }
+
+    /**
+     * Kết quả tổng hợp dùng cho API checkout-pricing-preview:
+     * <ul>
+     *   <li>{@code pricedLines} — danh sách dòng đã áp giá (PC, volume tier, PwP nếu companion đã có trong giỏ).</li>
+     *   <li>{@code pwpSuggestions} — gợi ý mua kèm PwP khi SP neo có trong giỏ nhưng companion chưa có.</li>
+     * </ul>
+     */
+    record PricingWithSuggestionsResult(
+            List<PricedLineWithPrograms> pricedLines,
+            List<CheckoutPwpSuggestionDto> pwpSuggestions) {
+    }
+
     List<PricedLine> priceLines(List<OrderVariantLine> lines);
+
+    List<PricedLineWithPrograms> priceLinesWithPrograms(List<OrderVariantLine> lines);
+
+    /**
+     * Giống {@link #priceLinesWithPrograms} nhưng đồng thời trả về danh sách gợi ý PwP (companion chưa có
+     * trong giỏ). Dùng cho API {@code POST /orders/checkout-pricing-preview}.
+     */
+    PricingWithSuggestionsResult priceLinesWithProgramsAndSuggestions(List<OrderVariantLine> lines);
 }

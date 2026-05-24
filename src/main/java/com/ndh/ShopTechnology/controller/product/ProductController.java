@@ -1,4 +1,4 @@
-  package com.ndh.ShopTechnology.controller.product;
+package com.ndh.ShopTechnology.controller.product;
 
 import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
 import com.ndh.ShopTechnology.dto.request.product.GetProductsByIdsRequest;
@@ -7,6 +7,7 @@ import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.PaginationMetadata;
 import com.ndh.ShopTechnology.dto.response.ProductSearchPaginationMetadata;
+import com.ndh.ShopTechnology.dto.response.product.ActivePromotionsResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductDetailResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 import com.ndh.ShopTechnology.dto.search.ProductSearchResult;
@@ -385,5 +386,25 @@ public class ProductController {
           null);
       return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
+  }
+
+  /**
+   * Danh sách tất cả sản phẩm đang chạy chương trình khuyến mãi, nhóm theo loại chương trình.
+   * <ul>
+   *   <li>{@code price_change} – sản phẩm đang có Price Change đang hiệu lực.</li>
+   *   <li>{@code volume_tier} – sản phẩm có Volume Price Tier (giá theo bậc số lượng) đang bật.</li>
+   *   <li>{@code purchase_with_purchase} – sản phẩm tham gia chương trình Mua Kèm Ưu Đãi (cả neo lẫn đi kèm).</li>
+   * </ul>
+   */
+  @GetMapping("/active-promotions")
+  public ResponseEntity<APIResponse<ActivePromotionsResponse>> getActivePromotions() {
+    ActivePromotionsResponse data = productService.getActivePromotions();
+    APIResponse<ActivePromotionsResponse> response = APIResponse.of(
+        true,
+        "Active promotions retrieved successfully",
+        data,
+        null,
+        null);
+    return ResponseEntity.ok(response);
   }
 }

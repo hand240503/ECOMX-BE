@@ -29,6 +29,12 @@ public class ProductPurchaseWithPurchaseProgramResponse {
     @JsonProperty("companion_product_id")
     private Long companionProductId;
 
+    @JsonProperty("anchor_variant_id")
+    private Long anchorVariantId;
+
+    @JsonProperty("companion_variant_id")
+    private Long companionVariantId;
+
     @JsonProperty("promo_unit_price")
     private Double promoUnitPrice;
 
@@ -40,6 +46,18 @@ public class ProductPurchaseWithPurchaseProgramResponse {
 
     @JsonProperty("max_companion_promo_units")
     private Integer maxCompanionPromoUnits;
+
+    @JsonProperty("anchor_product_name")
+    private String anchorProductName;
+
+    @JsonProperty("companion_product_name")
+    private String companionProductName;
+
+    @JsonProperty("anchor_product_main_image_url")
+    private String anchorProductMainImageUrl;
+
+    @JsonProperty("companion_product_main_image_url")
+    private String companionProductMainImageUrl;
 
     private Boolean enabled;
 }

@@ -1,5 +1,6 @@
 package com.ndh.ShopTechnology.services.brand.impl;
 
+import com.ndh.ShopTechnology.constants.DocumentEntityType;
 import com.ndh.ShopTechnology.constants.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.brand.CreateBrandRequest;
 import com.ndh.ShopTechnology.dto.request.brand.UpdateBrandRequest;
@@ -8,6 +9,7 @@ import com.ndh.ShopTechnology.entities.product.BrandEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.BrandRepository;
+import com.ndh.ShopTechnology.repository.DocumentRepository;
 import com.ndh.ShopTechnology.repository.ProductRepository;
 import com.ndh.ShopTechnology.services.brand.BrandService;
 import org.springframework.http.HttpStatus;
@@ -22,26 +24,38 @@ public class BrandServiceImpl implements BrandService {
 
     private final BrandRepository brandRepository;
     private final ProductRepository productRepository;
+    private final DocumentRepository documentRepository;
 
-    public BrandServiceImpl(BrandRepository brandRepository, ProductRepository productRepository) {
+    public BrandServiceImpl(BrandRepository brandRepository,
+                            ProductRepository productRepository,
+                            DocumentRepository documentRepository) {
         this.brandRepository = brandRepository;
         this.productRepository = productRepository;
+        this.documentRepository = documentRepository;
+    }
+
+    /** Lấy URL logo (is_main=true) của brand; trả về {@code null} nếu chưa có ảnh. */
+    private String resolveLogo(Long brandId) {
+        return documentRepository
+                .findMainByEntityIdAndEntityType(brandId, DocumentEntityType.ID_DOCUMENT_ENTITY_BRAND)
+                .map(d -> d.getFilePath())
+                .orElse(null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<BrandResponse> listAll() {
         return brandRepository.findAllByOrderByIdAsc().stream()
-                .map(BrandResponse::fromEntity)
+                .map(e -> BrandResponse.fromEntity(e, resolveLogo(e.getId())))
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
     public BrandResponse getById(long id) {
-        return BrandResponse.fromEntity(
-                brandRepository.findById(id)
-                        .orElseThrow(() -> new NotFoundEntityException("Brand not found with id: " + id)));
+        BrandEntity e = brandRepository.findById(id)
+                .orElseThrow(() -> new NotFoundEntityException("Brand not found with id: " + id));
+        return BrandResponse.fromEntity(e, resolveLogo(id));
     }
 
     @Override
@@ -58,7 +72,8 @@ public class BrandServiceImpl implements BrandService {
                 .name(name)
                 .status(status)
                 .build();
-        return BrandResponse.fromEntity(brandRepository.save(e));
+        BrandEntity saved = brandRepository.save(e);
+        return BrandResponse.fromEntity(saved, resolveLogo(saved.getId()));
     }
 
     @Override
@@ -79,7 +94,7 @@ public class BrandServiceImpl implements BrandService {
         if (request.getStatus() != null) {
             e.setStatus(request.getStatus());
         }
-        return BrandResponse.fromEntity(brandRepository.save(e));
+        return BrandResponse.fromEntity(brandRepository.save(e), resolveLogo(id));
     }
 
     @Override

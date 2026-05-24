@@ -39,6 +39,19 @@ public interface UserService {
 
     UserResponse getCustomerUser(Long id);
 
+    /** Toàn bộ user (mọi role), phân trang — quyền {@code READ_USER} / {@code READ_ALL}. */
+    Page<UserResponse> getAllUsersForAdmin(PaginationRequest request);
+
+    /** Chi tiết user bất kỳ — quyền {@code READ_USER} / {@code READ_ALL}. */
+    UserResponse getUserForAdmin(Long id);
+
+    /** Cập nhật user bất kỳ (CUSTOMER và nội bộ). */
+    UserResponse updateUserForAdmin(AdminModUserInfoRequest req);
+
+    void deleteUserForAdmin(Long id);
+
+    UserResponse resetUserPasswordForAdmin(Long id);
+
     void deleteStaffUser(Long id);
 
     /** Đặt lại mật khẩu 6 chữ số (5 số đầu SĐT + 1 số ngẫu nhiên); trả về {@link UserResponse#getTemporaryPassword()} một lần. */

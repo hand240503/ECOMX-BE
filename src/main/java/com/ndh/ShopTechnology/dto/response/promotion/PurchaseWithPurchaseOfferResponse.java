@@ -16,6 +16,8 @@ public class PurchaseWithPurchaseOfferResponse {
     private Long id;
     private Long anchorProductId;
     private Long companionProductId;
+    private Long anchorVariantId;
+    private Long companionVariantId;
     private Double promoUnitPrice;
     private Integer minAnchorQuantity;
     private Integer companionPromoUnitsPerAnchor;

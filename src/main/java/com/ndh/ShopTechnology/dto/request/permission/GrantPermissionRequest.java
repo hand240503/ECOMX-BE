@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * Yêu cầu cấp quyền thêm cho 1 user.
  *
- * <p>Người gọi phải có quyền {@link com.ndh.ShopTechnology.constants.PermissionCode#GRANT_PERMISSION}
+ * <p>Người gọi phải có quyền {@link com.ndh.ShopTechnology.constants.PermissionCode#UPDATE_USER}
  * và <b>chỉ được cấp những quyền mình đang có</b> (kiểm tra ở service).
  */
 @Getter

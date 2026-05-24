@@ -21,6 +21,10 @@ public class UpdateProductRequest {
 
   private Integer status;
   private Long categoryId;
+
+  /** Partial: chỉ đổi khi gửi field. */
+  private Long brandId;
+
   private Boolean isFeatured;
 
   private Boolean hotSale;

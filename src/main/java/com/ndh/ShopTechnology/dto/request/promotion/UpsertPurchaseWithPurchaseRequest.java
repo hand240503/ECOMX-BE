@@ -20,6 +20,12 @@ public class UpsertPurchaseWithPurchaseRequest {
     private Long companionProductId;
 
     @NotNull
+    private Long anchorVariantId;
+
+    @NotNull
+    private Long companionVariantId;
+
+    @NotNull
     @Min(0)
     private Double promoUnitPrice;
 

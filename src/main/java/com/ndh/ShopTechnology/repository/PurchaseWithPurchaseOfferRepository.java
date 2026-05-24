@@ -13,27 +13,42 @@ import java.util.Optional;
 @Repository
 public interface PurchaseWithPurchaseOfferRepository extends JpaRepository<PurchaseWithPurchaseOfferEntity, Long> {
 
-    List<PurchaseWithPurchaseOfferEntity> findByCompanionProduct_IdInAndEnabledTrue(Collection<Long> companionIds);
+    @Query("""
+            SELECT DISTINCT o FROM PurchaseWithPurchaseOfferEntity o
+            JOIN FETCH o.anchorProduct
+            JOIN FETCH o.companionProduct
+            JOIN FETCH o.anchorVariant
+            JOIN FETCH o.companionVariant
+            WHERE o.companionVariant.id IN :companionVariantIds AND o.enabled = true
+            """)
+    List<PurchaseWithPurchaseOfferEntity> findActiveFetchedByCompanionVariantIdIn(
+            @Param("companionVariantIds") Collection<Long> companionVariantIds);
 
     @Query("""
             SELECT DISTINCT o FROM PurchaseWithPurchaseOfferEntity o
             JOIN FETCH o.anchorProduct
             JOIN FETCH o.companionProduct
-            WHERE o.companionProduct.id IN :companionIds AND o.enabled = true
+            JOIN FETCH o.anchorVariant
+            JOIN FETCH o.companionVariant
+            WHERE o.anchorVariant.id IN :anchorVariantIds AND o.enabled = true
             """)
-    List<PurchaseWithPurchaseOfferEntity> findActiveFetchedByCompanionProductIdIn(
-            @Param("companionIds") Collection<Long> companionIds);
+    List<PurchaseWithPurchaseOfferEntity> findActiveFetchedByAnchorVariantIdIn(
+            @Param("anchorVariantIds") Collection<Long> anchorVariantIds);
 
-    @Query("""
-            SELECT DISTINCT o FROM PurchaseWithPurchaseOfferEntity o
-            JOIN FETCH o.anchorProduct
-            JOIN FETCH o.companionProduct
-            WHERE o.anchorProduct.id IN :anchorIds AND o.enabled = true
-            """)
-    List<PurchaseWithPurchaseOfferEntity> findActiveFetchedByAnchorProductIdIn(
-            @Param("anchorIds") Collection<Long> anchorIds);
-
-    Optional<PurchaseWithPurchaseOfferEntity> findByCompanionProduct_Id(Long companionProductId);
+    Optional<PurchaseWithPurchaseOfferEntity> findByCompanionVariant_Id(Long companionVariantId);
 
     List<PurchaseWithPurchaseOfferEntity> findAllByOrderByIdAsc();
+
+    /** Distinct product IDs tham gia PwP (cả neo lẫn đi kèm) trong các offer đang bật. */
+    @Query("""
+            SELECT DISTINCT o.anchorProduct.id FROM PurchaseWithPurchaseOfferEntity o
+            WHERE o.enabled = true
+            """)
+    List<Long> findDistinctAnchorProductIdsEnabled();
+
+    @Query("""
+            SELECT DISTINCT o.companionProduct.id FROM PurchaseWithPurchaseOfferEntity o
+            WHERE o.enabled = true
+            """)
+    List<Long> findDistinctCompanionProductIdsEnabled();
 }

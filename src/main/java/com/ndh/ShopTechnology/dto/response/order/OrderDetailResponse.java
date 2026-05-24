@@ -29,4 +29,8 @@ public class OrderDetailResponse {
     /** Mô tả dài sản phẩm tại thời điểm xem đơn (snapshot từ bảng product). */
     @JsonProperty("l_description")
     private String lDescription;
+
+    /** Snapshot chương trình giá khi đặt (PC / mix-and-match / PWP). */
+    @JsonProperty("pricing_programs")
+    private OrderLinePricingProgramsDto pricingPrograms;
 }

@@ -68,4 +68,9 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     @EntityGraph(attributePaths = {"role", "userPermissions", "userInfo", "addresses"})
     Page<UserEntity> findByRole_Code(String roleCode, Pageable pageable);
+
+    /** Toàn bộ user (mọi role), phân trang — dùng màn quản trị user thống nhất. */
+    @EntityGraph(attributePaths = {"role", "userPermissions", "userInfo", "addresses"})
+    @Query("SELECT u FROM UserEntity u")
+    Page<UserEntity> findAllPagedForAdmin(Pageable pageable);
 }

@@ -29,19 +29,19 @@ public class AdminBrandController {
     }
 
     @GetMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.READ_BRAND + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
     public ResponseEntity<APIResponse<List<BrandResponse>>> list() {
         return ResponseEntity.ok(APIResponse.of(true, "OK", brandService.listAll(), null, null));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.READ_BRAND + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
     public ResponseEntity<APIResponse<BrandResponse>> getById(@PathVariable long id) {
         return ResponseEntity.ok(APIResponse.of(true, "OK", brandService.getById(id), null, null));
     }
 
     @PostMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_BRAND + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<BrandResponse>> create(@Valid @RequestBody CreateBrandRequest request) {
         BrandResponse data = brandService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -49,7 +49,7 @@ public class AdminBrandController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_BRAND + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<BrandResponse>> update(
             @PathVariable long id,
             @Valid @RequestBody UpdateBrandRequest request) {
@@ -57,7 +57,7 @@ public class AdminBrandController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_BRAND + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRODUCT + ")")
     public ResponseEntity<APIResponse<Void>> delete(@PathVariable long id) {
         brandService.delete(id);
         return ResponseEntity.ok(APIResponse.of(true, "Deleted", null, null, null));

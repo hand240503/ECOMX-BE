@@ -33,7 +33,8 @@ import java.util.stream.Collectors;
  * Chi tiết từng SKU nằm trong {@link #variants}; mỗi variant có thêm {@code effective_unit_price}
  * (khi có price change hiệu lực thì trùng giá áp dụng PC) và {@code active_price_change}.
  *
- * <p>{@link #volumePriceTiers} và {@link #purchaseWithPurchasePrograms} là các chương trình giá kèm SPU đang bật (mix-and-match, PWP).
+ * <p>{@link #purchaseWithPurchasePrograms} gom chương trình PWP liên quan SPU. **Mix-and-match** hiển thị trên từng
+ * phân loại: {@link ProductVariantResponse#getVolumePriceTiers()}.
  *
  * <p>Các URL ảnh ({@code thumbnailUrl}, {@code mainImageUrl}, {@code imageUrls}) và danh sách {@link #documents}
  * được gán từ bảng {@code document} trong service, không được gán trong {@link #fromEntity}.
@@ -77,7 +78,10 @@ public class ProductFullResponse {
   /** Có dữ liệu khi entity đã fetch policies (vd. GET /products/{id}, GET /products/{id}/detail). */
   private List<PolicyResponse> policies;
 
-  /** Bậc giá mix-and-match đang bật (theo tổng SL sản phẩm trên đơn). Gán sau {@link #fromEntity}. */
+  /**
+   * @deprecated Chuyển sang {@link ProductVariantResponse#getVolumePriceTiers()}. JSON thường không còn field này.
+   */
+  @Deprecated
   @JsonProperty("volume_price_tiers")
   private List<VolumePriceTierResponse> volumePriceTiers;
 
@@ -208,7 +212,7 @@ public class ProductFullResponse {
         .tag(entity.getTag())
         .createdDate(entity.getCreatedDate())
         .modifiedDate(entity.getModifiedDate())
-        .brand(BrandSummaryResponse.fromEntity(entity.getBrand()))
+        .brand(BrandSummaryResponse.fromEntity(entity.getBrand(), null))
         .category(CategorySummaryResponse.fromEntity(entity.getCategory()))
         .prices(priceList)
         .fromEffectiveUnitPrice(fromEffective)

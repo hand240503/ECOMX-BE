@@ -82,6 +82,20 @@ public class ProductImageAttachService {
         variantImageAttachService.attach(products);
     }
 
+    public Map<Long, String> getPrimaryImageUrlsByProductIds(Collection<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Resolved> map = resolveByProductIds(productIds);
+        Map<Long, String> urls = new LinkedHashMap<>();
+        for (Map.Entry<Long, Resolved> entry : map.entrySet()) {
+            if (entry.getValue().primaryUrl() != null) {
+                urls.put(entry.getKey(), entry.getValue().primaryUrl());
+            }
+        }
+        return urls;
+    }
+
     private Map<Long, Resolved> resolveByProductIds(Collection<Long> productIds) {
         List<Integer> entityTypes =
                 List.of(DocumentEntityType.ID_DOCUMENT_ENTITY_PRODUCT, LEGACY_PRODUCT_ENTITY_TYPE);

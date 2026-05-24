@@ -33,7 +33,7 @@ public class AdminStaffController {
     public ResponseEntity<APIResponse<List<UserResponse>>> getStaffUsers(
             @RequestParam(value = "page", defaultValue = "0", required = false) int page,
             @RequestParam(value = "size", defaultValue = "10", required = false) int size) {
-        permissionService.requireAnyPermission(400002, 700002);
+        permissionService.requireAnyPermission(PermissionCode.READ_USER);
 
         PaginationRequest request = new PaginationRequest();
         request.setPage(page);
@@ -64,7 +64,6 @@ public class AdminStaffController {
     @PostMapping("")
     public ResponseEntity<APIResponse<UserResponse>> createStaffUser(@RequestBody CreateUserRequest request) {
         permissionService.requireAnyPermission(
-                PermissionCode.CREATE_EMPLOYEE,
                 PermissionCode.CREATE_USER,
                 PermissionCode.CREATE_ALL);
 
@@ -77,7 +76,7 @@ public class AdminStaffController {
 
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<UserResponse>> getStaffUser(@PathVariable Long id) {
-        permissionService.requireAnyPermission(400002, 700002);
+        permissionService.requireAnyPermission(PermissionCode.READ_USER);
 
         UserResponse userResponse = userService.getStaffUser(id);
 
@@ -89,9 +88,7 @@ public class AdminStaffController {
     public ResponseEntity<APIResponse<UserResponse>> updateStaffUser(
             @RequestBody AdminModUserInfoRequest request) {
         permissionService.requireAnyPermission(
-                400003,
-                700003,
-                PermissionCode.LOCK_USER,
+                PermissionCode.UPDATE_USER,
                 PermissionCode.UPDATE_ALL,
                 PermissionCode.UPDATE_USER);
 
@@ -104,7 +101,6 @@ public class AdminStaffController {
     @DeleteMapping("/{id}")
     public ResponseEntity<APIResponse<Map<String, Long>>> deleteStaffUser(@PathVariable Long id) {
         permissionService.requireAnyPermission(
-                PermissionCode.DELETE_EMPLOYEE,
                 PermissionCode.DELETE_USER,
                 PermissionCode.DELETE_ALL);
 
@@ -116,7 +112,6 @@ public class AdminStaffController {
     @PostMapping("/{id}/reset-password")
     public ResponseEntity<APIResponse<UserResponse>> resetStaffPassword(@PathVariable Long id) {
         permissionService.requireAnyPermission(
-                PermissionCode.UPDATE_EMPLOYEE,
                 PermissionCode.UPDATE_USER,
                 PermissionCode.UPDATE_ALL);
 

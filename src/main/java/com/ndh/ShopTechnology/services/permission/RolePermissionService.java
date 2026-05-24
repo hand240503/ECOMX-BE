@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * API quản lý role và permission cấp thêm cho user.
  *
- * <p>Tất cả method đều yêu cầu actor đã đăng nhập. Việc kiểm tra quyền (MANAGE_ROLE / GRANT_PERMISSION,
+ * <p>Tất cả method đều yêu cầu actor đã đăng nhập. Việc kiểm tra quyền (Role Admin / UPDATE_USER,
  * không cấp quá quyền mình có, ...) được thực hiện trong implementation.
  */
 public interface RolePermissionService {
@@ -21,13 +21,13 @@ public interface RolePermissionService {
     /** Liệt kê tất cả role kèm permission mặc định. */
     List<RoleResponse> listRoles();
 
-    /** Tạo mới role. Yêu cầu MANAGE_ROLE. Permission mặc định không được vượt quá quyền của actor. */
+    /** Tạo mới role. Yêu cầu Role Admin/SuperAdmin. Permission mặc định không được vượt quá quyền của actor. */
     RoleResponse createRole(UpsertRoleRequest request);
 
-    /** Cập nhật role theo id. Yêu cầu MANAGE_ROLE. */
+    /** Cập nhật role theo id. Yêu cầu Role Admin/SuperAdmin. */
     RoleResponse updateRole(Long roleId, UpsertRoleRequest request);
 
-    /** Xoá role theo id. Yêu cầu MANAGE_ROLE. */
+    /** Xoá role theo id. Yêu cầu Role Admin/SuperAdmin. */
     void deleteRole(Long roleId);
 
     // ===================== USER PERMISSION GRANTS =====================
@@ -36,11 +36,11 @@ public interface RolePermissionService {
     UserPermissionsResponse getUserPermissions(Long userId);
 
     /**
-     * Cấp thêm quyền cho user. Yêu cầu GRANT_PERMISSION + actor phải đang có TẤT CẢ các quyền cần cấp.
-     * Customer (không có GRANT_PERMISSION) sẽ bị từ chối.
+     * Cấp thêm quyền cho user. Yêu cầu UPDATE_USER + actor phải đang có TẤT CẢ các quyền cần cấp.
+     * Customer (không có UPDATE_USER) sẽ bị từ chối.
      */
     UserPermissionsResponse grantPermissions(GrantPermissionRequest request);
 
-    /** Thu hồi quyền cấp thêm. Yêu cầu GRANT_PERMISSION. */
+    /** Thu hồi quyền cấp thêm. Yêu cầu UPDATE_USER. */
     UserPermissionsResponse revokePermissions(RevokePermissionRequest request);
 }

@@ -2,6 +2,7 @@ package com.ndh.ShopTechnology.dto.response.product;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.ndh.ShopTechnology.dto.response.promotion.VolumePriceTierResponse;
 import com.ndh.ShopTechnology.entities.product.PriceEntity;
 import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import lombok.AllArgsConstructor;
@@ -52,6 +53,12 @@ public class ProductVariantResponse {
     /** Price change đang hiệu lực tại thời điểm trả API (cùng nguồn với {@link #effectiveUnitPrice}). */
     @JsonProperty("active_price_change")
     private ProductPriceChangeResponse activePriceChange;
+
+    /**
+     * Bậc mix-and-match gắn **SKU này** (thay cho danh sách cấp SPU).
+     */
+    @JsonProperty("volume_price_tiers")
+    private List<VolumePriceTierResponse> volumePriceTiers;
 
     /** Gallery/media của SKU ({@code document.entity_type} = PRODUCT_VARIANT). Được gán sau khi load API. */
     private List<ProductDocumentSummary> documents;

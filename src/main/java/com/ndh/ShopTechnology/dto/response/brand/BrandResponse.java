@@ -20,10 +20,11 @@ public class BrandResponse {
     private String code;
     private String name;
     private Integer status;
+    private String logoUrl;
     private Date createdDate;
     private Date modifiedDate;
 
-    public static BrandResponse fromEntity(BrandEntity e) {
+    public static BrandResponse fromEntity(BrandEntity e, String logoUrl) {
         if (e == null) {
             return null;
         }
@@ -32,6 +33,7 @@ public class BrandResponse {
                 .code(e.getCode())
                 .name(e.getName())
                 .status(e.getStatus())
+                .logoUrl(logoUrl)
                 .createdDate(e.getCreatedDate())
                 .modifiedDate(e.getModifiedDate())
                 .build();

@@ -18,8 +18,9 @@ public class BrandSummaryResponse {
   private String code;
   private String name;
   private Integer status;
+  private String logoUrl;
 
-  public static BrandSummaryResponse fromEntity(BrandEntity entity) {
+  public static BrandSummaryResponse fromEntity(BrandEntity entity, String logoUrl) {
     if (entity == null) {
       return null;
     }
@@ -28,6 +29,7 @@ public class BrandSummaryResponse {
         .code(entity.getCode())
         .name(entity.getName())
         .status(entity.getStatus())
+        .logoUrl(logoUrl)
         .build();
   }
 }

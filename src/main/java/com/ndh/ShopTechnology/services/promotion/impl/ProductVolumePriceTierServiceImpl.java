@@ -1,12 +1,13 @@
 package com.ndh.ShopTechnology.services.promotion.impl;
 
+import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.dto.request.promotion.VolumePriceTierItemRequest;
 import com.ndh.ShopTechnology.dto.response.promotion.VolumePriceTierResponse;
-import com.ndh.ShopTechnology.entities.product.ProductEntity;
+import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.entities.promotion.ProductVolumePriceTierEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
-import com.ndh.ShopTechnology.repository.ProductRepository;
+import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.repository.ProductVolumePriceTierRepository;
 import com.ndh.ShopTechnology.services.promotion.ProductVolumePriceTierService;
 import org.springframework.http.HttpStatus;
@@ -23,28 +24,29 @@ import java.util.stream.Collectors;
 public class ProductVolumePriceTierServiceImpl implements ProductVolumePriceTierService {
 
     private final ProductVolumePriceTierRepository tierRepository;
-    private final ProductRepository productRepository;
+    private final ProductVariantRepository variantRepository;
 
     public ProductVolumePriceTierServiceImpl(
             ProductVolumePriceTierRepository tierRepository,
-            ProductRepository productRepository) {
+            ProductVariantRepository variantRepository) {
         this.tierRepository = tierRepository;
-        this.productRepository = productRepository;
+        this.variantRepository = variantRepository;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<VolumePriceTierResponse> listByProductId(Long productId) {
-        ensureProduct(productId);
-        return tierRepository.findByProduct_IdOrderByMinQuantityAsc(productId).stream()
+    public List<VolumePriceTierResponse> listByVariant(Long productId, Long variantId) {
+        ensureVariantBelongsToProduct(variantId, productId);
+        return tierRepository.findByProductVariant_IdOrderByMinQuantityAsc(variantId).stream()
                 .map(ProductVolumePriceTierServiceImpl::toResponse)
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional
-    public List<VolumePriceTierResponse> replaceTiers(Long productId, List<VolumePriceTierItemRequest> tiers) {
-        ProductEntity product = ensureProduct(productId);
+    public List<VolumePriceTierResponse> replaceTiers(
+            Long productId, Long variantId, List<VolumePriceTierItemRequest> tiers) {
+        ProductVariantEntity variant = ensureVariantBelongsToProduct(variantId, productId);
         if (tiers == null) {
             tiers = List.of();
         }
@@ -55,13 +57,15 @@ public class ProductVolumePriceTierServiceImpl implements ProductVolumePriceTier
                         "Duplicate minQuantity in tier list: " + t.getMinQuantity());
             }
         }
-        List<ProductVolumePriceTierEntity> existing = tierRepository.findByProduct_IdOrderByMinQuantityAsc(productId);
+        List<ProductVolumePriceTierEntity> existing =
+                tierRepository.findByProductVariant_IdOrderByMinQuantityAsc(variantId);
+        assertNoDropOfActiveVolumeTiers(existing, tiers);
         tierRepository.deleteAll(existing);
 
         List<ProductVolumePriceTierEntity> saved = new ArrayList<>();
         for (VolumePriceTierItemRequest t : tiers) {
             ProductVolumePriceTierEntity e = ProductVolumePriceTierEntity.builder()
-                    .product(product)
+                    .productVariant(variant)
                     .minQuantity(t.getMinQuantity())
                     .unitPrice(t.getUnitPrice())
                     .enabled(t.getEnabled() != null ? t.getEnabled() : true)
@@ -71,15 +75,35 @@ public class ProductVolumePriceTierServiceImpl implements ProductVolumePriceTier
         return saved.stream().map(ProductVolumePriceTierServiceImpl::toResponse).collect(Collectors.toList());
     }
 
-    private ProductEntity ensureProduct(Long productId) {
-        return productRepository.findById(productId)
-                .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + productId));
+    private static void assertNoDropOfActiveVolumeTiers(
+            List<ProductVolumePriceTierEntity> existing,
+            List<VolumePriceTierItemRequest> tiers) {
+        Set<Integer> incomingMinQuantities = tiers.stream()
+                .map(VolumePriceTierItemRequest::getMinQuantity)
+                .collect(Collectors.toSet());
+        boolean droppingActive = existing.stream()
+                .anyMatch(e -> Boolean.TRUE.equals(e.getEnabled())
+                        && !incomingMinQuantities.contains(e.getMinQuantity()));
+        if (droppingActive) {
+            throw new CustomApiException(HttpStatus.CONFLICT, MessageConstant.VOLUME_TIER_CANNOT_DROP_WHILE_ACTIVE);
+        }
+    }
+
+    private ProductVariantEntity ensureVariantBelongsToProduct(Long variantId, Long productId) {
+        return variantRepository.findById(variantId)
+                .filter(v -> v.getProduct() != null && v.getProduct().getId().equals(productId))
+                .orElseThrow(() -> new NotFoundEntityException(
+                        "Variant " + variantId + " not found for product " + productId));
     }
 
     private static VolumePriceTierResponse toResponse(ProductVolumePriceTierEntity e) {
+        ProductVariantEntity pv = e.getProductVariant();
+        Long pid = pv != null && pv.getProduct() != null ? pv.getProduct().getId() : null;
+        Long vid = pv != null ? pv.getId() : null;
         return VolumePriceTierResponse.builder()
                 .id(e.getId())
-                .productId(e.getProduct().getId())
+                .productVariantId(vid)
+                .productId(pid)
                 .minQuantity(e.getMinQuantity())
                 .unitPrice(e.getUnitPrice())
                 .enabled(e.getEnabled())

@@ -21,8 +21,8 @@ import java.util.List;
  * chỉ có thể tạo lúc tạo sản phẩm (POST {@code /admin/products}); controller
  * này bổ sung CRUD đầy đủ cho sản phẩm đã tồn tại.
  *
- * <p>Quyền: dùng {@code MODULE_PRICE} (150xxx) — tách khỏi {@code MODULE_PRODUCT}
- * để có thể giao quyền "đổi giá" mà không mở quyền sửa toàn bộ sản phẩm.
+ * <p>Quyền: thuộc nhóm catalogue sản phẩm ({@link PermissionCode#MODULE_PRODUCT}, mã {@code 100xxx})
+ * — cùng cấp với quản trị SKU, đơn vị tính, hãng, danh mục và các cấu hình giá khác.
  */
 @RestController
 @RequestMapping("${api.prefix}/admin/products/{productId}/prices")
@@ -35,13 +35,13 @@ public class AdminProductPriceController {
     }
 
     @GetMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
     public ResponseEntity<APIResponse<List<ProductPriceResponse>>> list(@PathVariable Long productId) {
         return ResponseEntity.ok(APIResponse.of(true, "OK", priceService.list(productId), null, null));
     }
 
     @PostMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<ProductPriceResponse>> create(
             @PathVariable Long productId,
             @Valid @RequestBody UpsertProductPriceRequest request) {
@@ -51,7 +51,7 @@ public class AdminProductPriceController {
     }
 
     @PutMapping("/{priceId}")
-    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<ProductPriceResponse>> update(
             @PathVariable Long productId,
             @PathVariable long priceId,
@@ -61,7 +61,7 @@ public class AdminProductPriceController {
     }
 
     @DeleteMapping("/{priceId}")
-    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRICE + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRODUCT + ")")
     public ResponseEntity<APIResponse<Void>> delete(
             @PathVariable Long productId,
             @PathVariable long priceId) {

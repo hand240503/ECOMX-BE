@@ -69,7 +69,6 @@ public class RolePermissionController {
     @GetMapping("/users/{userId}/permissions")
     public ResponseEntity<APIResponse<UserPermissionsResponse>> getUserPermissions(@PathVariable Long userId) {
         permissionService.requireAnyPermission(
-                PermissionCode.GRANT_PERMISSION,
                 PermissionCode.READ_USER,
                 PermissionCode.READ_ALL,
                 PermissionCode.UPDATE_USER);
@@ -101,7 +100,6 @@ public class RolePermissionController {
     public ResponseEntity<APIResponse<Map<String, Object>>> permissionCatalog() {
         permissionService.requireAnyPermission(
                 PermissionCode.MANAGE_ROLE,
-                PermissionCode.GRANT_PERMISSION,
                 PermissionCode.READ_ALL,
                 PermissionCode.UPDATE_USER);
         List<Map<String, Object>> systemWide = List.of(
@@ -110,30 +108,40 @@ public class RolePermissionController {
                 describeEntry(PermissionCode.UPDATE_ALL,        "Update all"),
                 describeEntry(PermissionCode.DELETE_ALL,        "Delete all"),
                 describeEntry(PermissionCode.LOCK_USER,         "Lock user"),
-                describeEntry(PermissionCode.MANAGE_ROLE,       "Manage role"),
-                describeEntry(PermissionCode.GRANT_PERMISSION,  "Grant permission")
+                describeEntry(PermissionCode.MANAGE_ROLE,       "Manage role")
         );
 
-        List<Map<String, Object>> moduleSpecific = PermissionCode.allKnownCodes().stream()
-                .filter(PermissionCode::isModuleSpecific)
-                .map(c -> describeEntry(c, labelFor(c)))
+        List<Map<String, Object>> moduleSpecific = PermissionCode.catalogGrantableModuleSpecificCodesOrdered().stream()
+                .map(c -> describeEntry(c, labelForCatalog(c)))
                 .toList();
 
         Map<String, Object> data = Map.of(
                 "systemWide",     systemWide,
                 "moduleSpecific", moduleSpecific,
+                "catalogNote", Map.of(
+                        "mergedModules", Map.of(
+                                "PRODUCT_FAMILY", Map.of(
+                                        "canonicalPrefix", PermissionCode.MODULE_PRODUCT,
+                                        "includesLegacyPrefixes", List.of(
+                                                PermissionCode.MODULE_PRODUCT,
+                                                PermissionCode.MODULE_PRICE,
+                                                PermissionCode.MODULE_UNIT,
+                                                PermissionCode.MODULE_BRAND,
+                                                PermissionCode.MODULE_CATEGORY)),
+                                "USER_MANAGEMENT", Map.of(
+                                        "canonicalPrefix", PermissionCode.MODULE_USER,
+                                        "includesLegacyPrefixes", List.of(
+                                                PermissionCode.MODULE_USER,
+                                                PermissionCode.MODULE_EMPLOYEE))),
+                        "effectivePermissionsNormalization", Map.of(
+                                "storage", "Khi grant / lưu role, BE chuẩn hoá mã vào PREFIX chuẩn (PRODUCT=100xxx, USER=700xxx)",
+                                "legacyBranchesStillHonor", Boolean.TRUE)),
                 "modules", Map.of(
-                        "PRODUCT",  PermissionCode.MODULE_PRODUCT,
-                        "PRICE",    PermissionCode.MODULE_PRICE,
-                        "UNIT",     PermissionCode.MODULE_UNIT,
-                        "BRAND",    PermissionCode.MODULE_BRAND,
-                        "CATEGORY", PermissionCode.MODULE_CATEGORY,
+                        "PRODUCT_FAMILY", PermissionCode.MODULE_PRODUCT,
                         "DOCUMENT", PermissionCode.MODULE_DOCUMENT,
-                        "EMPLOYEE", PermissionCode.MODULE_EMPLOYEE,
-                        "ORDER",    PermissionCode.MODULE_ORDER,
-                        "REPORT",   PermissionCode.MODULE_REPORT,
-                        "USER",     PermissionCode.MODULE_USER
-                ),
+                        "ORDER", PermissionCode.MODULE_ORDER,
+                        "REPORT", PermissionCode.MODULE_REPORT,
+                        "USER_MANAGEMENT", PermissionCode.MODULE_USER),
                 "actions", Map.of(
                         "CREATE", PermissionCode.ACTION_CREATE,
                         "READ",   PermissionCode.ACTION_READ,
@@ -156,21 +164,16 @@ public class RolePermissionController {
     /**
      * Sinh label kiểu "Action Module" từ mã 6 chữ số. Vd 100002 → "READ PRODUCT".
      */
-    private static String labelFor(int code) {
+    private static String labelForCatalog(int code) {
         if (!PermissionCode.isModuleSpecific(code)) return String.valueOf(code);
         int module = PermissionCode.extractModule(code);
         int action = PermissionCode.extractAction(code);
         String moduleName = switch (module) {
-            case PermissionCode.MODULE_PRODUCT  -> "PRODUCT";
-            case PermissionCode.MODULE_PRICE     -> "PRICE";
-            case PermissionCode.MODULE_UNIT      -> "UNIT";
-            case PermissionCode.MODULE_BRAND     -> "BRAND";
-            case PermissionCode.MODULE_CATEGORY -> "CATEGORY";
+            case PermissionCode.MODULE_PRODUCT -> "PRODUCT";
             case PermissionCode.MODULE_DOCUMENT -> "DOCUMENT";
-            case PermissionCode.MODULE_EMPLOYEE -> "EMPLOYEE";
-            case PermissionCode.MODULE_ORDER    -> "ORDER";
-            case PermissionCode.MODULE_REPORT   -> "REPORT";
-            case PermissionCode.MODULE_USER     -> "USER";
+            case PermissionCode.MODULE_ORDER -> "ORDER";
+            case PermissionCode.MODULE_REPORT -> "REPORT";
+            case PermissionCode.MODULE_USER -> "USER_MANAGEMENT";
             default -> "MODULE_" + module;
         };
         String actionName = switch (action) {

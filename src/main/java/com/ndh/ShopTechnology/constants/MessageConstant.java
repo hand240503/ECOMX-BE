@@ -58,4 +58,16 @@ public class MessageConstant {
     public static final String PRODUCT_DELETE_SUCCESS = "Product deleted successfully!";
     public static final String PRODUCT_NOT_FOUND = "Product not found.";
     public static final String PRODUCT_LIST_SUCCESS = "Products retrieved successfully!";
+
+    /** PC (product price change): đã vào thời gian áp dụng — chỉ dừng (enabled=false), không xóa bản ghi. */
+    public static final String PRICE_CHANGE_CANNOT_DELETE_AFTER_START =
+            "Đợt giá đã đến hoặc đang trong thời gian áp dụng; không thể xóa. Hãy tắt chương trình (enabled=false) để dừng.";
+
+    /** PWP đang bật — chỉ dừng bằng cập nhật, không xóa. */
+    public static final String PWP_CANNOT_DELETE_WHILE_ACTIVE =
+            "Chương trình purchase-with-purchase đang bật; không thể xóa. Hãy tắt (enabled=false) để dừng.";
+
+    /** Mix-and-match (volume tier): không gỡ bậc đang bật khỏi cấu hình; phải gửi enabled=false cùng minQuantity trước. */
+    public static final String VOLUME_TIER_CANNOT_DROP_WHILE_ACTIVE =
+            "Không thể bỏ bậc giá theo số lượng đang bật. Hãy gửi lại cùng minQuantity với enabled=false để dừng, sau đó có thể cập nhật danh sách.";
 }

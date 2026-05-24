@@ -29,19 +29,19 @@ public class AdminUnitController {
     }
 
     @GetMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.READ_UNIT + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
     public ResponseEntity<APIResponse<List<UnitResponse>>> list() {
         return ResponseEntity.ok(APIResponse.of(true, "OK", unitService.listAll(), null, null));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.READ_UNIT + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
     public ResponseEntity<APIResponse<UnitResponse>> getById(@PathVariable long id) {
         return ResponseEntity.ok(APIResponse.of(true, "OK", unitService.getById(id), null, null));
     }
 
     @PostMapping
-    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_UNIT + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<UnitResponse>> create(@Valid @RequestBody CreateUnitRequest request) {
         UnitResponse data = unitService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -49,7 +49,7 @@ public class AdminUnitController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_UNIT + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<UnitResponse>> update(
             @PathVariable long id,
             @Valid @RequestBody UpdateUnitRequest request) {
@@ -57,7 +57,7 @@ public class AdminUnitController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_UNIT + ")")
+    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRODUCT + ")")
     public ResponseEntity<APIResponse<Void>> delete(@PathVariable long id) {
         unitService.delete(id);
         return ResponseEntity.ok(APIResponse.of(true, "Deleted", null, null, null));
