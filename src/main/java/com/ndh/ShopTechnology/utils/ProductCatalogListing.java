@@ -8,9 +8,6 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Chọn biến thể đại diện cho list/card (giá thấp nhất trong các biến thể đang active).
- */
 public final class ProductCatalogListing {
 
     private ProductCatalogListing() {
@@ -20,9 +17,6 @@ public final class ProductCatalogListing {
         return pickCheapestActiveVariant(product, null);
     }
 
-    /**
-     * Khi có map đơn giá hiển thị (price change + catalog), chọn biến thể active có đơn giá đó nhỏ nhất.
-     */
     public static ProductVariantEntity pickCheapestActiveVariant(
             ProductEntity product, Map<Long, Double> displayUnitPriceByVariantId) {
         if (product == null || product.getVariants() == null || product.getVariants().isEmpty()) {

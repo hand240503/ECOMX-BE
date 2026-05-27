@@ -160,7 +160,7 @@ public class UserRatingController {
             List<UserRatingResponse> ratings = userRatingService.getRatingsByProductId(productId);
             Double averageRating = userRatingService.getAverageRatingByProductId(productId);
             Long ratingCount = userRatingService.getRatingCountByProductId(productId);
-            
+
             APIResponse<List<UserRatingResponse>> response = APIResponse.of(
                     true,
                     "User ratings retrieved successfully",
@@ -191,7 +191,7 @@ public class UserRatingController {
         try {
             Double averageRating = userRatingService.getAverageRatingByProductId(productId);
             Long ratingCount = userRatingService.getRatingCountByProductId(productId);
-            
+
             APIResponse<Map<String, Object>> response = APIResponse.of(
                     true,
                     "Average rating retrieved successfully",

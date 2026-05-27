@@ -31,9 +31,6 @@ public class RefreshTokenService {
     private final UserRepository userRepository;
     private final TokenProvider tokenProvider;
 
-    /**
-     * Tạo refresh token root cho 1 phiên đăng nhập mới
-     */
     @Transactional
     public RefreshTokenEntity createInitialRefreshToken(String username, String deviceId) {
         UserEntity user = userRepository.findOneByUsername(username)
@@ -42,22 +39,15 @@ public class RefreshTokenService {
                         "User không tồn tại"
                 ));
 
-        // Giữ hành vi "single session per user" như hiện tại
         refreshTokenRepository.revokeAllUserTokens(user, LocalDateTime.now(), REASON_LOGIN_REPLACED);
         return issueRefreshToken(user, UUID.randomUUID().toString(), null, deviceId);
     }
 
-    /**
-     * Backward-compat method để không phá call site cũ
-     */
     @Transactional
     public RefreshTokenEntity createRefreshToken(String username) {
         return createInitialRefreshToken(username, null);
     }
 
-    /**
-     * Rotate refresh token theo cơ chế token family + reuse detection
-     */
     @Transactional
     public RefreshTokenEntity rotateRefreshToken(
             String rawRefreshToken,
@@ -84,7 +74,6 @@ public class RefreshTokenService {
                         "Refresh token không hợp lệ"
                 ));
 
-        // Chặn token bị tráo payload (jti hợp lệ nhưng token string mismatch)
         if (!rawRefreshToken.equals(currentToken.getToken())) {
             throw new CustomApiException(HttpStatus.UNAUTHORIZED, "Refresh token không hợp lệ");
         }
@@ -102,7 +91,6 @@ public class RefreshTokenService {
             );
         }
 
-        // Nếu token đã bị consume/revoke mà tiếp tục dùng => reuse detected
         if (Boolean.TRUE.equals(currentToken.getRevoked()) || currentToken.getUsedAt() != null) {
             handleTokenReuse(currentToken, ipAddress, userAgent);
             throw new CustomApiException(
@@ -135,18 +123,12 @@ public class RefreshTokenService {
         return nextToken;
     }
 
-    /**
-     * Revoke all tokens của user
-     */
     @Transactional
     public void revokeUserTokens(UserEntity user) {
         refreshTokenRepository.revokeAllUserTokens(user, LocalDateTime.now(), REASON_LOGOUT);
         log.info("Revoked all refresh tokens for user: {}", user.getUsername());
     }
 
-    /**
-     * Xóa các token đã hết hạn (có thể chạy scheduled)
-     */
     @Transactional
     public void cleanupExpiredTokens() {
         refreshTokenRepository.deleteExpiredTokens(LocalDateTime.now());

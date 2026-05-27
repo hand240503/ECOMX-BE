@@ -7,10 +7,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Snapshot đơn dòng: PC (price change), mix-and-match (volume tier), PWP — dùng API preview checkout và lưu
- * {@link com.ndh.ShopTechnology.entities.order.OrderDetailEntity#getPricingProgramsJson()} để đối soát sau.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -24,11 +20,9 @@ public class OrderLinePricingProgramsDto {
     @JsonProperty("catalog_unit_price")
     private Double catalogUnitPrice;
 
-    /** Đơn giá sau PC (hoặc catalog nếu không có PC), trướn bậc mix.and-match. */
     @JsonProperty("effective_unit_before_volume_tier")
     private Double effectiveUnitBeforeVolumeTier;
 
-    /** Đơn giá cuối sau mọi chương trình (PWP có thể là đơn giá trung bình có trọng số). */
     @JsonProperty("final_unit_price")
     private Double finalUnitPrice;
 
@@ -61,7 +55,6 @@ public class OrderLinePricingProgramsDto {
         @JsonProperty("sale_price")
         private Double salePrice;
 
-        /** Giá áp dụng từ PC: sale_price != null ? sale_price : base_price. */
         @JsonProperty("resolved_unit_price")
         private Double resolvedUnitPrice;
 
@@ -70,6 +63,15 @@ public class OrderLinePricingProgramsDto {
 
         @JsonProperty("end_at_epoch_ms")
         private Long endAtEpochMillis;
+
+        @JsonProperty("quantity_limit")
+        private Integer quantityLimit;
+
+        @JsonProperty("sold_quantity")
+        private Integer soldQuantity;
+
+        @JsonProperty("required_payment_method_code")
+        private String requiredPaymentMethodCode;
     }
 
     @Data
@@ -86,7 +88,6 @@ public class OrderLinePricingProgramsDto {
         @JsonProperty("tier_unit_price")
         private Double tierUnitPrice;
 
-        /** Tổng SL đúng phân loại (SKU) trên đơn — dùng chọn bậc mix-and-match cho SKU đó. */
         @JsonProperty("aggregate_quantity_for_variant_on_order")
         private Integer aggregateQuantityForVariantOnOrder;
     }
@@ -121,7 +122,6 @@ public class OrderLinePricingProgramsDto {
         @JsonProperty("regular_quantity")
         private Integer regularQuantity;
 
-        /** Đơn giá áp cho phần không được PWP (sau volume tier). */
         @JsonProperty("regular_unit_price_after_programs")
         private Double regularUnitPriceAfterPrograms;
     }

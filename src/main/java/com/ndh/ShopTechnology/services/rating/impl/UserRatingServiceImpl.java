@@ -35,17 +35,14 @@ public class UserRatingServiceImpl implements UserRatingService {
     @Override
     @Transactional
     public UserRatingResponse createRating(CreateUserRatingRequest request) {
-        // Check if rating already exists
         userRatingRepository.findByUserIdAndProductId(request.getUserId(), request.getProductId())
                 .ifPresent(rating -> {
                     throw new IllegalArgumentException("User has already rated this product. Use update instead.");
                 });
 
-        // Verify user exists
         UserEntity user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new NotFoundEntityException("User not found with id: " + request.getUserId()));
 
-        // Verify product exists
         ProductEntity product = productRepository.findById(request.getProductId())
                 .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + request.getProductId()));
 

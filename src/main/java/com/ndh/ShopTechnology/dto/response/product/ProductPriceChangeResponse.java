@@ -22,5 +22,14 @@ public class ProductPriceChangeResponse {
     private Date startAt;
     private Date endAt;
     private Boolean enabled;
-}
 
+    private Integer quantityLimit;
+
+    private Integer soldQuantity;
+
+    private Integer remainingQuantity;
+
+    private Integer maxPerCustomer;
+
+    private String requiredPaymentMethodCode;
+}

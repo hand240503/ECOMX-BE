@@ -39,7 +39,6 @@ public class DocumentController {
             @RequestParam(value = "mainFileIndex", required = false) Integer mainFileIndex
     ) throws Exception {
 
-        // Validate files
         if (files == null || files.isEmpty()) {
             APIResponse<List<DocumentEntity>> response = APIResponse.of(
                     false,
@@ -56,7 +55,6 @@ public class DocumentController {
                     .body(response);
         }
 
-        // Check for empty files
         for (MultipartFile file : files) {
             if (file.isEmpty()) {
                 APIResponse<List<DocumentEntity>> response = APIResponse.of(
@@ -105,9 +103,6 @@ public class DocumentController {
                 .body(response);
     }
 
-    /**
-     * Tải file đã lưu — {@code filename} là phần sau {@code /uploads/}, ví dụ {@code 260510/uuid_....jpg}.
-     */
     @GetMapping("/{filename:.+}")
     public ResponseEntity<byte[]> getImage(@PathVariable String filename) {
         try {
@@ -124,10 +119,8 @@ public class DocumentController {
                         .body(null);
             }
 
-            // Đọc nội dung file
             byte[] fileContent = Files.readAllBytes(filePath);
 
-            // Xác định loại nội dung
             String contentType = Files.probeContentType(filePath);
             if (contentType == null) {
                 contentType = "application/octet-stream";

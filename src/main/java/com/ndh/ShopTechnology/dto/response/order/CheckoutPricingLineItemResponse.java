@@ -34,7 +34,6 @@ public class CheckoutPricingLineItemResponse {
     private Integer quantity;
     private String description;
 
-    /** Đơn giá cuối (có thể là trung bình có trọng số nếu PWP). */
     @JsonProperty("unit_price")
     private Double unitPrice;
 

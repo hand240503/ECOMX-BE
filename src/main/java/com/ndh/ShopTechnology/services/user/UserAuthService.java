@@ -9,24 +9,12 @@ import com.ndh.ShopTechnology.dto.response.user.LoginResponse;
 
 public interface UserAuthService {
 
-    /**
-     * Register new user
-     */
     LoginResponse registerUser(RegisterUserRequest request);
 
-    /**
-     * Login user
-     */
     LoginResponse login(LoginRequest request);
 
-    /**
-     * Refresh access token using refresh token
-     */
     LoginResponse refreshToken(String refreshToken, String deviceId, String ipAddress, String userAgent);
 
-    /**
-     * Logout user and revoke tokens
-     */
     void logout(String username);
 
     void requestForgotPassword(ForgotPasswordRequest request);

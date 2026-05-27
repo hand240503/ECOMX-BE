@@ -15,12 +15,6 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Seed các role mặc định (SUPER_ADMIN, ADMIN, MANAGER, EMPLOYEE, CUSTOMER) kèm permission code mặc định
- * (xem {@link RolePermissionDefaults}).
- *
- * <p>Idempotent: nếu role đã tồn tại, hợp permission mặc định vào tập hiện có (không xoá quyền tùy biến đã cấu hình).
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -36,12 +30,8 @@ public class RolePermissionBootstrapper {
             Set<Integer> defaults = entry.getValue();
             String readableName = toReadableName(code);
 
-            // 1) Tìm theo code chuẩn.
             RoleEntity role = roleRepository.findByCode(code).orElse(null);
 
-            // 2) Fallback: row legacy có thể đang giữ name "Super Admin" / "Admin" / ... với code khác
-            //    (vd `ROLE_ADMIN`, `SuperAdmin`, NULL, ...). Tìm theo name để re-attach thay vì insert mới
-            //    (insert mới sẽ đụng UNIQUE(name)).
             if (role == null) {
                 role = roleRepository.findByName(readableName)
                         .flatMap(r -> roleRepository.findById(r.getId()))
@@ -54,7 +44,6 @@ public class RolePermissionBootstrapper {
                 }
             }
 
-            // 3) Vẫn không thấy → tạo mới.
             if (role == null) {
                 role = RoleEntity.builder()
                         .code(code)
@@ -68,7 +57,6 @@ public class RolePermissionBootstrapper {
                 continue;
             }
 
-            // 4) Có role rồi → đảm bảo các trường mặc định + merge permission code.
             boolean changed = false;
 
             if (role.getName() == null || role.getName().isBlank()) {
@@ -84,7 +72,6 @@ public class RolePermissionBootstrapper {
                 changed = true;
             }
 
-            // Merge: tạo Set mới rồi gán lại — bắt buộc với cột JSON để Hibernate phát hiện thay đổi.
             Set<Integer> existing = role.getPermissionCodes() != null
                     ? role.getPermissionCodes()
                     : new LinkedHashSet<>();

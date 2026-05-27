@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 public class ProductVariantResponse {
 
     private Long id;
-    /** Id SPU cha — tiện FE cart / breadcrumb. */
     @JsonProperty("product_id")
     private Long productId;
     private String skuCode;
@@ -42,25 +41,15 @@ public class ProductVariantResponse {
     @JsonProperty("modified_date")
     private Date modifiedDate;
 
-    /**
-     * Đơn giá hiển thị storefront khi có price change đang hiệu lực: {@code sale_price ?? base_price};
-     * không có price change: cùng quy tắc catalog như {@link com.ndh.ShopTechnology.utils.CatalogVariantUnitPrice}
-     * (dòng {@link PriceEntity} có {@code id} nhỏ nhất).
-     */
     @JsonProperty("effective_unit_price")
     private Double effectiveUnitPrice;
 
-    /** Price change đang hiệu lực tại thời điểm trả API (cùng nguồn với {@link #effectiveUnitPrice}). */
     @JsonProperty("active_price_change")
     private ProductPriceChangeResponse activePriceChange;
 
-    /**
-     * Bậc mix-and-match gắn **SKU này** (thay cho danh sách cấp SPU).
-     */
     @JsonProperty("volume_price_tiers")
     private List<VolumePriceTierResponse> volumePriceTiers;
 
-    /** Gallery/media của SKU ({@code document.entity_type} = PRODUCT_VARIANT). Được gán sau khi load API. */
     private List<ProductDocumentSummary> documents;
     private List<String> imageUrls;
     private String mainImageUrl;

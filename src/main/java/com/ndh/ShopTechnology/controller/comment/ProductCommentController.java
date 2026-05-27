@@ -15,17 +15,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * API comment dành cho khách hàng (user đã đăng nhập + đã mua sản phẩm).
- *
- * <p>Phân quyền:
- * <ul>
- *   <li>{@code GET /product/{productId}} — public (không cần đăng nhập).</li>
- *   <li>{@code POST /} — cần đăng nhập + đã mua sản phẩm (kiểm tra trong service).</li>
- *   <li>{@code PUT /{id}} — cần đăng nhập + là chủ comment.</li>
- *   <li>{@code DELETE /{id}} — cần đăng nhập + là chủ comment.</li>
- * </ul>
- */
 @RestController
 @RequestMapping("${api.prefix}/product-comments")
 @RequiredArgsConstructor
@@ -33,13 +22,6 @@ public class ProductCommentController {
 
     private final ProductCommentService commentService;
 
-    // ------------------------------------------------------------------
-    // PUBLIC
-    // ------------------------------------------------------------------
-
-    /**
-     * Lấy tất cả comment hiển thị của một sản phẩm (public — không cần đăng nhập).
-     */
     @GetMapping("/product/{productId}")
     public ResponseEntity<APIResponse<List<ProductCommentResponse>>> getVisibleComments(
             @PathVariable Long productId) {
@@ -52,14 +34,6 @@ public class ProductCommentController {
                 Map.of("count", comments.size(), "productId", productId)));
     }
 
-    // ------------------------------------------------------------------
-    // AUTHENTICATED USER
-    // ------------------------------------------------------------------
-
-    /**
-     * Tạo bình luận mới.
-     * Yêu cầu: đã đăng nhập + đã mua sản phẩm (đơn hàng COMPLETED).
-     */
     @PostMapping
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<APIResponse<ProductCommentResponse>> createComment(
@@ -73,10 +47,6 @@ public class ProductCommentController {
                 null));
     }
 
-    /**
-     * Cập nhật bình luận của chính mình.
-     * Yêu cầu: đã đăng nhập + là chủ comment.
-     */
     @PutMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<APIResponse<ProductCommentResponse>> updateMyComment(
@@ -91,10 +61,6 @@ public class ProductCommentController {
                 null));
     }
 
-    /**
-     * Xoá bình luận của chính mình.
-     * Yêu cầu: đã đăng nhập + là chủ comment.
-     */
     @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<APIResponse<Void>> deleteMyComment(@PathVariable Long id) {

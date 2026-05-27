@@ -13,9 +13,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Price change theo thời gian cho từng biến thể (SKU).
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/products/{productId}/variants/{variantId}/price-changes")
 public class AdminProductPriceChangeController {

@@ -8,6 +8,7 @@ import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.ProductPriceChangeRepository;
+import com.ndh.ShopTechnology.repository.ProductPriceChangeUsageRepository;
 import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.services.product.ProductPriceChangeService;
 import org.springframework.http.HttpStatus;
@@ -23,12 +24,15 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
 
     private final ProductVariantRepository variantRepository;
     private final ProductPriceChangeRepository priceChangeRepository;
+    private final ProductPriceChangeUsageRepository usageRepository;
 
     public ProductPriceChangeServiceImpl(
             ProductVariantRepository variantRepository,
-            ProductPriceChangeRepository priceChangeRepository) {
+            ProductPriceChangeRepository priceChangeRepository,
+            ProductPriceChangeUsageRepository usageRepository) {
         this.variantRepository = variantRepository;
         this.priceChangeRepository = priceChangeRepository;
+        this.usageRepository = usageRepository;
     }
 
     @Override
@@ -53,6 +57,10 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
                 .startAt(request.getStartAt())
                 .endAt(request.getEndAt())
                 .enabled(request.getEnabled() != null ? request.getEnabled() : true)
+                .quantityLimit(request.getQuantityLimit())
+                .soldQuantity(0)
+                .maxPerCustomer(request.getMaxPerCustomer())
+                .requiredPaymentMethodCode(normalizeCode(request.getRequiredPaymentMethodCode()))
                 .build();
         e = priceChangeRepository.save(e);
         return toResponse(e);
@@ -78,6 +86,15 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
         if (request.getEnabled() != null) {
             e.setEnabled(request.getEnabled());
         }
+        if (request.getQuantityLimit() != null) {
+            e.setQuantityLimit(request.getQuantityLimit());
+        }
+        if (request.getMaxPerCustomer() != null) {
+            e.setMaxPerCustomer(request.getMaxPerCustomer());
+        }
+        if (request.getRequiredPaymentMethodCode() != null) {
+            e.setRequiredPaymentMethodCode(normalizeCode(request.getRequiredPaymentMethodCode()));
+        }
         e = priceChangeRepository.save(e);
         return toResponse(e);
     }
@@ -96,6 +113,24 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
         priceChangeRepository.delete(e);
     }
 
+    @Override
+    @Transactional
+    public boolean incrementSoldQuantity(Long priceChangeId, int qty) {
+        if (priceChangeId == null || qty <= 0) return true;
+        int affected = priceChangeRepository.incrementSoldQuantity(priceChangeId, qty);
+        return affected > 0;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isWithinPerCustomerLimit(Long priceChangeId, Long userId, int qty) {
+        if (priceChangeId == null || userId == null) return true;
+        ProductPriceChangeEntity pc = priceChangeRepository.findById(priceChangeId).orElse(null);
+        if (pc == null || pc.getMaxPerCustomer() == null) return true;
+        int alreadyUsed = usageRepository.sumQuantityByPriceChangeIdAndUserId(priceChangeId, userId);
+        return alreadyUsed + qty <= pc.getMaxPerCustomer();
+    }
+
     private ProductVariantEntity ensureVariant(Long productId, Long variantId) {
         ProductVariantEntity v = variantRepository.findById(variantId)
                 .orElseThrow(() -> new NotFoundEntityException("Product variant not found with id: " + variantId));
@@ -106,9 +141,6 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
         return v;
     }
 
-    /**
-     * Đợt PC đã đến hoặc đang/đã trong khoảng áp dụng thì không xóa — chỉ dừng bằng {@code enabled=false}.
-     */
     private static void assertDeletablePriceChange(ProductPriceChangeEntity e) {
         Date now = new Date();
         if (e.getStartAt() != null && !e.getStartAt().after(now)) {
@@ -125,7 +157,16 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
         }
     }
 
-    private static ProductPriceChangeResponse toResponse(ProductPriceChangeEntity e) {
+    private static String normalizeCode(String code) {
+        if (code == null) return null;
+        String t = code.trim().toUpperCase();
+        return t.isEmpty() ? null : t;
+    }
+
+    static ProductPriceChangeResponse toResponse(ProductPriceChangeEntity e) {
+        Integer ql = e.getQuantityLimit();
+        Integer sq = e.getSoldQuantity() != null ? e.getSoldQuantity() : 0;
+        Integer remaining = ql != null ? Math.max(0, ql - sq) : null;
         return ProductPriceChangeResponse.builder()
                 .id(e.getId())
                 .productVariantId(e.getProductVariant() != null ? e.getProductVariant().getId() : null)
@@ -134,6 +175,11 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
                 .startAt(e.getStartAt())
                 .endAt(e.getEndAt())
                 .enabled(e.getEnabled())
+                .quantityLimit(ql)
+                .soldQuantity(sq)
+                .remainingQuantity(remaining)
+                .maxPerCustomer(e.getMaxPerCustomer())
+                .requiredPaymentMethodCode(e.getRequiredPaymentMethodCode())
                 .build();
     }
 }

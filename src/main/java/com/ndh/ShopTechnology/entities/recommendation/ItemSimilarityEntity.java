@@ -45,10 +45,6 @@ public class ItemSimilarityEntity {
         @Column(name = COL_TARGET, nullable = false)
         private Long target;
 
-        /**
-         * Optional navigation to {@code products} as source item; same columns as {@link #source} /
-         * {@link #target}, read-only; scalar columns must match {@code products.id} ({@link Long} / BIGINT).
-         */
         @ManyToOne(fetch = FetchType.LAZY)
         @JoinColumn(
                         name = COL_SOURCE,

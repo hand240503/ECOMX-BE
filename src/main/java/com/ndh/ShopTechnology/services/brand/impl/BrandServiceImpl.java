@@ -34,7 +34,6 @@ public class BrandServiceImpl implements BrandService {
         this.documentRepository = documentRepository;
     }
 
-    /** Lấy URL logo (is_main=true) của brand; trả về {@code null} nếu chưa có ảnh. */
     private String resolveLogo(Long brandId) {
         return documentRepository
                 .findMainByEntityIdAndEntityType(brandId, DocumentEntityType.ID_DOCUMENT_ENTITY_BRAND)

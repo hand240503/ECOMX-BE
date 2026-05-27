@@ -20,5 +20,5 @@ public class CreateCategoryRequest {
     @NotNull(message = "Category status is required")
     private Integer status;
 
-    private Long parentId; // Optional: for child categories
+    private Long parentId;
 }

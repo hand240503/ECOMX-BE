@@ -46,10 +46,6 @@ public class OrderController {
         return ResponseEntity.ok(APIResponse.of(true, "OK", data, null, null));
     }
 
-    /**
-     * Trạng thái thanh toán VNPAY theo {@code transactionPublicId} từ body tạo đơn (PENDING, EXPIRED, FAILED, CANCELLED,
-     * hoặc COMPLETED kèm đơn).
-     */
     @GetMapping("/vnpay-pending/{transactionPublicId}")
     public ResponseEntity<APIResponse<VnpayPendingTransactionResponse>> getVnpayPendingTransaction(
             @PathVariable String transactionPublicId) {
@@ -57,10 +53,6 @@ public class OrderController {
         return ResponseEntity.ok(APIResponse.of(true, "OK", data, null, null));
     }
 
-    /**
-     * Mã thống kê tương đương {@code vnp_TransactionStatus} (VNPAY): PENDING / chờ thanh toán → {@code 01} "Giao dịch
-     * chưa hoàn tất", thành công → {@code 00}, thất bại/hủy theo từng trường hợp.
-     */
     @GetMapping("/vnpay-pending/{transactionPublicId}/transaction-status")
     public ResponseEntity<APIResponse<VnpayTransactionStatusResponse>> getVnpayTransactionStatus(
             @PathVariable String transactionPublicId) {
@@ -69,10 +61,6 @@ public class OrderController {
         return ResponseEntity.ok(APIResponse.of(true, "OK", data, null, null));
     }
 
-    /**
-     * Hủy phiên VNPAY PENDING: cập nhật {@code checkout_sessions} sang CANCELLED (giữ bản ghi lịch sử). Dùng khi KH
-     * bấm hủy / rời trang thanh toán, hoặc mở khóa tồn theo phiên nếu có.
-     */
     @PostMapping("/vnpay-pending/{transactionPublicId}/abandon")
     public ResponseEntity<APIResponse<Void>> abandonVnpayPending(
             @PathVariable String transactionPublicId) {
@@ -80,10 +68,6 @@ public class OrderController {
         return ResponseEntity.ok(APIResponse.of(true, "Checkout session cancelled", null, null, null));
     }
 
-    /**
-     * [DEV] Mô phỏng IPN thành công: tạo đơn + cập nhật phiên COMPLETED. Bật bằng
-     * {@code vnpay.dev-simulate-success-enabled=true}. Dùng khi localhost không nhận IPN; không bật production.
-     */
     @PostMapping("/vnpay-pending/{transactionPublicId}/dev-simulate-success")
     public ResponseEntity<APIResponse<OrderResponse>> devSimulateVnpaySuccess(
             @PathVariable String transactionPublicId) {
@@ -91,9 +75,6 @@ public class OrderController {
         return ResponseEntity.ok(APIResponse.of(true, "Dev: VNPAY success simulated; order created", data, null, null));
     }
 
-    /**
-     * Preview giá checkout: price change, mix-and-match (volume tier), PWP — cùng engine với {@link #createOrder}.
-     */
     @PostMapping("/checkout-pricing-preview")
     public ResponseEntity<APIResponse<CheckoutPricingPreviewResponse>> previewCheckoutPricing(
             @Valid @RequestBody CheckoutPricingPreviewRequest request) {
@@ -132,9 +113,6 @@ public class OrderController {
         return ResponseEntity.ok(APIResponse.of(true, "Order cancelled", data, null, null));
     }
 
-    /**
-     * Ghi nhận thanh toán thành công (FE / callback giả lập). Mốc {@code paidAt} dùng tính hạn 7 ngày trả/hoàn.
-     */
     @PostMapping("/{id}/confirm-payment")
     public ResponseEntity<APIResponse<OrderResponse>> confirmPayment(@PathVariable Long id) {
         OrderResponse data = orderService.confirmPayment(id);

@@ -61,7 +61,6 @@ public class WebSecurityConfig {
         return authProvider;
     }
 
-
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
@@ -82,10 +81,6 @@ public class WebSecurityConfig {
         return source;
     }
 
-    /**
-     * Normalizes {@code api.prefix} so request matchers always use a single leading slash (avoids
-     * {@code //api/...} when the property is configured with a leading slash).
-     */
     private String apiBasePath() {
         String p = apiPrefix == null ? "" : apiPrefix.trim();
         while (p.startsWith("/")) {
@@ -101,11 +96,10 @@ public class WebSecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         final String base = apiBasePath();
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // THÊM DÒNG NÀY
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(requests -> {
                     requests
-                            // CORS preflight must not require JWT (browser sends OPTIONS without Authorization)
                             .requestMatchers(HttpMethod.OPTIONS, "/**")
                             .permitAll()
 
@@ -137,7 +131,6 @@ public class WebSecurityConfig {
                             .requestMatchers(HttpMethod.POST, String.format("%s/products/by-ids", base))
                             .permitAll()
 
-                            // Danh sách comment sản phẩm — public (không cần đăng nhập)
                             .requestMatchers(HttpMethod.GET, String.format("%s/product-comments/product/**", base))
                             .permitAll()
 
@@ -147,7 +140,6 @@ public class WebSecurityConfig {
                             .requestMatchers(HttpMethod.GET, String.format("%s/payment-methods", base))
                             .permitAll()
 
-                            // VNPAY: IPN (server) + Return (browser redirect) — không dùng JWT
                             .requestMatchers(HttpMethod.GET, String.format("%s/payment/vnpay/ipn", base))
                             .permitAll()
                             .requestMatchers(HttpMethod.GET, String.format("%s/payment/vnpay/return", base))

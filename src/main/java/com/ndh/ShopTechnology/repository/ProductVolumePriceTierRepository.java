@@ -26,7 +26,6 @@ public interface ProductVolumePriceTierRepository extends JpaRepository<ProductV
 
     List<ProductVolumePriceTierEntity> findByProductVariant_IdOrderByMinQuantityAsc(Long variantId);
 
-    /** Distinct product IDs có ít nhất một volume tier được bật. */
     @Query("""
             SELECT DISTINCT t.productVariant.product.id FROM ProductVolumePriceTierEntity t
             WHERE t.enabled = true

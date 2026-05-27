@@ -18,14 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Arrays;
 import java.util.Set;
 
-/**
- * Service đọc quyền hiệu lực của user (có cache theo username).
- *
- * <p>Toàn bộ kiểm tra wildcard (101..104) và gộp nhánh quyền được uỷ quyền cho {@link PermissionEvaluator}.
- *
- * <p>Trong controller/service, thay vì biến SpEL phức tạp, gọi
- * {@link #requireAnyPermission(int...)} / {@link #requirePermission(int)} trong thân method.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -33,9 +25,6 @@ public class PermissionService {
 
     private final UserRepository userRepository;
 
-    /**
-     * Lấy tất cả permission code (đã hợp role + cấp thêm) của user. Có cache.
-     */
     @Cacheable(value = "userPermissions", key = "#username")
     @Transactional(readOnly = true)
     public Set<Integer> getUserPermissions(String username) {
@@ -47,38 +36,23 @@ public class PermissionService {
         return user.getAllPermissions();
     }
 
-    /**
-     * Kiểm tra user có 1 quyền cụ thể.
-     */
     public boolean hasPermission(String username, int code) {
         Set<Integer> permissions = getUserPermissions(username);
         return PermissionEvaluator.hasPermission(permissions, code);
     }
 
-    /**
-     * Kiểm tra user có ít nhất 1 trong các quyền.
-     */
     public boolean hasAnyPermission(String username, int... codes) {
         if (codes == null || codes.length == 0) return false;
         Set<Integer> permissions = getUserPermissions(username);
         return PermissionEvaluator.hasAnyPermission(permissions, codes);
     }
 
-    /**
-     * Kiểm tra user có TẤT CẢ các quyền.
-     */
     public boolean hasAllPermissions(String username, int... codes) {
         if (codes == null || codes.length == 0) return false;
         Set<Integer> permissions = getUserPermissions(username);
         return PermissionEvaluator.hasAllPermissions(permissions, codes);
     }
 
-    /**
-     * Đảm bảo user hiện tại có ÍT NHẤT 1 trong các quyền {@code codes}, ngược lại ném
-     * {@link AccessDeniedException} (Spring map HTTP 403 qua handler toàn cục nếu có).
-     *
-     * @param codes danh sách permission code yêu cầu (vd {@link PermissionCode#READ_USER})
-     */
     public void requireAnyPermission(int... codes) {
         String username = currentUsername();
         if (username == null) {
@@ -94,9 +68,6 @@ public class PermissionService {
         }
     }
 
-    /**
-     * Đảm bảo user hiện tại có 1 quyền cụ thể (xét cả wildcard system-wide và gộp nhánh).
-     */
     public void requirePermission(int code) {
         String username = currentUsername();
         if (username == null) {
@@ -108,9 +79,6 @@ public class PermissionService {
         }
     }
 
-    /**
-     * Đảm bảo user hiện tại có TẤT CẢ các quyền chỉ định.
-     */
     public void requireAllPermissions(int... codes) {
         String username = currentUsername();
         if (username == null) {

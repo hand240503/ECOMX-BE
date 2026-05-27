@@ -21,10 +21,8 @@ public class UserAddressResponse {
     private Boolean isDefault;
     private Double latitude;
     private Double longitude;
-    /** Quãng đường lái xe tới kho (m); null nếu chưa tính được (OSRM lỗi). */
     private Double distanceToWarehouseMeters;
 
-    /** Phí ship ước tính (VND); null nếu không có khoảng cách. */
     private Long shippingFeeVnd;
 
     public static UserAddressResponse fromEntity(UserAddressEntity entity) {

@@ -30,7 +30,6 @@ public class JobReportServiceImpl implements JobReportService {
         this.jobReportDetailRepository = jobReportDetailRepository;
     }
 
-
     public JobReportEntity createReportForUser(CreateJobReportRequest request) {
 
         if (request.getUserId() == null) return null;
@@ -70,7 +69,6 @@ public class JobReportServiceImpl implements JobReportService {
 
         return jobReport;
     }
-
 
     private static int getDaysInMonth(int month, int year) {
         YearMonth yearMonth = YearMonth.of(year, month);
@@ -121,8 +119,6 @@ public class JobReportServiceImpl implements JobReportService {
         jobReportRepository.save(jobEnt);
         return jobReportDetailRepository.save(entity);
     }
-
-
 
     @Override
     public  JobReportDetailEntity getJobReportForUser(GetJobReportRequest request) {

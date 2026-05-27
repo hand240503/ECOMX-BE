@@ -13,14 +13,14 @@ public class CacheConfig {
     @Bean
     public CacheManager cacheManager() {
         CaffeineCacheManager mgr = new CaffeineCacheManager(
-                "similarItemsCf",      // key = productId  → similar (CF)
-                "similarItemsContent", // key = productId  → similar (content)
-                "userContentRecs",     // key = userId     → top-K từ cb_content_recommendation
-                "popularItems",        // key = "all"      → top popular
+                "similarItemsCf",
+                "similarItemsContent",
+                "userContentRecs",
+                "popularItems",
                 "longtermScores",
                 "fbtCache",
-                "users",               // UserServiceImpl @Cacheable by id
-                "userPermissions"      // PermissionService by username
+                "users",
+                "userPermissions"
         );
         mgr.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(30, TimeUnit.MINUTES)

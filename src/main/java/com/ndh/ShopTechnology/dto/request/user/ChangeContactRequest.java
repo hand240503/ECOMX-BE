@@ -15,4 +15,3 @@ public class ChangeContactRequest {
     @NotBlank(message = "Mật khẩu hiện tại không được để trống")
     private String currentPassword;
 }
-

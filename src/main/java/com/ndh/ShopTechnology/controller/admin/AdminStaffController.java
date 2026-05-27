@@ -18,9 +18,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Quản lý <b>nhân viên nội bộ</b>: mọi role trừ CUSTOMER.
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/staff")
 @RequiredArgsConstructor

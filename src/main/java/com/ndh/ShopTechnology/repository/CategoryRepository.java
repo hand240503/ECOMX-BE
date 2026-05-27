@@ -18,7 +18,6 @@ public interface CategoryRepository extends JpaRepository<CategoryEntity, Long> 
 
   List<CategoryEntity> findByParentId(Long parentId);
 
-  /** True when {@code parentId} is a parent category (has at least one direct child). */
   boolean existsByParent_Id(Long parentId);
 
   boolean existsByCode(String code);

@@ -13,7 +13,6 @@ public interface CbContentRecommendationService {
 
     boolean existsForUser(Long userId);
 
-    /** API "phẳng" để Hybrid service dùng — tự lọc excludeIds. */
     List<RecommendationItem> getRecommendations(
             Long userId, int limit, Collection<Long> excludeIds);
 

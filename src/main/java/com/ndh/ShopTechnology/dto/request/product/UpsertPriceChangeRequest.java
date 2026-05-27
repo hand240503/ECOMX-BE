@@ -3,6 +3,7 @@ package com.ndh.ShopTechnology.dto.request.product;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -19,7 +20,6 @@ public class UpsertPriceChangeRequest {
     @Min(0)
     private Double basePrice;
 
-    /** Nullable = không có giá ưu đãi. */
     @Min(0)
     private Double salePrice;
 
@@ -29,5 +29,13 @@ public class UpsertPriceChangeRequest {
     private Date endAt;
 
     private Boolean enabled;
-}
 
+    @Min(value = 1, message = "quantityLimit phải >= 1 nếu đặt")
+    private Integer quantityLimit;
+
+    @Min(value = 1, message = "maxPerCustomer phải >= 1 nếu đặt")
+    private Integer maxPerCustomer;
+
+    @Size(max = 64)
+    private String requiredPaymentMethodCode;
+}

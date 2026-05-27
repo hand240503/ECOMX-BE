@@ -17,10 +17,6 @@ public interface BrandRepository extends JpaRepository<BrandEntity, Long> {
 
     boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
 
-    /**
-     * Lấy các brand phân biệt có sản phẩm thuộc danh mục {@code categoryId}
-     * hoặc danh mục con trực tiếp của nó.
-     */
     @Query("""
             SELECT DISTINCT p.brand FROM products p
             WHERE p.brand IS NOT NULL

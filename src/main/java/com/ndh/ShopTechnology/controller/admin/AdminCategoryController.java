@@ -14,10 +14,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Quản trị danh mục sản phẩm ({@link com.ndh.ShopTechnology.entities.product.CategoryEntity}).
- * Hỗ trợ danh mục cha–con qua {@code parent_id}.
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/categories")
 public class AdminCategoryController {

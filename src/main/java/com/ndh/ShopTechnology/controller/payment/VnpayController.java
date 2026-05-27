@@ -25,10 +25,6 @@ public class VnpayController {
         this.vnpayService = vnpayService;
     }
 
-    /**
-     * Tạo URL chuyển hướng sang cổng VNPAY (mở tab / location.assign). {@code sessionId} = {@code checkoutSessionId}
-     * trả về từ {@code POST /orders} khi PTTT = VNPAY.
-     */
     @PostMapping("/checkout-sessions/{sessionId}/payment-url")
     public ResponseEntity<APIResponse<VnpayCreatePaymentData>> createPaymentUrl(
             @PathVariable long sessionId,
@@ -43,19 +39,12 @@ public class VnpayController {
                 null));
     }
 
-    /**
-     * IPN — server VNPAY gọi (GET). Cập nhật trạng thái thanh toán, phản hồi JSON theo tài liệu VNPAY.
-     * Đăng ký full URL công khai (HTTPS khi production) tại trang cấu hình VNPAY.
-     */
     @GetMapping("/ipn")
     @ResponseStatus(HttpStatus.OK)
     public VnpayIpnResponse ipn(HttpServletRequest request) {
         return vnpayService.handleIpn(request);
     }
 
-    /**
-     * Return — khách hàng quay lại từ VNPAY. Chỉ xác thực chữ ký, redirect về FE (DB cập nhật tại IPN).
-     */
     @GetMapping("/return")
     public RedirectView vnpayReturn(HttpServletRequest request) {
         String target = vnpayService.buildReturnRedirectUrl(request);

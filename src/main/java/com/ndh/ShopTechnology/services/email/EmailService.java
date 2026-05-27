@@ -19,9 +19,6 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    /**
-     * Gửi email OTP với HTML template (Async)
-     */
     @Async("mailTaskExecutor")
     public CompletableFuture<Void> sendOTPEmail(String toEmail, String otpCode) {
         try {
@@ -42,7 +39,6 @@ public class EmailService {
             return CompletableFuture.failedFuture(new RuntimeException("Không thể gửi email. Vui lòng thử lại sau.", e));
         }
     }
-
 
     @Async("mailTaskExecutor")
     public CompletableFuture<Void> sendPasswordResetLinkEmail(String toEmail, String resetLink) {

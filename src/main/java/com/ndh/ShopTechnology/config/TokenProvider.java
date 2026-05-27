@@ -109,7 +109,6 @@ public class TokenProvider implements Serializable {
         return parseAccessClaims(token).getSubject();
     }
 
-    // Backward compatibility for older call sites
     public String getUsernameFromToken(String token) {
         return getUsernameFromAccessToken(token);
     }
@@ -132,7 +131,6 @@ public class TokenProvider implements Serializable {
         }
     }
 
-    // Backward compatibility for older call sites
     public boolean validateToken(String token, UserDetails userDetails) {
         return validateAccessToken(token, userDetails);
     }
@@ -166,7 +164,6 @@ public class TokenProvider implements Serializable {
         return new UsernamePasswordAuthenticationToken(userDetails, "", authorities);
     }
 
-    // Backward compatibility for older call sites
     public UsernamePasswordAuthenticationToken getAuthentication(
             String accessToken,
             Authentication ignoredAuthentication,

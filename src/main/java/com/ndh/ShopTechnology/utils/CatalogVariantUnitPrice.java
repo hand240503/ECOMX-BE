@@ -8,9 +8,6 @@ import org.springframework.http.HttpStatus;
 import java.util.Comparator;
 import java.util.Objects;
 
-/**
- * Đơn giá catalog mặc định của một biến thể (bản ghi {@link PriceEntity} có id nhỏ nhất).
- */
 public final class CatalogVariantUnitPrice {
 
     private CatalogVariantUnitPrice() {

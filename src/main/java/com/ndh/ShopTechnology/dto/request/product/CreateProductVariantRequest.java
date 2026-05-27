@@ -18,7 +18,6 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class CreateProductVariantRequest {
 
-    /** Mã SKU chuỗi (khuyến nghị unique). */
     private String skuCode;
 
     @Builder.Default

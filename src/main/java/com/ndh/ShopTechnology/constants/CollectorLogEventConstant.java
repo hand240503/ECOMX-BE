@@ -2,9 +2,6 @@ package com.ndh.ShopTechnology.constants;
 
 import java.util.Set;
 
-/**
- * Các giá trị {@code event} được phép ghi vào {@code collector_log} và dùng cho gợi ý / popularity.
- */
 public final class CollectorLogEventConstant {
 
     public static final String DETAILS = "details";

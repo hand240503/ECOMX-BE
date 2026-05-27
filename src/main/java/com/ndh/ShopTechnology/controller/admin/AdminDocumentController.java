@@ -18,11 +18,6 @@ import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Upload tài liệu / media cho luồng Admin — {@code {api.prefix}/admin/document/upload}.
- * Cùng xử lý lưu file với {@link com.ndh.ShopTechnology.controller.document.DocumentController} nhưng chỉ
- * user có quyền vào {@code /admin/**} mới gọi được.
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/document")
 public class AdminDocumentController {
@@ -100,10 +95,6 @@ public class AdminDocumentController {
         return ResponseEntity.status(HttpStatus.OK).body(response);
     }
 
-    /**
-     * Xóa document (xóa asset Cloudinary + bản ghi DB).
-     * Quyền: DELETE_DOCUMENT (300004) hoặc DELETE_PRODUCT (100004) nếu media gắn catalogue sản phẩm / hãng / danh mục.
-     */
     @DeleteMapping("/{id}")
     @PreAuthorize("@perm.checkCatalogueDocumentAlter(300004, 100004, #id)")
     public ResponseEntity<APIResponse<Void>> deleteDocument(@PathVariable Long id) {
@@ -128,11 +119,6 @@ public class AdminDocumentController {
         }
     }
 
-    /**
-     * Thay thế file ảnh của document: xóa asset cũ trên Cloudinary, upload file mới.
-     * Các trường metadata (entityId, entityType, isMain, description…) giữ nguyên.
-     * Quyền: UPDATE_DOCUMENT (300003) hoặc UPDATE_PRODUCT (100003) nếu media gắn catalogue.
-     */
     @PutMapping(value = "/{id}/replace", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@perm.checkCatalogueDocumentAlter(300003, 100003, #id)")
     public ResponseEntity<APIResponse<DocumentEntity>> replaceDocumentFile(
@@ -165,10 +151,6 @@ public class AdminDocumentController {
         }
     }
 
-    /**
-     * Cập nhật metadata (description, fileDes) của document — không thay file thực tế.
-     * Quyền: UPDATE_DOCUMENT (300003) hoặc UPDATE_PRODUCT (100003) nếu media gắn catalogue.
-     */
     @PatchMapping("/{id}")
     @PreAuthorize("@perm.checkCatalogueDocumentAlter(300003, 100003, #id)")
     public ResponseEntity<APIResponse<DocumentEntity>> updateDocumentMeta(
@@ -195,9 +177,6 @@ public class AdminDocumentController {
         }
     }
 
-    /**
-     * Đặt document đã tồn tại làm ảnh đại diện (main) trong cùng entity — không upload file mới.
-     */
     @PostMapping("/{id}/main")
     @PreAuthorize("@perm.checkCatalogueDocumentAlter(300003, 100003, #id)")
     public ResponseEntity<APIResponse<DocumentEntity>> setMainDocument(@PathVariable Long id) {

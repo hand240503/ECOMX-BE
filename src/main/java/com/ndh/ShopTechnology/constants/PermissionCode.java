@@ -7,36 +7,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Định nghĩa toàn bộ mã quyền (permission code) của hệ thống.
- *
- * <p>Quy tắc mã quyền:
- * <ul>
- *   <li>Mã 3 chữ số bắt đầu bằng <b>1</b> (101..104, 110..112): áp dụng cho TOÀN BỘ module ("system-wide").</li>
- *   <li>Mã 6 chữ số: áp dụng cho từng module — cấu trúc <code>MMMAAA</code> với
- *       <ul>
- *         <li><b>MMM</b> = mã module</li>
- *         <li><b>AAA</b> = mã action (001 Create, 002 Read, 003 Update, 004 Delete)</li>
- *       </ul>
- *   </li>
- * </ul>
- *
- * <p>Ví dụ: <code>100002</code> = đọc toàn nhóm catalogue sản phẩm (gồm sản phẩm,
- * giá, đơn vị tính, thương hiệu, danh mục). {@code normalizeGrantPermissionCode}
- * và {@link #expandedMergedCodesEqualToCanonical} gom các mã cũ ({@code 150xxx}…{@code 200xxx})
- * vào một mã chuẩn {@code 100xxx}.
- *
- * <p>Lưu ý: User có quyền hệ thống <code>102</code> (Read all) sẽ tự động đọc được mọi module
- * (xem {@code PermissionEvaluator#hasPermission}).
- */
 public final class PermissionCode {
 
     private PermissionCode() {
     }
 
-    // =====================================================================
-    // SYSTEM-WIDE (3 chữ số, prefix 1)
-    // =====================================================================
     public static final int CREATE_ALL = 101;
     public static final int READ_ALL   = 102;
     public static final int UPDATE_ALL = 103;
@@ -44,15 +19,9 @@ public final class PermissionCode {
     public static final int LOCK_USER  = 110;
     public static final int MANAGE_ROLE = 111;
 
-    // =====================================================================
-    // MODULE CODES (MMM)
-    // =====================================================================
     public static final int MODULE_PRODUCT    = 100;
-    /** Mã module giá trong DB/ghi nhật ký — về catalogue cấp quyền được gộp vào {@link #MODULE_PRODUCT}. */
     public static final int MODULE_PRICE      = 150;
-    /** Đơn vị tính sản phẩm (cái, thùng, kg, …) — dùng khi tạo giá catalog. */
     public static final int MODULE_UNIT       = 160;
-    /** Thương hiệu / hãng sản phẩm — dùng khi tạo / sửa sản phẩm ({@code brand_id}). */
     public static final int MODULE_BRAND      = 170;
     public static final int MODULE_CATEGORY   = 200;
     public static final int MODULE_DOCUMENT   = 300;
@@ -63,92 +32,65 @@ public final class PermissionCode {
     public static final int MODULE_ROLE       = 800;
     public static final int MODULE_PERMISSION = 900;
 
-    /** Các mã nhánh “sản phẩm” (giá / đơn vị / hãng / danh mục) được gộp vào {@link #MODULE_PRODUCT}. */
     private static final int[] PRODUCT_MERGED_SOURCE_MODULES =
             new int[]{MODULE_PRODUCT, MODULE_PRICE, MODULE_UNIT, MODULE_BRAND, MODULE_CATEGORY};
-    /** Nhân viên + user admin gộp thành quản lý user ({@link #MODULE_USER}). */
     private static final int[] USER_MERGED_SOURCE_MODULES = new int[]{MODULE_USER, MODULE_EMPLOYEE};
 
-    // =====================================================================
-    // ACTION CODES (AAA)
-    // =====================================================================
     public static final int ACTION_CREATE = 1;
     public static final int ACTION_READ   = 2;
     public static final int ACTION_UPDATE = 3;
     public static final int ACTION_DELETE = 4;
 
-    // =====================================================================
-    // MODULE-SPECIFIC (6 chữ số) — Generated qua moduleAction(...)
-    // =====================================================================
-
-    // Product (100xxx)
     public static final int CREATE_PRODUCT = 100001;
     public static final int READ_PRODUCT   = 100002;
     public static final int UPDATE_PRODUCT = 100003;
     public static final int DELETE_PRODUCT = 100004;
 
-    // Price (150xxx) — quản lý mọi loại giá của sản phẩm
     public static final int CREATE_PRICE = 150001;
     public static final int READ_PRICE   = 150002;
     public static final int UPDATE_PRICE = 150003;
     public static final int DELETE_PRICE = 150004;
 
-    // Unit (160xxx)
     public static final int CREATE_UNIT = 160001;
     public static final int READ_UNIT   = 160002;
     public static final int UPDATE_UNIT = 160003;
     public static final int DELETE_UNIT = 160004;
 
-    // Brand (170xxx)
     public static final int CREATE_BRAND = 170001;
     public static final int READ_BRAND   = 170002;
     public static final int UPDATE_BRAND = 170003;
     public static final int DELETE_BRAND = 170004;
 
-    // Category (200xxx)
     public static final int CREATE_CATEGORY = 200001;
     public static final int READ_CATEGORY   = 200002;
     public static final int UPDATE_CATEGORY = 200003;
     public static final int DELETE_CATEGORY = 200004;
 
-    // Document (300xxx)
     public static final int CREATE_DOCUMENT = 300001;
     public static final int READ_DOCUMENT   = 300002;
     public static final int UPDATE_DOCUMENT = 300003;
     public static final int DELETE_DOCUMENT = 300004;
 
-    // Employee (400xxx) — quản lý nhân viên (user không phải Customer)
     public static final int CREATE_EMPLOYEE = 400001;
     public static final int READ_EMPLOYEE   = 400002;
     public static final int UPDATE_EMPLOYEE = 400003;
     public static final int DELETE_EMPLOYEE = 400004;
 
-    // Order (500xxx)
     public static final int CREATE_ORDER = 500001;
     public static final int READ_ORDER   = 500002;
     public static final int UPDATE_ORDER = 500003;
     public static final int DELETE_ORDER = 500004;
 
-    // Report (600xxx) — job report
     public static final int CREATE_REPORT = 600001;
     public static final int READ_REPORT   = 600002;
     public static final int UPDATE_REPORT = 600003;
     public static final int DELETE_REPORT = 600004;
 
-    // User (700xxx) — thông tin người dùng (cho admin)
     public static final int CREATE_USER = 700001;
     public static final int READ_USER   = 700002;
     public static final int UPDATE_USER = 700003;
     public static final int DELETE_USER = 700004;
 
-    // =====================================================================
-    // HELPERS
-    // =====================================================================
-
-    /**
-     * Compose module-action code: <code>MMM * 1000 + AAA</code>.
-     * Ví dụ: {@code moduleAction(100, 2)} → 100002 (Read Product).
-     */
     public static int moduleAction(int moduleCode, int actionCode) {
         if (moduleCode < 100 || moduleCode > 999) {
             throw new IllegalArgumentException("moduleCode must be 3 digits: " + moduleCode);
@@ -159,32 +101,24 @@ public final class PermissionCode {
         return moduleCode * 1000 + actionCode;
     }
 
-    /** True nếu code là 3 chữ số (100..999) — system-wide. */
     public static boolean isSystemWide(int code) {
         return code >= 100 && code <= 999;
     }
 
-    /** True nếu code là 6 chữ số (100000..999999) — module-specific. */
     public static boolean isModuleSpecific(int code) {
         return code >= 100_000 && code <= 999_999;
     }
 
-    /** Trích action từ mã 6 chữ số (vd 100002 → 2). Trả -1 nếu không phải mã 6 chữ số. */
     public static int extractAction(int code) {
         if (!isModuleSpecific(code)) return -1;
         return code % 1000;
     }
 
-    /** Trích module từ mã 6 chữ số (vd 100002 → 100). Trả -1 nếu không phải mã 6 chữ số. */
     public static int extractModule(int code) {
         if (!isModuleSpecific(code)) return -1;
         return code / 1000;
     }
 
-    /**
-     * Mã system-wide (101..104) tương ứng với action của một mã 6 chữ số. Vd 100003 → 103 (UPDATE_ALL).
-     * Trả -1 nếu không có ánh xạ (vd code không phải CRUD chuẩn).
-     */
     public static int systemWideForAction(int code) {
         int action = extractAction(code);
         switch (action) {
@@ -196,10 +130,6 @@ public final class PermissionCode {
         }
     }
 
-    /**
-     * Chuẩn hoá mã cấp quyền / lưu grant: các nhánh sản phẩm ({@code 100..200}) và
-     * nhánh nhân viên ({@link #MODULE_EMPLOYEE}) gộp lần lượt thành {@code 100xxx} và {@code 700xxx}.
-     */
     public static int normalizeGrantPermissionCode(int code) {
         if (!isModuleSpecific(code)) {
             return code;
@@ -219,9 +149,6 @@ public final class PermissionCode {
         return code;
     }
 
-    /**
-     * Mọi mã trong cùng nhóm merge (chuẩn + nhánh legacy) có cùng năng lực — revoke nên quét đủ tập.
-     */
     public static LinkedHashSet<Integer> expandedMergedCodesEqualToCanonical(int canonOrLegacy) {
         int canon = normalizeGrantPermissionCode(canonOrLegacy);
         LinkedHashSet<Integer> out = new LinkedHashSet<>();
@@ -245,7 +172,6 @@ public final class PermissionCode {
         return out;
     }
 
-    /** Thứ tự hàng/phân hệ trên catalogue cấp quyền (mỗi năng lực chỉ một mã 6 chữ số). */
     public static List<Integer> catalogGrantableModuleSpecificCodesOrdered() {
         List<Integer> out = new ArrayList<>(20);
         int[] modules = new int[]{MODULE_PRODUCT, MODULE_DOCUMENT, MODULE_ORDER, MODULE_REPORT, MODULE_USER};
@@ -257,9 +183,6 @@ public final class PermissionCode {
         return out;
     }
 
-    /**
-     * Tập hợp tất cả mã quyền hợp lệ (đã được khai báo). Dùng để validate input từ client.
-     */
     public static Set<Integer> allKnownCodes() {
         return KNOWN_CODES;
     }

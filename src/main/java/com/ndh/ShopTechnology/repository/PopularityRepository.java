@@ -8,19 +8,8 @@ import org.springframework.data.repository.Repository;
 
 import java.util.List;
 
-/**
- * Repository "đặc biệt" — chỉ chứa native aggregate query trên bảng collector_log.
- * Bind root entity = CollectorLogEntity (bảng nguồn) để Spring Data JPA dựng được metamodel.
- * Không kế thừa CrudRepository / JpaRepository nên KHÔNG mở các method CRUD ra ngoài.
- */
 public interface PopularityRepository extends Repository<CollectorLogEntity, Long> {
 
-    /**
-     * Top sản phẩm phổ biến — chỉ event được thu thập ({@code details}, {@code moreDetails}, {@code buy}):
-     *   buy         × 5
-     *   moreDetails × 2
-     *   details     × 1
-     */
     @Query(value = """
         SELECT product_id AS productId,
                SUM(CASE event
@@ -38,9 +27,6 @@ public interface PopularityRepository extends Repository<CollectorLogEntity, Lon
         """, nativeQuery = true)
     List<PopularProductRow> findTopPopular(Pageable pageable);
 
-    /**
-     * (Tuỳ chọn) Chỉ trending 30 ngày gần nhất — cần khi data mới nhiều.
-     */
     @Query(value = """
         SELECT product_id AS productId,
                SUM(CASE event

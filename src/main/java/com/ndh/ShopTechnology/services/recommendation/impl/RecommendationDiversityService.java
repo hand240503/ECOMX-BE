@@ -24,9 +24,6 @@ public class RecommendationDiversityService {
     private final RecommendationDiversityProperties properties;
     private final ProductRepository productRepository;
 
-    /**
-     * Ưu tiên điểm: nhận item nếu hãng chưa đạt {@code maxPerBrand}; phần vượt nối cuối (cùng thứ tự điểm trong nhóm overflow).
-     */
     public List<RecommendationItem> diversifyByBrand(List<RecommendationItem> ranked, int limit) {
         if (ranked == null || ranked.isEmpty()) {
             return List.of();

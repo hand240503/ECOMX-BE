@@ -38,9 +38,7 @@ public class UpdateProductVariantItemRequest {
 
     private List<Long> removedPriceIds;
 
-    /** Document ảnh của đúng SKU này ({@code entity_type} PRODUCT_VARIANT). */
     private List<Long> removedDocumentIds;
 
-    /** Đặt ảnh main trong gallery của SKU (phải là document variant của đúng {@link #id}). */
     private Long mainDocumentId;
 }

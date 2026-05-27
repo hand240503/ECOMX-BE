@@ -10,9 +10,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * Tóm tắt media gắn sản phẩm trong {@link ProductFullResponse#documents} (không gồm toàn bộ cột Entity).
- */
 @Getter
 @Setter
 @Builder
@@ -25,7 +22,6 @@ public class ProductDocumentSummary {
   private String fileName;
   private String filePath;
   private String fileSize;
-  /** {@link DocumentKind}: {@code 1} ảnh, {@code 2} video, {@code 3} tài liệu. */
   private Integer type;
 
   @JsonProperty("isMain")

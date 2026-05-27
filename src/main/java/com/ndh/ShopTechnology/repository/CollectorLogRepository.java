@@ -13,10 +13,6 @@ import java.util.List;
 @Repository
 public interface CollectorLogRepository extends JpaRepository<CollectorLogEntity, Long> {
 
-        // ─────────────────────────────────────────────────────────────
-        // Các method CRUD / filter cho CollectorLogService (có sẵn)
-        // ─────────────────────────────────────────────────────────────
-
         List<CollectorLogEntity> findByUserId(Long userId);
 
         List<CollectorLogEntity> findByProductId(Long productId);
@@ -56,11 +52,6 @@ public interface CollectorLogRepository extends JpaRepository<CollectorLogEntity
                         @Param("startDate") Date startDate,
                         @Param("endDate") Date endDate);
 
-        // ─────────────────────────────────────────────────────────────
-        // Các method cho Recommendation (Bước 4 + Bước 5)
-        // ─────────────────────────────────────────────────────────────
-
-        /** Đếm tổng số event của 1 user — dùng cho UserStateService (Bước 4). */
         @Query(value = """
                         SELECT COUNT(*) FROM collector_log
                         WHERE user_id = :userId
@@ -68,11 +59,6 @@ public interface CollectorLogRepository extends JpaRepository<CollectorLogEntity
                         """, nativeQuery = true)
         long countByUserId(@Param("userId") Long userId);
 
-        /**
-         * N product_id user đã tương tác gần nhất (Bước 5 - hybrid ACTIVE).
-         * Truyền sessionId = null để không filter theo session.
-         * Dùng GROUP BY + MAX(timestamp): MySQL không cho ORDER BY cột ngoài SELECT khi dùng DISTINCT.
-         */
         @Query(value = """
                         SELECT product_id FROM (
                             SELECT product_id, MAX(`timestamp`) AS last_ts
@@ -109,7 +95,6 @@ public interface CollectorLogRepository extends JpaRepository<CollectorLogEntity
                         @Param("since") LocalDateTime since,
                         @Param("limit") int limit);
 
-
     @Query(value = """
     SELECT product_id            AS productId,
            MAX(`timestamp`)      AS lastTs,
@@ -129,9 +114,6 @@ public interface CollectorLogRepository extends JpaRepository<CollectorLogEntity
             @Param("limit") int limit
     );
 
-    /**
-     * Khách (chưa đăng nhập): N sản phẩm tương tác gần nhất theo phiên (session_id), user_id NULL.
-     */
     @Query(value = """
             SELECT product_id FROM (
                 SELECT product_id, MAX(`timestamp`) AS last_ts

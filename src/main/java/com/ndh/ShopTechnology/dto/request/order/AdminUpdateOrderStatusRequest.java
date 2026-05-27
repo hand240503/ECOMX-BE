@@ -7,18 +7,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Body của {@code PATCH /admin/orders/{id}/status}.
- * <p>
- * Trạng thái hợp lệ (trừ returnRefundStatus — quản lý riêng):
- * <ul>
- *   <li>1 — Chờ chuẩn bị</li>
- *   <li>2 — Chờ vận chuyển</li>
- *   <li>3 — Chờ giao hàng</li>
- *   <li>4 — Hoàn thành</li>
- *   <li>5 — Đã hủy</li>
- * </ul>
- */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

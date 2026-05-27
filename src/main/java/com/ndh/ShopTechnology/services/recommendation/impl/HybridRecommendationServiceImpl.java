@@ -46,11 +46,8 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
     private static final double W_CF_ITEM = 0.7;
     private static final double W_CONTENT_ITEM = 0.3;
 
-    /** Max rank (offset + limit) served for home pagination. */
     private static final int MAX_HOME_RANK = 500;
-    /** Max items per home request. */
     private static final int MAX_HOME_PAGE_SIZE = 100;
-    /** Upper bound on merged candidate pool from sources. */
     private static final int MAX_MERGE_POOL = 2000;
 
     @Override
@@ -114,10 +111,6 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
         return diversified.stream().skip(off).limit(lim).toList();
     }
 
-    /**
-     * long = chuẩn hoá score trước session; short = chuẩn hoá score sau session
-     * boost.
-     */
     private List<RecommendationItem> blendLongShort(
             List<RecommendationItem> base,
             List<RecommendationItem> boosted,
@@ -297,9 +290,6 @@ public class HybridRecommendationServiceImpl implements HybridRecommendationServ
         return mergeFromSeedProducts(recent, limit, false);
     }
 
-    /**
-     * Gộp gợi ý từ danh sách seed (CF; và content item–item nếu {@code hybridContent}).
-     */
     private List<RecommendationItem> mergeFromSeedProducts(
             List<Long> recent, int limit, boolean hybridContent) {
 

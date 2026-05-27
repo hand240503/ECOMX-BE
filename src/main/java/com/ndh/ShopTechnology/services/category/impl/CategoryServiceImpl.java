@@ -40,7 +40,6 @@ public class CategoryServiceImpl implements CategoryService {
         this.userService = userService;
     }
 
-    /** Lấy URL ảnh đại diện (is_main=true) của một category; trả về {@code null} nếu chưa có. */
     private String resolveThumbnail(Long categoryId) {
         return documentRepository
                 .findMainByEntityIdAndEntityType(categoryId, DocumentEntityType.ID_DOCUMENT_ENTITY_CATEGORY)
@@ -53,7 +52,6 @@ public class CategoryServiceImpl implements CategoryService {
     public CategoryResponse createCategory(CreateCategoryRequest req) {
         UserEntity currentUser = userService.getCurrentUser();
 
-        // Check if code already exists
         if (categoryRepository.existsByCode(req.getCode())) {
             throw new IllegalArgumentException("Category code already exists: " + req.getCode());
         }
@@ -63,7 +61,6 @@ public class CategoryServiceImpl implements CategoryService {
                 .name(req.getName())
                 .status(req.getStatus());
 
-        // Set parent if provided
         if (req.getParentId() != null) {
             CategoryEntity parent = categoryRepository.findById(req.getParentId())
                     .orElseThrow(() -> new NotFoundEntityException(
@@ -73,7 +70,6 @@ public class CategoryServiceImpl implements CategoryService {
 
         CategoryEntity ent = builder.build();
         ent = categoryRepository.save(ent);
-        // Ảnh chưa upload ngay khi tạo mới → thumbnailUrl = null
         return CategoryResponse.fromEntity(ent, null);
     }
 
@@ -144,9 +140,7 @@ public class CategoryServiceImpl implements CategoryService {
         CategoryEntity category = categoryRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Category not found with id: " + id));
 
-        // Update fields if provided
         if (req.getCode() != null && !req.getCode().equals(category.getCode())) {
-            // Check if new code already exists
             if (categoryRepository.existsByCode(req.getCode())) {
                 throw new IllegalArgumentException("Category code already exists: " + req.getCode());
             }
@@ -161,7 +155,6 @@ public class CategoryServiceImpl implements CategoryService {
             category.setStatus(req.getStatus());
         }
 
-        // Handle parent change
         if (req.getParentId() != null) {
             if (req.getParentId().equals(id)) {
                 throw new IllegalArgumentException("Category cannot be its own parent");
@@ -171,7 +164,6 @@ public class CategoryServiceImpl implements CategoryService {
                             "Parent category not found with id: " + req.getParentId()));
             category.setParent(parent);
         } else if (req.getParentId() == null && category.getParent() != null) {
-            // Setting parentId to null means making it a root category
             category.setParent(null);
         }
 
@@ -185,13 +177,11 @@ public class CategoryServiceImpl implements CategoryService {
         CategoryEntity category = categoryRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Category not found with id: " + id));
 
-        // Check if category has children
         if (category.getChildren() != null && !category.getChildren().isEmpty()) {
             throw new IllegalArgumentException(
                     "Cannot delete category with children. Please delete or move children first.");
         }
 
-        // Check if category has products
         if (category.getProducts() != null && !category.getProducts().isEmpty()) {
             throw new IllegalArgumentException("Cannot delete category with products. Please remove products first.");
         }

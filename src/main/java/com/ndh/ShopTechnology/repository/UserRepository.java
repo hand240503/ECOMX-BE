@@ -30,10 +30,6 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     boolean existsByPhoneNumberAndIdNot(String phoneNumber, Long id);
 
-    /**
-     * Load user kèm role (permission_codes JSON trên {@code roles}), user permission grants, userInfo và default address.
-     * Dùng cho login và authentication.
-     */
     @Query("SELECT DISTINCT u FROM UserEntity u " +
             "LEFT JOIN FETCH u.role r " +
             "LEFT JOIN FETCH u.userPermissions " +
@@ -43,11 +39,6 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
             "AND (addr.isDefault = true OR addr.id IS NULL)")
     Optional<UserEntity> findByUsernameWithRolesAndPermissions(@Param("username") String username);
 
-    /**
-     * Load user kèm role (permission_codes JSON), user permission grants, userInfo và địa chỉ.
-     * Đồng bộ với login về độ đầy đủ (roles, permissions, defaultAddress); fetch toàn bộ địa chỉ
-     * để trường hợp chưa có địa chỉ mặc định vẫn trả về user (khác truy vấn login tối ưu theo username).
-     */
     @Query("SELECT DISTINCT u FROM UserEntity u " +
             "LEFT JOIN FETCH u.role r " +
             "LEFT JOIN FETCH u.userPermissions " +
@@ -69,7 +60,6 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
     @EntityGraph(attributePaths = {"role", "userPermissions", "userInfo", "addresses"})
     Page<UserEntity> findByRole_Code(String roleCode, Pageable pageable);
 
-    /** Toàn bộ user (mọi role), phân trang — dùng màn quản trị user thống nhất. */
     @EntityGraph(attributePaths = {"role", "userPermissions", "userInfo", "addresses"})
     @Query("SELECT u FROM UserEntity u")
     Page<UserEntity> findAllPagedForAdmin(Pageable pageable);

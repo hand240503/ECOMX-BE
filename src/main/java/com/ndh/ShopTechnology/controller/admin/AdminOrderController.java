@@ -14,18 +14,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * API quản lý đơn hàng dành cho admin/staff.
- *
- * <p>Tất cả endpoint nằm dưới {@code /admin/**} — đã lọc role qua {@link com.ndh.ShopTechnology.config.WebSecurityConfig}.
- * {@code @PreAuthorize} kiểm tra thêm permission code cụ thể.
- *
- * <p>Phân quyền:
- * <ul>
- *   <li>{@code GET} — {@link PermissionCode#READ_ORDER} (500002)</li>
- *   <li>{@code PATCH status} — {@link PermissionCode#UPDATE_ORDER} (500003)</li>
- * </ul>
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/orders")
 @RequiredArgsConstructor
@@ -33,9 +21,6 @@ public class AdminOrderController {
 
     private final OrderService orderService;
 
-    /**
-     * Lấy tất cả đơn hàng, tuỳ chọn lọc theo {@code status} (1–5).
-     */
     @GetMapping
     @PreAuthorize("@perm.check(" + PermissionCode.READ_ORDER + ")")
     public ResponseEntity<APIResponse<List<OrderResponse>>> getAllOrders(
@@ -49,9 +34,6 @@ public class AdminOrderController {
                 Map.of("count", orders.size())));
     }
 
-    /**
-     * Lấy chi tiết đơn hàng bất kỳ.
-     */
     @GetMapping("/{id}")
     @PreAuthorize("@perm.check(" + PermissionCode.READ_ORDER + ")")
     public ResponseEntity<APIResponse<OrderResponse>> getOrderById(@PathVariable Long id) {
@@ -64,10 +46,6 @@ public class AdminOrderController {
                 null));
     }
 
-    /**
-     * Cập nhật trạng thái đơn hàng (1–5, không bao gồm returnRefundStatus).
-     * <p>Luồng chuyển hợp lệ: 1→2/5, 2→3/5, 3→4/5. Trạng thái 4 và 5 là khoá cuối — không chỉnh được.
-     */
     @PatchMapping("/{id}/status")
     @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_ORDER + ")")
     public ResponseEntity<APIResponse<OrderResponse>> updateOrderStatus(

@@ -19,7 +19,6 @@ public class VolumePriceTierResponse {
     @JsonProperty("product_variant_id")
     private Long productVariantId;
 
-    /** SPU cha — tiện admin/FE. */
     @JsonProperty("product_id")
     private Long productId;
 

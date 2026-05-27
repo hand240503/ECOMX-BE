@@ -15,4 +15,8 @@ public interface ProductPriceChangeService {
             UpsertPriceChangeRequest request);
 
     void delete(Long productId, Long variantId, long priceChangeId);
+
+    boolean incrementSoldQuantity(Long priceChangeId, int qty);
+
+    boolean isWithinPerCustomerLimit(Long priceChangeId, Long userId, int qty);
 }

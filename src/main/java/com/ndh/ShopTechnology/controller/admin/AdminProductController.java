@@ -24,10 +24,6 @@ import java.util.stream.Collectors;
 
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * API quản trị sản phẩm — toàn bộ path dưới {@code {api.prefix}/admin/products}.
- * Yêu cầu JWT + role admin cụm (xem {@code WebSecurityConfig}); đọc/ghi kèm {@code @PreAuthorize} theo {@code PermissionCode}.
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/products")
 public class AdminProductController {
@@ -271,10 +267,6 @@ public class AdminProductController {
         }
     }
 
-    /**
-     * Cập nhật sản phẩm kèm ảnh: part JSON {@code product} + optional multipart {@code newImages} (lặp lại cùng tên field).
-     * Các field ảnh trong JSON: {@code removedDocumentIds}, {@code mainDocumentId}, {@code mainNewImageIndex}.
-     */
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@perm.check(100003)")
     public ResponseEntity<APIResponse<ProductFullResponse>> updateProductWithImages(
@@ -326,9 +318,6 @@ public class AdminProductController {
         }
     }
 
-    /**
-     * Upload ảnh cho một biến thể: multipart {@code newImages} (lặp field), optional {@code mainNewImageIndex}.
-     */
     @PostMapping(value = "/{productId}/variants/{variantId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@perm.check(100003)")
     public ResponseEntity<APIResponse<ProductFullResponse>> addVariantImages(

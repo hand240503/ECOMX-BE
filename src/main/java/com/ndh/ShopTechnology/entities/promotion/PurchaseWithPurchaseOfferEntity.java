@@ -6,9 +6,6 @@ import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
-/**
- * PWP: neo và đi kèm luôn gắn **một phân loại (SKU)** cụ thể; đếm SL và áp giá KM theo đúng variant đó.
- */
 @Getter
 @Setter
 @AllArgsConstructor

@@ -21,11 +21,11 @@ public class CreateCollectorLogRequest {
 
     private String platform;
 
-    private String metadata; // JSON string
+    private String metadata;
 
     private String ipAddress;
 
-    private Date timestamp; // If null, will use current time
+    private Date timestamp;
 
     private Long productId;
 

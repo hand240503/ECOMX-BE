@@ -21,4 +21,3 @@ public class ChangePasswordRequest {
     @NotBlank(message = "Xác nhận mật khẩu mới không được để trống")
     private String confirmPassword;
 }
-

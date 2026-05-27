@@ -173,7 +173,6 @@ public class VnpayServiceImpl implements VnpayService {
                 return new VnpayIpnResponse("04", "Invalid Amount");
             }
 
-            // Ưu tiên: bản ghi phiên checkout (PENDING/…); sau thanh toán thành công vẫn còn dòng (COMPLETED + order_id)
             CheckoutSessionEntity session = checkoutSessionRepository
                     .findByIdWithUserAndPaymentMethod(refId)
                     .orElse(null);
@@ -181,13 +180,11 @@ public class VnpayServiceImpl implements VnpayService {
                 return handleIpnForCheckoutSession(p, session, vnpLong);
             }
 
-            // Dữ liệu cũ: phiên từng bị xóa sau tạo đơn — idempotency theo cùng vnp_TxnRef
             var orderByTxn = orderRepository.findByVnpayCheckoutTxnRef(refId);
             if (orderByTxn.isPresent()) {
                 return handleIpnForOrderFromDeletedCheckout(p, orderByTxn.get(), vnpLong);
             }
 
-            // Tương thích: đơn cũ tạo trước (đã có bản ghi order + chưa thanh toán)
             OrderEntity order = orderRepository.findById(refId).orElse(null);
             if (order == null) {
                 return new VnpayIpnResponse("01", "Order not found");

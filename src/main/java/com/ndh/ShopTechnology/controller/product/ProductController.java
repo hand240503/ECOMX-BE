@@ -35,9 +35,6 @@ public class ProductController {
     this.productService = productService;
   }
 
-  /**
-   * FE gửi danh sách id; BE trả đúng các sản phẩm tồn tại, cùng thứ tự, bỏ trùng (tối đa 200 id).
-   */
   @PostMapping("/by-ids")
   public ResponseEntity<APIResponse<List<ProductFullResponse>>> getProductsByIds(
       @Valid @RequestBody GetProductsByIdsRequest request) {
@@ -51,10 +48,6 @@ public class ProductController {
     return ResponseEntity.ok(response);
   }
 
-  /**
-   * Cùng dữ liệu với {@code POST /by-ids} nhưng dùng query để tránh nhầm {@code GET /products/{id}} với
-   * {@code id = "by-ids"} (MethodArgumentTypeMismatchException). Ví dụ: {@code ?ids=1,2,3} (tối đa 200 id).
-   */
   @GetMapping("/by-ids")
   public ResponseEntity<APIResponse<List<ProductFullResponse>>> getProductsByIdsFromQuery(
       @RequestParam(value = "ids", required = false) String idsParam) {
@@ -177,7 +170,6 @@ public class ProductController {
     return ResponseEntity.ok(response);
   }
 
-  /** Cùng dữ liệu với {@code GET /featured} — lọc {@code is_featured = true}. */
   @GetMapping("/is-featured")
   public ResponseEntity<APIResponse<List<ProductFullResponse>>> getIsFeaturedProducts(
       @RequestParam(defaultValue = "10") int limit,
@@ -219,10 +211,6 @@ public class ProductController {
     return ResponseEntity.ok(response);
   }
 
-  /**
-   * Full-text style search on product name, description, {@code l_description}, and tag (active items). Pagination metadata may
-   * include {@code suggestedQuery} / {@code spellSuggestion} when the backend provides an alternate keyword.
-   */
   @GetMapping("/search")
   public ResponseEntity<APIResponse<List<ProductFullResponse>>> searchProducts(
       @RequestParam(value = "q", required = false, defaultValue = "") String q,
@@ -243,10 +231,6 @@ public class ProductController {
     return ResponseEntity.ok(response);
   }
 
-  /**
-   * PDP: full {@link ProductFullResponse} plus {@code recommendations} (similar products), same hybrid
-   * engine as {@code GET .../recommendations/pdp/{productId}}.
-   */
   @GetMapping("/{id}/detail")
   public ResponseEntity<APIResponse<ProductDetailResponse>> getProductDetail(
       @PathVariable Long id,
@@ -388,14 +372,6 @@ public class ProductController {
     }
   }
 
-  /**
-   * Danh sách tất cả sản phẩm đang chạy chương trình khuyến mãi, nhóm theo loại chương trình.
-   * <ul>
-   *   <li>{@code price_change} – sản phẩm đang có Price Change đang hiệu lực.</li>
-   *   <li>{@code volume_tier} – sản phẩm có Volume Price Tier (giá theo bậc số lượng) đang bật.</li>
-   *   <li>{@code purchase_with_purchase} – sản phẩm tham gia chương trình Mua Kèm Ưu Đãi (cả neo lẫn đi kèm).</li>
-   * </ul>
-   */
   @GetMapping("/active-promotions")
   public ResponseEntity<APIResponse<ActivePromotionsResponse>> getActivePromotions() {
     ActivePromotionsResponse data = productService.getActivePromotions();

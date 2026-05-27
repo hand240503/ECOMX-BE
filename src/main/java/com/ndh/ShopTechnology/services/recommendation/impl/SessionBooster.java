@@ -21,10 +21,8 @@ public class SessionBooster {
 
     private final ProductRepository productRepository;
 
-    /** Boost tối đa cho category: x1 -> x2.0 tuỳ weight relative */
     private static final double CATEGORY_BOOST_RANGE = 1.0;
 
-    /** Boost tối đa cho brand: x1 -> x1.5 tuỳ weight relative */
     private static final double BRAND_BOOST_RANGE = 0.5;
 
     public List<RecommendationItem> boost(
@@ -45,7 +43,6 @@ public class SessionBooster {
         double maxBrW  = ctx.getMaxBrandWeight();
 
         return baseRecs.stream()
-                // Loại sản phẩm đã xem trong session
                 .filter(r -> !ctx.getSessionProductIds().contains(r.getProductId()))
                 .map(r -> {
                     ProductEntity p = productMap.get(r.getProductId());
@@ -72,7 +69,6 @@ public class SessionBooster {
 
         double boost = 1.0;
 
-        // Category boost — tỷ lệ với weight relative (0..1)
         if (product.getCategory() != null) {
             double catW = ctx.getCategoryWeight(product.getCategory().getId());
             if (catW > 0 && maxCatW > 0) {
@@ -80,7 +76,6 @@ public class SessionBooster {
             }
         }
 
-        // Brand boost
         if (product.getBrand() != null) {
             double brW = ctx.getBrandWeight(product.getBrand().getName());
             if (brW > 0 && maxBrW > 0) {

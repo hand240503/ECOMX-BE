@@ -10,10 +10,6 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
-/**
- * Body gửi từ FE: 1 bản ghi thông tin đơn + danh sách đơn chi tiết
- * → ứng với 1 {@code OrderEntity} và nhiều {@code OrderDetailEntity}.
- */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

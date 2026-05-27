@@ -19,12 +19,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Admin endpoints quản lý role và permission.
- *
- * <p>Phần lớn endpoint gọi {@link PermissionService#requireAnyPermission(int...)}; service nghiệp vụ kiểm tra bổ sung.
- * Customer không truy cập được do không được seed quyền nào trong nhóm này.
- */
 @RestController
 @RequestMapping("${api.prefix}/admin")
 @RequiredArgsConstructor
@@ -32,8 +26,6 @@ public class RolePermissionController {
 
     private final RolePermissionService rolePermissionService;
     private final PermissionService permissionService;
-
-    // ===================== ROLES =====================
 
     @GetMapping("/roles")
     public ResponseEntity<APIResponse<List<RoleResponse>>> listRoles() {
@@ -64,8 +56,6 @@ public class RolePermissionController {
         return ResponseEntity.ok(APIResponse.of(true, "Role deleted successfully", null, null, null));
     }
 
-    // ===================== USER PERMISSIONS =====================
-
     @GetMapping("/users/{userId}/permissions")
     public ResponseEntity<APIResponse<UserPermissionsResponse>> getUserPermissions(@PathVariable Long userId) {
         permissionService.requireAnyPermission(
@@ -90,12 +80,6 @@ public class RolePermissionController {
         return ResponseEntity.ok(APIResponse.of(true, "Permissions revoked", data, null, null));
     }
 
-    // ===================== METADATA =====================
-
-    /**
-     * Trả về catalog các permission code đã khai báo trong hệ thống. Mỗi entry kèm {@code description} để FE
-     * render màn cấp quyền (tooltip / nhãn đầy đủ).
-     */
     @GetMapping("/permissions/catalog")
     public ResponseEntity<APIResponse<Map<String, Object>>> permissionCatalog() {
         permissionService.requireAnyPermission(
@@ -161,9 +145,6 @@ public class RolePermissionController {
         );
     }
 
-    /**
-     * Sinh label kiểu "Action Module" từ mã 6 chữ số. Vd 100002 → "READ PRODUCT".
-     */
     private static String labelForCatalog(int code) {
         if (!PermissionCode.isModuleSpecific(code)) return String.valueOf(code);
         int module = PermissionCode.extractModule(code);

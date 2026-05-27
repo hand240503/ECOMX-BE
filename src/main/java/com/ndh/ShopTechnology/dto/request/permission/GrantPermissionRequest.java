@@ -7,12 +7,6 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * Yêu cầu cấp quyền thêm cho 1 user.
- *
- * <p>Người gọi phải có quyền {@link com.ndh.ShopTechnology.constants.PermissionCode#UPDATE_USER}
- * và <b>chỉ được cấp những quyền mình đang có</b> (kiểm tra ở service).
- */
 @Getter
 @Setter
 @AllArgsConstructor
@@ -26,6 +20,5 @@ public class GrantPermissionRequest {
     @NotEmpty(message = "permissionCodes must not be empty")
     private List<Integer> permissionCodes;
 
-    /** Thời điểm hết hạn (null = vô thời hạn). */
     private LocalDateTime expiresAt;
 }

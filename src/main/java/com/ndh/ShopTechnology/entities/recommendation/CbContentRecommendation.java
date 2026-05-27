@@ -41,10 +41,6 @@ public class CbContentRecommendation {
     @Column(name = COL_USER_ID, nullable = false, unique = true)
     private Long userId;
 
-    /**
-     * Optional navigation to {@code users}; same column as {@link #userId}, read-only for JPA so
-     * writes still go through {@code userId}.
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = COL_USER_ID,
@@ -55,12 +51,10 @@ public class CbContentRecommendation {
     @JsonIgnore
     private UserEntity user;
 
-    /** Mảng product_id đã sort theo rank (rank 1 = phần tử [0]). */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = COL_PRODUCT_IDS, nullable = false, columnDefinition = "json")
     private List<Long> productIds;
 
-    /** Mảng similarity tương ứng (cùng index với productIds). */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = COL_SIMILARITIES, nullable = false, columnDefinition = "json")
     private List<Double> similarities;

@@ -57,14 +57,12 @@ public class CollectorLogServiceImpl implements CollectorLogService {
                 .ipAddress(request.getIpAddress())
                 .timestamp(request.getTimestamp() != null ? request.getTimestamp() : new Date());
 
-        // Set user if provided
         if (request.getUserId() != null) {
             UserEntity user = userRepository.findById(request.getUserId())
                     .orElseThrow(() -> new NotFoundEntityException("User not found with id: " + request.getUserId()));
             builder.user(user);
         }
 
-        // Set product if provided
         if (request.getProductId() != null) {
             ProductEntity product = productRepository.findById(request.getProductId())
                     .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + request.getProductId()));
@@ -140,7 +138,6 @@ public class CollectorLogServiceImpl implements CollectorLogService {
     public List<CollectorLogResponse> filterLogs(FilterCollectorLogRequest request) {
         List<CollectorLogEntity> logs;
 
-        // Build query based on filters
         if (request.getUserId() != null && request.getStartDate() != null && request.getEndDate() != null) {
             logs = collectorLogRepository.findByUserIdAndTimestampBetween(
                     request.getUserId(), request.getStartDate(), request.getEndDate());
@@ -161,7 +158,6 @@ public class CollectorLogServiceImpl implements CollectorLogService {
             logs = collectorLogRepository.findAll();
         }
 
-        // Apply pagination if provided
         if (request.getPage() != null && request.getSize() != null) {
             int page = request.getPage() > 0 ? request.getPage() - 1 : 0;
             int size = request.getSize() > 0 ? request.getSize() : 10;

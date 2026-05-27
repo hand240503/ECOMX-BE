@@ -41,11 +41,9 @@ public class UserAddressEntity extends BaseEntity {
     @Column(name = COL_LONGITUDE)
     private Double longitude;
 
-    /** Quãng đường lái xe (OSRM) từ điểm này tới kho; với WAREHOUSE thường là 0. */
     @Column(name = COL_DISTANCE_TO_WAREHOUSE)
     private Double distanceToWarehouseMeters;
 
-    /** Phí ship (VND) lưu cùng lúc cập nhật khoảng cách; đặt hàng ưu tiên cột này. */
     @Column(name = COL_SHIPPING_FEE_VND)
     private Long shippingFeeVnd;
 

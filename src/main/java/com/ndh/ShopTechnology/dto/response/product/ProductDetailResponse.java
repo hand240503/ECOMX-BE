@@ -18,6 +18,5 @@ import java.util.List;
 public class ProductDetailResponse {
 
   private ProductFullResponse product;
-  /** Similar / hybrid recommendations for PDP; never includes the current product. */
   private List<ProductFullResponse> recommendations;
 }

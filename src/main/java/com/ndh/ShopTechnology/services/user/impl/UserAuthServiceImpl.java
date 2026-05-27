@@ -70,13 +70,11 @@ public class UserAuthServiceImpl implements UserAuthService {
     @Override
     @Transactional
     public LoginResponse registerUser(RegisterUserRequest request) {
-        // ==================== VALIDATION ====================
         String login = validateAndNormalizeLogin(request.getEmail());
         String password = validatePassword(request.getPassword());
         String confirmPassword = request.getConfirmPassword();
         String verificationCode = request.getVerificationCode();
 
-        // Check password match
         if (!password.equals(confirmPassword)) {
             throw new CustomApiException(
                     HttpStatus.BAD_REQUEST,
@@ -84,7 +82,6 @@ public class UserAuthServiceImpl implements UserAuthService {
             );
         }
 
-        // ==================== VERIFY OTP ====================
         boolean verified = otpService.verifyOTPForRegister(login, verificationCode);
 
         if (!verified) {
@@ -94,23 +91,16 @@ public class UserAuthServiceImpl implements UserAuthService {
             );
         }
 
-        // ==================== CHECK USER EXISTS ====================
         checkUserNotExists(login);
 
-        // ==================== LOAD DEFAULT ROLE ====================
         RoleEntity role = loadRole("CUSTOMER");
 
-        // ==================== DETERMINE USERNAME / EMAIL / PHONE ====================
         boolean isPhone = isValidPhone(login);
         boolean isEmail = isValidEmail(login);
 
         String emailValue = isEmail ? login : null;
         String phone = isPhone ? login : null;
 
-        // Rules:
-        // 1) If user registers by username (not email/phone): keep username as-is
-        // 2) If user registers by email: generate random username (10 chars), derived from local-part before '@'
-        // 3) Phone case: keep current behavior (username = phone) until you define another rule
         final String username;
         if (!isEmail && !isPhone) {
             username = login;
@@ -120,7 +110,6 @@ public class UserAuthServiceImpl implements UserAuthService {
             username = generateUniqueUsernameForPhone();
         }
 
-        // ==================== BUILD USER ENTITY ====================
         UserEntity user = UserEntity.builder()
                 .username(username)
                 .password(passwordEncoder.encode(password))
@@ -129,7 +118,6 @@ public class UserAuthServiceImpl implements UserAuthService {
                 .status(SystemConstant.ACTIVE_STATUS)
                 .build();
 
-        // ==================== BUILD USER INFO ENTITY ====================
         UserInfoEntity userInfo = UserInfoEntity.builder()
                 .user(user)
                 .fullName(null)
@@ -139,22 +127,17 @@ public class UserAuthServiceImpl implements UserAuthService {
 
         user.setRole(role);
 
-        // ==================== SAVE USER ====================
         user = userRepository.save(user);
 
-        // ==================== CLEAR OTP ====================
         otpService.clearOTP(login);
 
         log.info("User registered successfully: username={}, email={}", username, emailValue);
 
-        // ==================== GENERATE TOKEN ====================
-        // Authenticate user sau khi đăng ký
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(username, password)
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        // ==================== BUILD RESPONSE ====================
         UserResponse userResponse = UserResponse.fromEntity(user);
 
         return LoginResponse.builder()
@@ -168,7 +151,6 @@ public class UserAuthServiceImpl implements UserAuthService {
         String login = validateLoginInput(request.getLogin());
         String password = request.getPassword();
 
-        // Load user với đầy đủ thông tin
         UserEntity user = loadUserForLogin(login);
 
         if (!passwordEncoder.matches(password, user.getPassword())) {
@@ -197,8 +179,6 @@ public class UserAuthServiceImpl implements UserAuthService {
                 .expiresIn(jwtService.getAccessTokenExpirationSeconds())
                 .build();
     }
-
-    // ==================== HELPER METHODS - VALIDATION ====================
 
     private String validateAndNormalizeLogin(String login) {
         if (login == null || login.trim().isEmpty()) {
@@ -229,11 +209,6 @@ public class UserAuthServiceImpl implements UserAuthService {
         return password;
     }
 
-    /**
-     * Chuẩn hoá role code về dạng UPPER, mặc định CUSTOMER nếu null.
-     * Lưu ý: hệ thống Role/Permission mới không dùng prefix "ROLE_" trong cột {@code roles.code}
-     * (Spring Security chỉ tự thêm prefix khi build authority).
-     */
     private String normalizeRoleCode(String roleCode) {
         return Optional.ofNullable(roleCode)
                 .map(String::trim)
@@ -249,8 +224,6 @@ public class UserAuthServiceImpl implements UserAuthService {
                 .filter(s -> !s.isEmpty())
                 .orElseThrow(() -> new AuthenticationFailedException(MessageConstant.AUTH_FAILED));
     }
-
-    // ==================== HELPER METHODS - DATABASE ====================
 
     private void checkUserNotExists(String email) {
         boolean isEmail = isValidEmail(email);
@@ -296,14 +269,12 @@ public class UserAuthServiceImpl implements UserAuthService {
         } else if (isEmail) {
             userOpt = userRepository.findOneByEmail(login.toLowerCase());
         } else {
-            // Username/internal login (không phải email/phone)
             userOpt = userRepository.findOneByUsername(login.toLowerCase());
         }
 
         if (userOpt.isPresent()) {
             UserEntity basicUser = userOpt.get();
 
-            // Load đầy đủ thông tin user (roles, permissions, userInfo, addresses)
             return userRepository.findByUsernameWithRolesAndPermissions(basicUser.getUsername())
                     .orElseThrow(() -> new AuthenticationFailedException(MessageConstant.AUTH_FAILED));
         }
@@ -326,7 +297,6 @@ public class UserAuthServiceImpl implements UserAuthService {
             base = "user";
         }
 
-        // Keep base short to make room for random suffix
         if (base.length() > 6) {
             base = base.substring(0, 6);
         }
@@ -338,7 +308,6 @@ public class UserAuthServiceImpl implements UserAuthService {
             }
         }
 
-        // Fallback: fully random
         for (int i = 0; i < 50; i++) {
             String candidate = randomString(RANDOM_USERNAME_LENGTH);
             if (!userRepository.existsByUsername(candidate)) {
@@ -357,12 +326,6 @@ public class UserAuthServiceImpl implements UserAuthService {
         return sb.toString();
     }
 
-    /**
-     * Phone registration rule:
-     * - Username length = 11
-     * - First 10 chars: [a-z0-9] random
-     * - 11th char: one of "#$@_"
-     */
     private String generateUniqueUsernameForPhone() {
         for (int i = 0; i < 100; i++) {
             String candidate = randomString(RANDOM_USERNAME_LENGTH)
@@ -533,7 +496,6 @@ public class UserAuthServiceImpl implements UserAuthService {
                         "User không tồn tại"
                 ));
 
-        // Revoke all refresh tokens
         refreshTokenService.revokeUserTokens(user);
 
         log.info("User logged out: {}", username);

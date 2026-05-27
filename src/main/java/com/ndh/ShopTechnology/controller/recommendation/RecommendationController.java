@@ -44,10 +44,6 @@ public class RecommendationController {
         return enrichmentService.enrich(items);
     }
 
-    /**
-     * PDP / listing: tương tự 1 sản phẩm theo <strong>hybrid có trọng số</strong> CF + content
-     * (item–item), không cần session/recent. Khác {@code /pdp/...} (cascade CF rồi mới bổ sung content).
-     */
     @GetMapping("/item-hybrid/{productId}")
     public List<ProductFullResponse> itemHybrid(
             @PathVariable Integer productId,

@@ -5,11 +5,6 @@ import lombok.*;
 
 import java.util.Set;
 
-/**
- * Tạo / cập nhật 1 role và danh sách permission mặc định của role đó.
- *
- * <p>Người gọi phải có role ADMIN hoặc SUPER_ADMIN.
- */
 @Getter
 @Setter
 @AllArgsConstructor

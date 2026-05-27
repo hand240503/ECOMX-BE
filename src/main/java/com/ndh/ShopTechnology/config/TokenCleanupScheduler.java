@@ -13,9 +13,6 @@ public class TokenCleanupScheduler {
 
     private final RefreshTokenService refreshTokenService;
 
-    /**
-     * Chạy mỗi ngày lúc 3h sáng để xóa expired tokens
-     */
     @Scheduled(cron = "0 0 3 * * *")
     public void cleanupExpiredTokens() {
         log.info("Starting cleanup of expired refresh tokens");

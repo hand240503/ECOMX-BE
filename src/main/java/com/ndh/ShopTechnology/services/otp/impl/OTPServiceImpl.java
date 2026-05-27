@@ -48,7 +48,6 @@ public class OTPServiceImpl implements OTPService {
         if (isValidEmail(login)) {
             sendOTPToEmail(login, otpCode);
         } else {
-            // TODO: send OTP via SMS
             log.info("OTP generated for phone (SMS not implemented yet): {}", maskLogin(login));
         }
     }
@@ -97,8 +96,6 @@ public class OTPServiceImpl implements OTPService {
         otpRepository.deleteByLoginAndPurpose(normalizedLogin, OTPPurpose.FORGOT_PASSWORD);
         log.info("Forgot-password OTP cleared for login: {}", maskLogin(normalizedLogin));
     }
-
-    // ==================== HELPER METHODS ====================
 
     private String validateAndNormalizeLogin(String login) {
         if (login == null || login.trim().isEmpty()) {

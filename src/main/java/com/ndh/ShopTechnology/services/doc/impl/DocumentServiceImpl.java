@@ -121,7 +121,6 @@ public class DocumentServiceImpl implements DocumentService {
                     "entityType must not be ID_DOCUMENT_ENTITY_UNASSIGNED (-1) when entityId is set");
         }
         if (!DocumentEntityType.isRegistered(entityType) && entityType != 1) {
-            // {@code 1} = legacy entity_type cho media sản phẩm (trước mã 100_000)
             throw new CustomApiException(HttpStatus.BAD_REQUEST, "Unknown entityType: " + entityType);
         }
         switch (entityType) {

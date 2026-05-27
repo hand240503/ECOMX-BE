@@ -24,9 +24,7 @@ public class CategoryResponse {
   private String parentName;
   private List<CategoryResponse> children;
   private Integer childrenCount;
-  /** URL ảnh đại diện (is_main = true) của danh mục; {@code null} nếu chưa upload. */
   private String thumbnailUrl;
-  /** Danh sách brand có sản phẩm thuộc danh mục này (chỉ trả về ở /roots). */
   private List<BrandSummaryResponse> brands;
 
   public static CategoryResponse fromEntity(CategoryEntity entity) {

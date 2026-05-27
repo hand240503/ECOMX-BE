@@ -27,19 +27,9 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>, J
     @Query("SELECT p FROM products p")
     List<ProductEntity> findAllWithListRelations();
 
-    /**
-     * Paginated products for one category (exact {@code category.id}, not subtree).
-     * No {@code @EntityGraph} on this query: graph + {@code Page} can break counts;
-     * relations load in the service tx.
-     */
     @Query(value = "SELECT p FROM products p WHERE p.category.id = :categoryId", countQuery = "SELECT count(p) FROM products p WHERE p.category.id = :categoryId")
     Page<ProductEntity> findPageByCategoryId(@Param("categoryId") Long categoryId, Pageable pageable);
 
-    /**
-     * Products whose {@code category.parent.id} equals {@code parentCategoryId}
-     * (direct children of that parent only), matching
-     * {@code JOIN category c ON c.id = p.category_id WHERE c.parent_id = :id}.
-     */
     @Query(value = "SELECT p FROM products p WHERE p.category.parent.id = :parentCategoryId", countQuery = "SELECT count(p) FROM products p WHERE p.category.parent.id = :parentCategoryId")
     Page<ProductEntity> findPageByDirectChildCategoriesOf(@Param("parentCategoryId") Long parentCategoryId,
             Pageable pageable);
@@ -59,13 +49,6 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>, J
     @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
     List<ProductEntity> findTopNByOrderBySoldCountDesc(Pageable pageable);
 
-    /**
-     * Full PDP / admin reload: category, brand, variants. Catalog {@code price}
-     * (+ {@link com.ndh.ShopTechnology.entities.product.UnitEntity}) is loaded in a
-     * separate query — joining {@code variants} and {@code prices} here hits Hibernate
-     * {@code MultipleBagFetchException} (two {@code List} bags). Policies are
-     * {@link jakarta.persistence.ManyToMany} and stay lazy.
-     */
     @Query("SELECT DISTINCT p FROM products p "
             + "LEFT JOIN FETCH p.category c "
             + "LEFT JOIN FETCH c.parent "

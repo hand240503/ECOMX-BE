@@ -39,7 +39,6 @@ public interface PurchaseWithPurchaseOfferRepository extends JpaRepository<Purch
 
     List<PurchaseWithPurchaseOfferEntity> findAllByOrderByIdAsc();
 
-    /** Distinct product IDs tham gia PwP (cả neo lẫn đi kèm) trong các offer đang bật. */
     @Query("""
             SELECT DISTINCT o.anchorProduct.id FROM PurchaseWithPurchaseOfferEntity o
             WHERE o.enabled = true

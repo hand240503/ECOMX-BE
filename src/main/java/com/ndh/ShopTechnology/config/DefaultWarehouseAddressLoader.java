@@ -9,9 +9,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Một bản ghi {@link AddressType#WAREHOUSE} trong {@code user_address} để lưu tọa độ kho; ưu tiên hơn {@link DeliveryRoutingProperties} khi routing.
- */
 @Component
     @Order(2)
 public class DefaultWarehouseAddressLoader implements ApplicationRunner {

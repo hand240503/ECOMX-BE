@@ -23,22 +23,16 @@ public class UserResponse {
     private Integer status;
     private Integer type;
 
-    /** ID user quản lý trực tiếp (users.man_id). */
     private Long manId;
 
     private UserInfoResponse userInfo;
 
-    /** Tập role code (vd ADMIN, EMPLOYEE). */
     private Set<String> roles;
 
-    /** Quyền hiệu lực (Integer) — đã hợp role + cấp thêm. */
     private Set<Integer> permissions;
 
     private UserAddressResponse defaultAddress;
 
-    /**
-     * Chỉ có khi tạo mới / reset mật khẩu: mật khẩu một lần (6 chữ số) để gửi nhân viên.
-     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String temporaryPassword;
 

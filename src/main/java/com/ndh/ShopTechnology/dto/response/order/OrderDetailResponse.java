@@ -16,7 +16,6 @@ public class OrderDetailResponse {
 
     private Long id;
     private Long productId;
-    /** Biến thể đã mua (null với đơn cũ). */
     private Long productVariantId;
     private java.util.Map<String, String> variantOptions;
     private String variantSkuCode;
@@ -26,11 +25,9 @@ public class OrderDetailResponse {
     private String lineTotal;
     private String description;
 
-    /** Mô tả dài sản phẩm tại thời điểm xem đơn (snapshot từ bảng product). */
     @JsonProperty("l_description")
     private String lDescription;
 
-    /** Snapshot chương trình giá khi đặt (PC / mix-and-match / PWP). */
     @JsonProperty("pricing_programs")
     private OrderLinePricingProgramsDto pricingPrograms;
 }

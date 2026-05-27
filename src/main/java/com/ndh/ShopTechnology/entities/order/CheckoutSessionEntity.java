@@ -20,9 +20,6 @@ import java.util.Date;
 })
 public class CheckoutSessionEntity extends BaseEntity {
 
-    /**
-     * Mặc định = chuỗi {@link #getId()} sau khi lưu; hoặc = {@code checkoutWorkSessionId} do FE gửi (VNPAY) nếu có và hợp lệ.
-     */
     @Column(name = "public_id", nullable = false, unique = true, length = 128)
     private String publicId;
 
@@ -43,7 +40,6 @@ public class CheckoutSessionEntity extends BaseEntity {
     @Column(name = "shipping_fee_vnd")
     private Long shippingFeeVnd;
 
-    /** JSON {@link com.ndh.ShopTechnology.dto.request.order.CreateOrderRequest} tại thời điểm checkout. */
     @Column(name = "request_payload_json", nullable = false, columnDefinition = "TEXT")
     private String requestPayloadJson;
 
@@ -55,10 +51,6 @@ public class CheckoutSessionEntity extends BaseEntity {
     @Column(name = "expires_at", nullable = false)
     private Date expiresAt;
 
-    /**
-     * Khi {@link #status} là {@code COMPLETED} — liên kết tới bảng {@code orders}; bản ghi phiên vẫn giữ lịch sử, không
-     * xóa dòng.
-     */
     @Column(name = "order_id", nullable = true)
     private Long orderId;
 

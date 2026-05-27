@@ -9,13 +9,11 @@ import lombok.*;
 @Builder
 public class ModUserInfoRequest {
 
-    // User info fields
     private String fullName;
     private String telephone;
     private String avatar;
     private Long managerId;
 
-    // Custom fields
     private String info01;
     private String info02;
     private String info03;

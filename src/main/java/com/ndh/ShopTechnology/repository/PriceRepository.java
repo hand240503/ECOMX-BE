@@ -18,13 +18,8 @@ public interface PriceRepository extends JpaRepository<PriceEntity, Long> {
 
     List<PriceEntity> findByVariant_IdOrderByIdAsc(Long variantId);
 
-    /** Tất cả entry giá của mọi biến thể thuộc một SPU (SPU id = {@code products.id}). */
     List<PriceEntity> findByVariant_Product_IdOrderByVariant_IdAscIdAsc(Long productId);
 
-    /**
-     * Giống {@link #findByVariant_Product_IdOrderByVariant_IdAscIdAsc} nhưng fetch variant + product + unit một query
-     * (admin list giá kèm ô tóm tắt SKU).
-     */
     @Query(
             """
                     SELECT pr FROM price pr

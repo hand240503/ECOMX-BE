@@ -7,9 +7,6 @@ import com.ndh.ShopTechnology.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/**
- * Resolve {@link RoleEntity} từ id; fallback về role CUSTOMER nếu không truyền id / không tìm thấy (flow admin).
- */
 @Service
 @RequiredArgsConstructor
 public class RoleAssignmentService {

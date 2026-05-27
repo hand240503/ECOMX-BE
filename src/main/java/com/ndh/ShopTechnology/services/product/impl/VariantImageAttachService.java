@@ -17,9 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Gắn document ({@code entity_type} = {@link DocumentEntityType#ID_DOCUMENT_ENTITY_PRODUCT_VARIANT}) vào từng phần tử {@link ProductVariantResponse}.
- */
 @Service
 @RequiredArgsConstructor
 public class VariantImageAttachService {

@@ -13,9 +13,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Purchase-with-purchase: mua sản phẩm neo (anchor) được mua sản phẩm đi kèm (companion) với đơn giá ưu đãi.
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/promotions/purchase-with-purchase")
 public class AdminPurchaseWithPurchaseController {

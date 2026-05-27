@@ -8,9 +8,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Bảo đảm có PTTT VNPAY (upsert theo mã) — cần cho DB đã từng seed trước khi thêm mã mới.
- */
 @Component
 @Order(2)
 public class VnpayPaymentMethodEnsurer implements ApplicationRunner {

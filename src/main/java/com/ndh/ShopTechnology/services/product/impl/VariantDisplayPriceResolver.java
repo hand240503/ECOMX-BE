@@ -17,19 +17,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Giá đơn vị hiển thị storefront: ưu tiên price change đang hiệu lực, fallback catalog {@link PriceEntity#getCurrentValue()}
- * (nhỏ nhất trong các dòng giá của biến thể).
- */
 @Component
 @RequiredArgsConstructor
 public class VariantDisplayPriceResolver {
 
     private final ProductPriceChangeRepository productPriceChangeRepository;
 
-    /**
-     * @return map variantId → đơn giá hiển thị; chỉ chứa biến thể resolve được giá (kể cả 0 nếu catalog = 0)
-     */
     public Map<Long, Double> resolveForProducts(Collection<ProductEntity> products) {
         if (products == null || products.isEmpty()) {
             return Map.of();
@@ -70,9 +63,6 @@ public class VariantDisplayPriceResolver {
         return out;
     }
 
-    /**
-     * Dòng price change đang hiệu lực theo cùng quy tắc {@link #resolveForProducts} (startAt/id giảm dần).
-     */
     public Map<Long, ProductPriceChangeEntity> effectiveActivePriceChangesByVariantId(
             Collection<Long> variantIds, Date at) {
         Date t = at != null ? at : new Date();

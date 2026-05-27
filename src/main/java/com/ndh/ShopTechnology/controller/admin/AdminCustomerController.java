@@ -1,7 +1,5 @@
 package com.ndh.ShopTechnology.controller.admin;
 
-
-
 import com.ndh.ShopTechnology.constants.PermissionCode;
 
 import com.ndh.ShopTechnology.dto.request.PaginationRequest;
@@ -26,17 +24,7 @@ import org.springframework.http.ResponseEntity;
 
 import org.springframework.web.bind.annotation.*;
 
-
-
 import java.util.List;
-
-
-
-/**
-
- * Đọc danh sách và chi tiết tài khoản khách hàng (role {@code CUSTOMER}).
-
- */
 
 @RestController
 
@@ -46,13 +34,9 @@ import java.util.List;
 
 public class AdminCustomerController {
 
-
-
     private final UserService userService;
 
     private final PermissionService permissionService;
-
-
 
     @GetMapping("")
 
@@ -68,23 +52,17 @@ public class AdminCustomerController {
 
                 PermissionCode.READ_ALL);
 
-
-
         PaginationRequest request = new PaginationRequest();
 
         request.setPage(page);
 
         request.setSize(size);
 
-
-
         Page<UserResponse> userPage = userService.getCustomerUsers(request);
 
         List<UserResponse> users = userPage.getContent();
 
         PaginationMetadata metadata = PaginationMetadata.fromPage(userPage);
-
-
 
         if (users.isEmpty()) {
 
@@ -102,8 +80,6 @@ public class AdminCustomerController {
 
         }
 
-
-
         return ResponseEntity.ok(
 
                 APIResponse.<List<UserResponse>>builder()
@@ -120,8 +96,6 @@ public class AdminCustomerController {
 
     }
 
-
-
     @GetMapping("/{id}")
 
     public ResponseEntity<APIResponse<UserResponse>> getCustomer(@PathVariable Long id) {
@@ -132,8 +106,6 @@ public class AdminCustomerController {
 
                 PermissionCode.READ_ALL);
 
-
-
         UserResponse userResponse = userService.getCustomerUser(id);
 
         return ResponseEntity.ok(
@@ -143,5 +115,3 @@ public class AdminCustomerController {
     }
 
 }
-
-

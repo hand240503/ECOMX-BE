@@ -10,10 +10,6 @@ import org.hibernate.type.SqlTypes;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * SKU / biến thể bán hàng: tổ hợp tùy ý các thuộc tính (dung lượng, màu, nhà mạng, grade…)
- * lưu trong {@link #optionValues}. Giá catalog ({@link PriceEntity}) gắn với biến thể, không còn gắn trực tiếp SPU.
- */
 @Getter
 @Setter
 @AllArgsConstructor
@@ -33,14 +29,9 @@ public class ProductVariantEntity extends BaseEntity {
     @JoinColumn(name = COL_PRODUCT_ID, nullable = false)
     private ProductEntity product;
 
-    /** Mã SKU chuỗi (unique khi khác null). */
     @Column(name = COL_SKU_CODE, unique = true, length = 128)
     private String skuCode;
 
-    /**
-     * Thuộc tính hiển thị/lọc (vd: {@code Size}→{@code 256GB}, {@code Color}→{@code Deep Blue}).
-     * Khóa nên dùng nhãn ổn định (tiếng Anh) để FE dễ map.
-     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = COL_OPTION_VALUES, columnDefinition = "json")
     @Builder.Default

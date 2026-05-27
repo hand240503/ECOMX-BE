@@ -52,8 +52,6 @@ public class ModJobReportRequest {
     public JobReportDetailEntity toEntity() {
         JobReportDetailEntity entity = new JobReportDetailEntity();
 
-
-
         entity.setJobDate1(getJobDateOrDefault(jobDate1));
         entity.setJobDate2(getJobDateOrDefault(jobDate2));
         entity.setJobDate3(getJobDateOrDefault(jobDate3));
@@ -89,7 +87,6 @@ public class ModJobReportRequest {
     }
 
     public JobReportDetailEntity toEntity(ModJobReportRequest request, JobReportDetailEntity entity) {
-
 
         entity.setJobDate1(getJobDateOrDefault(request.getJobDate1()));
         entity.setJobDate2(getJobDateOrDefault(request.getJobDate2()));

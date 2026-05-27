@@ -17,10 +17,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Quản lý user <b>thống nhất</b> (CUSTOMER + nội bộ). Quyền theo nhóm {@code 700xxx}.
- * Các route {@code /admin/staff}, {@code /admin/customers}, … vẫn giữ để lọc phân khúc riêng.
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/users")
 @RequiredArgsConstructor

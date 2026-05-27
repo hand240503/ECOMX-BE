@@ -12,9 +12,6 @@ import lombok.Setter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Variant gắn với một dòng giá catalog — không chứa {@code prices[]} để tránh lặp / vòng JSON.
- */
 @Getter
 @Setter
 @Builder

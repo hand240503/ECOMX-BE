@@ -14,7 +14,6 @@ class ShippingFeeCalculatorTest {
         assertEquals(15_000L, ShippingFeeCalculator.fromDistanceMeters(3_000.0));
     }
 
-    /** 3,1 km: vượt 100 m → ceil 1 km phụ → 15k + 3,5k */
     @Test
     void km3_point1_is18_5k() {
         assertEquals(18_500L, ShippingFeeCalculator.fromDistanceMeters(3_100.0));
@@ -27,7 +26,6 @@ class ShippingFeeCalculatorTest {
 
     @Test
     void km5_point2_threeExtraBlocks() {
-        // 5,2 km → vượt 2,2 km → ceil = 3 → 15k + 3×3,5k = 25,5k
         assertEquals(25_500L, ShippingFeeCalculator.fromDistanceMeters(5_200.0));
     }
 

@@ -38,7 +38,6 @@ public class CbContentRecommendationServiceImpl implements CbContentRecommendati
         this.self = self;
     }
 
-    // ─── 1. API có metadata (cho controller debug/PDP) ────────────
     @Override
     @Transactional(readOnly = true)
     public Optional<CbContentRecommendationResponse> getForUser(Long userId, int limit) {
@@ -47,14 +46,12 @@ public class CbContentRecommendationServiceImpl implements CbContentRecommendati
                 .map(e -> CbContentRecommendationResponse.fromEntity(e, safeLimit));
     }
 
-    // ─── 2. Check tồn tại ─────────────────────────────────────────
     @Override
     @Transactional(readOnly = true)
     public boolean existsForUser(Long userId) {
         return cbContentRecommendationRepository.existsByUserId(userId);
     }
 
-    // ─── 3. API phẳng — có exclude ────────────────────────────────
     @Override
     @Transactional(readOnly = true)
     public List<RecommendationItem> getRecommendations(
@@ -85,14 +82,12 @@ public class CbContentRecommendationServiceImpl implements CbContentRecommendati
         return out;
     }
 
-    // ─── 4. API phẳng — không exclude (Hybrid dùng) ───────────────
     @Override
     @Transactional(readOnly = true)
     public List<RecommendationItem> getRecommendations(Long userId, int limit) {
         return getRecommendations(userId, limit, null);
     }
 
-    // ─── 5. Cached raw fetch ──────────────────────────────────────
     @Cacheable(value = "userContentRecs", key = "#userId")
     public Optional<CbContentRecommendation> findRaw(Long userId) {
         log.debug("CACHE MISS - user content recs for {}", userId);

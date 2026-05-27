@@ -28,9 +28,6 @@ public class AuthController {
     private final AuthService authService;
     private final UserAuthService userAuthService;
 
-    /**
-     * POST /api/v1/auth/register
-     */
     @PostMapping("/register")
     public ResponseEntity<APIResponse<LoginResponse>> registerUser(
             @RequestBody @Valid RegisterUserRequest request) {
@@ -50,9 +47,6 @@ public class AuthController {
                 .body(response);
     }
 
-    /**
-     * POST /api/v1/auth/login
-     */
     @PostMapping("/login")
     public ResponseEntity<APIResponse<LoginResponse>> login(
             @RequestBody @Valid LoginRequest request) {
@@ -72,10 +66,6 @@ public class AuthController {
                 .body(response);
     }
 
-    /**
-     * POST /api/v1/auth/refresh
-     * Access token using refresh token
-     */
     @PostMapping("/refresh")
     public ResponseEntity<APIResponse<LoginResponse>> refreshToken(
             @RequestBody @Valid RefreshTokenRequest request,
@@ -100,10 +90,6 @@ public class AuthController {
                 .body(response);
     }
 
-    /**
-     * POST /api/v1/auth/logout
-     * Logout and revoke all refresh tokens
-     */
     @PostMapping("/logout")
     public ResponseEntity<APIResponse<Void>> logout() {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

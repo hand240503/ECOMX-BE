@@ -21,9 +21,6 @@ public class PaymentMethodEntity extends BaseEntity {
     @Column(name = COL_NAME, nullable = false, length = 128)
     private String name;
 
-    /**
-     * Mã nội bộ ổn định (VD: COD, BANK_TRANSFER) — dùng khi tích hợp thanh toán sau này.
-     */
     @Column(name = COL_CODE, nullable = false, unique = true, length = 64)
     private String code;
 

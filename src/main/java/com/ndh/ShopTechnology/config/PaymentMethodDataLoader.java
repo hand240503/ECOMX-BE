@@ -8,9 +8,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Bảo đảm có vài bản ghi PTTT mặc định (chỉ chạy khi bảng còn trống).
- */
 @Component
 @Order(1)
 public class PaymentMethodDataLoader implements ApplicationRunner {

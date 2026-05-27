@@ -41,7 +41,6 @@ public class UserEntity extends BaseEntity {
     @Column(name = "type")
     private Integer type;
 
-    /** ID user quản lý (self-reference tới users.id), có thể null. */
     @Column(name = "man_id")
     private Long manId;
 
@@ -49,10 +48,6 @@ public class UserEntity extends BaseEntity {
     @JsonIgnore
     private UserInfoEntity userInfo;
 
-    /**
-     * <b>Một user chỉ có một role;</b> <b>một role có thể được dùng cho nhiều user.</b>
-     * Lưu bằng {@code users.role_id} → {@code roles.id}, không bảng nối. JPA: {@link jakarta.persistence.ManyToOne}.
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "role_id", nullable = false)
     @JsonIgnore
@@ -88,13 +83,6 @@ public class UserEntity extends BaseEntity {
                 .orElse(null);
     }
 
-    /**
-     * Trả về tập hợp <b>permission code (Integer)</b> đầy đủ của user:
-     * <pre>Effective = (permissions của role) ∪ (permissions cấp thêm cho user, chưa hết hạn)</pre>
-     *
-     * <p>Lưu ý: hàm này KHÔNG mở rộng wildcard 101..104 thành các permission 6 chữ số tương ứng.
-     * Việc kiểm tra wildcard được thực hiện trong {@code PermissionEvaluator#hasPermission}.
-     */
     @Transient
     public Set<Integer> getAllPermissions() {
         Set<Integer> permissions = new HashSet<>();

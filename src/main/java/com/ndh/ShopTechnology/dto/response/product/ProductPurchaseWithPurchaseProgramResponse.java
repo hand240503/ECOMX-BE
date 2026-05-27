@@ -7,9 +7,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Chương trình PWP đang bật liên quan đến một SPU: vai trò của SPU hiện tại trên API là neo hay đi kèm.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -17,7 +14,6 @@ import lombok.NoArgsConstructor;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductPurchaseWithPurchaseProgramResponse {
 
-    /** {@code companion} — SP này được giá {@code promo_unit_price} khi có neo; {@code anchor} — SP này là neo cho các offer đi kèm. */
     @JsonProperty("role")
     private String role;
 

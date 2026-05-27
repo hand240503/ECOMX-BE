@@ -25,9 +25,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/**
- * Gắn snapshot chương trình giá (mix-and-match theo SKU, PWP, price change) vào DTO trả API.
- */
 @Component
 @RequiredArgsConstructor
 public class ProductPricingProgramsAttachService {
@@ -117,7 +114,7 @@ public class ProductPricingProgramsAttachService {
         Set<PurchaseWithPurchaseOfferEntity> offers = new LinkedHashSet<>();
         offers.addAll(purchaseWithPurchaseOfferRepository.findActiveFetchedByCompanionVariantIdIn(variantIds));
         offers.addAll(purchaseWithPurchaseOfferRepository.findActiveFetchedByAnchorVariantIdIn(variantIds));
-        
+
         Set<Long> relatedProductIds = new LinkedHashSet<>();
         for (PurchaseWithPurchaseOfferEntity o : offers) {
             if (o.getCompanionProduct() != null && o.getCompanionProduct().getId() != null) {
@@ -183,14 +180,6 @@ public class ProductPricingProgramsAttachService {
     }
 
     private static ProductPriceChangeResponse toPriceChangeResponse(ProductPriceChangeEntity e) {
-        return ProductPriceChangeResponse.builder()
-                .id(e.getId())
-                .productVariantId(e.getProductVariant() != null ? e.getProductVariant().getId() : null)
-                .basePrice(e.getBasePrice())
-                .salePrice(e.getSalePrice())
-                .startAt(e.getStartAt())
-                .endAt(e.getEndAt())
-                .enabled(e.getEnabled())
-                .build();
+        return com.ndh.ShopTechnology.services.product.impl.ProductPriceChangeServiceImpl.toResponse(e);
     }
 }

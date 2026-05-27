@@ -6,12 +6,6 @@ import lombok.*;
 
 import java.util.Date;
 
-/**
- * Price change theo thời gian cho một biến thể (SKU).
- *
- * <p>Giá hiệu lực = (salePrice != null ? salePrice : basePrice) trong khoảng
- * [startAt, endAt] (endAt có thể null = không hết hạn).
- */
 @Getter
 @Setter
 @AllArgsConstructor
@@ -25,15 +19,12 @@ public class ProductPriceChangeEntity extends BaseEntity {
     @JoinColumn(name = "product_variant_id", nullable = false)
     private ProductVariantEntity productVariant;
 
-    /** Trùng {@link ProductVariantEntity#getProduct()} — schema DB giữ cột NOT NULL. */
     @Column(name = "product_id", nullable = false)
     private Long productId;
 
-    /** Giá gốc (VND). */
     @Column(name = "base_price", nullable = false)
     private Double basePrice;
 
-    /** Giá ưu đãi (VND), null = không giảm. */
     @Column(name = "sale_price")
     private Double salePrice;
 
@@ -48,5 +39,17 @@ public class ProductPriceChangeEntity extends BaseEntity {
     @Column(name = "enabled", nullable = false)
     @Builder.Default
     private Boolean enabled = true;
-}
 
+    @Column(name = "quantity_limit")
+    private Integer quantityLimit;
+
+    @Column(name = "sold_quantity", nullable = false, columnDefinition = "INT NOT NULL DEFAULT 0")
+    @Builder.Default
+    private Integer soldQuantity = 0;
+
+    @Column(name = "max_per_customer")
+    private Integer maxPerCustomer;
+
+    @Column(name = "required_payment_method_code", length = 64)
+    private String requiredPaymentMethodCode;
+}

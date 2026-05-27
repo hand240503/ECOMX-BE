@@ -35,10 +35,6 @@ public class ProductCommentServiceImpl implements ProductCommentService {
     private final OrderDetailRepository orderDetailRepository;
     private final UserService userService;
 
-    // =====================================================================
-    // USER-FACING
-    // =====================================================================
-
     @Override
     @Transactional
     public ProductCommentResponse createComment(CreateProductCommentRequest request) {
@@ -48,7 +44,6 @@ public class ProductCommentServiceImpl implements ProductCommentService {
                 .orElseThrow(() -> new NotFoundEntityException(
                         "Sản phẩm không tồn tại: id=" + request.getProductId()));
 
-        // Kiểm tra user đã mua sản phẩm này chưa (đơn hàng COMPLETED)
         boolean hasPurchased = orderDetailRepository.existsByOrderUserIdAndProductIdAndOrderStatus(
                 currentUser.getId(),
                 request.getProductId(),
@@ -60,7 +55,6 @@ public class ProductCommentServiceImpl implements ProductCommentService {
                     "Bạn chỉ có thể bình luận sản phẩm mà bạn đã mua thành công.");
         }
 
-        // Mỗi user chỉ được comment 1 lần trên mỗi sản phẩm
         if (commentRepository.existsByUser_IdAndProduct_Id(currentUser.getId(), product.getId())) {
             throw new CustomApiException(
                     HttpStatus.CONFLICT,
@@ -86,7 +80,6 @@ public class ProductCommentServiceImpl implements ProductCommentService {
         UserEntity currentUser = userService.getCurrentUser();
         ProductCommentEntity comment = findCommentOrThrow(commentId);
 
-        // Chỉ được sửa comment của chính mình
         assertCommentOwner(comment, currentUser);
 
         if (StringUtils.hasText(request.getContent())) {
@@ -104,7 +97,6 @@ public class ProductCommentServiceImpl implements ProductCommentService {
         UserEntity currentUser = userService.getCurrentUser();
         ProductCommentEntity comment = findCommentOrThrow(commentId);
 
-        // Chỉ được xoá comment của chính mình
         assertCommentOwner(comment, currentUser);
 
         commentRepository.delete(comment);
@@ -121,10 +113,6 @@ public class ProductCommentServiceImpl implements ProductCommentService {
                 .map(ProductCommentResponse::fromEntity)
                 .collect(Collectors.toList());
     }
-
-    // =====================================================================
-    // ADMIN-FACING
-    // =====================================================================
 
     @Override
     @Transactional(readOnly = true)
@@ -176,10 +164,6 @@ public class ProductCommentServiceImpl implements ProductCommentService {
         commentRepository.delete(comment);
         log.info("Comment deleted by admin: commentId={}", commentId);
     }
-
-    // =====================================================================
-    // PRIVATE HELPERS
-    // =====================================================================
 
     private ProductCommentEntity findCommentOrThrow(Long commentId) {
         return commentRepository.findById(commentId)

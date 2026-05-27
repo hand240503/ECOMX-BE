@@ -12,9 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Mix-and-match theo **phân loại (SKU)**: bậc giá theo tổng SL đúng {@code variantId} trên đơn.
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/products/{productId}/variants/{variantId}/volume-price-tiers")
 public class AdminVolumePriceTierController {

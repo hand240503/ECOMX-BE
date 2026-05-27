@@ -17,19 +17,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Loads product-linked documents trong bảng {@code document} và gán URL + tóm tắt vào {@link ProductFullResponse}.
- */
 @Service
 @RequiredArgsConstructor
 public class ProductImageAttachService {
 
-    /** Legacy {@code entity_type} từ dữ liệu cũ (trước đăng ký {@link DocumentEntityType}). */
     private static final Integer LEGACY_PRODUCT_ENTITY_TYPE = 1;
 
-    /**
-     * Ảnh gallery — {@link DocumentKind#IMAGE} ({@code 1}) hoặc legacy {@code 0}. Video / tài liệu loại trừ.
-     */
     private static boolean isTreatableAsImage(DocumentEntity d) {
         if (d == null) {
             return false;

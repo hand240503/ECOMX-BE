@@ -16,16 +16,11 @@ import java.util.UUID;
 
 public final class FileUtils {
 
-    /** Segment đầu trong {@link DocumentEntity#getFilePath()} (URL tương đối). */
     public static final String PUBLIC_UPLOAD_SEGMENT = "uploads";
 
     private FileUtils() {
     }
 
-    /**
-     * Ghi file dưới {@code uploadRoot}/{yyMMdd}/{uuid}_{nano}.{ext}} và trả entity với {@code filePath} kiểu
-     * {@code /uploads/{yyMMdd}/...}.
-     */
     public static DocumentEntity storeFile(MultipartFile file, Path uploadRoot) throws IOException {
         String filename = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
         String extension = FilenameUtils.getExtension(filename);

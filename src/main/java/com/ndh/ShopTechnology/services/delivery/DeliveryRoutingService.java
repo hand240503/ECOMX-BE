@@ -46,9 +46,6 @@ public class DeliveryRoutingService {
         this.userAddressRepository = userAddressRepository;
     }
 
-    /**
-     * Tọa độ kho dùng cho routing: ưu tiên bản ghi {@link AddressType#WAREHOUSE} trong DB, fallback {@link DeliveryRoutingProperties}.
-     */
     public double[] resolveWarehouseLatLon() {
         return userAddressRepository
                 .findFirstByAddressType(AddressType.WAREHOUSE)
@@ -135,11 +132,6 @@ public class DeliveryRoutingService {
 
     private record GeocodedPoint(double lat, double lon, String displayName) {}
 
-    /**
-     * Thử lần lượt: Nominatim (có/không giới hạn country) → Photon (không bias / bias kho).
-     * Trước đây Nominatim trả {@code []} vẫn ném 400 và không bao giờ gọi Photon; Photon chỉ bias kho nên
-     * thường rỗng với địa chỉ xa kho.
-     */
     private GeocodedPoint geocode(String address) {
         String q = enrichQueryForGeocode(address);
         GeocodedPoint nominatimResult = null;
@@ -182,7 +174,6 @@ public class DeliveryRoutingService {
                 "Could not geocode address; try a more specific address");
     }
 
-    /** Gợi ý quốc gia để Nominatim/Photon dễ khớp (địa chỉ chỉ có phường/quận VN). */
     private static String enrichQueryForGeocode(String address) {
         String t = address.trim();
         if (t.isEmpty()) {
@@ -207,10 +198,6 @@ public class DeliveryRoutingService {
                 || code == HttpStatus.BAD_GATEWAY.value();
     }
 
-    /**
-     * @param useCountryFilter {@code true} → thêm {@code countrycodes} từ cấu hình (thường vn).
-     * @return điểm đầu tiên hợp lệ, hoặc null nếu mảng rỗng / không parse được.
-     */
     private GeocodedPoint nominatimSearch(String address, boolean useCountryFilter) {
         UriComponentsBuilder b = UriComponentsBuilder
                 .fromUriString(properties.getNominatimBaseUrl())
@@ -271,11 +258,6 @@ public class DeliveryRoutingService {
         return null;
     }
 
-    /**
-     * Photon: {@code features[].geometry.coordinates} = [lon, lat].
-     *
-     * @param biasToWarehouse {@code true} → thêm lat/lon kho (hợp địa chỉ gần kho); {@code false} → tìm toàn cầu, tránh rỗng khi xa kho.
-     */
     private GeocodedPoint photonSearch(String address, boolean biasToWarehouse) {
         try {
             UriComponentsBuilder b = UriComponentsBuilder

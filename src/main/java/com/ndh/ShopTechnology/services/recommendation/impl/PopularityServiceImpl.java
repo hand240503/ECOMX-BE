@@ -38,7 +38,6 @@ public class PopularityServiceImpl implements PopularityService {
         this.self = self;
     }
 
-    // ─── 1. API chính: hỗ trợ exclude ─────────────────────────────
     @Override
     @Transactional(readOnly = true)
     public List<RecommendationItem> getPopular(int limit, Collection<Long> excludeIds) {
@@ -65,14 +64,12 @@ public class PopularityServiceImpl implements PopularityService {
         return out;
     }
 
-    // ─── 2. Shortcut: không exclude (dùng cho Hybrid) ─────────────
     @Override
     @Transactional(readOnly = true)
     public List<RecommendationItem> getPopularItems(int limit) {
         return getPopular(limit, null);
     }
 
-    // ─── 3. Cached raw fetch ──────────────────────────────────────
     @Cacheable(value = "popularItems", key = "'all'")
     public List<PopularProductRow> fetchPopularRaw() {
         log.info("CACHE MISS - rebuilding popular items list");

@@ -9,9 +9,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Một dòng giá catalog cần cập nhật trong luồng {@code PUT} sản phẩm (đã có {@link com.ndh.ShopTechnology.entities.product.PriceEntity#getId()}).
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -22,7 +19,6 @@ public class UpdateProductPriceItemRequest {
     @NotNull(message = "Price id is required")
     private Long id;
 
-    /** Đổi đơn vị tính; bỏ qua hoặc null để giữ unit hiện tại. */
     @JsonProperty("unit_id")
     private Long unitId;
 

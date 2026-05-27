@@ -14,10 +14,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Quản trị đơn vị tính ({@link com.ndh.ShopTechnology.entities.product.UnitEntity}).
- * Dùng khi cấu hình giá catalog / sản phẩm (trường {@code unit_id}).
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/units")
 public class AdminUnitController {

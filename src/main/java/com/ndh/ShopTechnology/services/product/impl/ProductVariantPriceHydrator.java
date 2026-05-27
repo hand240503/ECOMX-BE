@@ -19,11 +19,6 @@ public class ProductVariantPriceHydrator {
 
     private final PriceRepository priceRepository;
 
-    /**
-     * Loads catalog prices (+ unit) for variants and fills {@link ProductVariantEntity#getPrices()}.
-     * Variant and prices cannot be join-fetched together with {@link ProductEntity#getVariants()}
-     * in one query ({@code MultipleBagFetchException}).
-     */
     public void attachPrices(Collection<ProductEntity> products) {
         if (products == null || products.isEmpty()) {
             return;

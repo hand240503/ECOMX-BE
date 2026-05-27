@@ -7,10 +7,6 @@ import org.springframework.data.jpa.domain.Specification;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Search: each whitespace-separated token must appear in product name, description, {@code l_description}, or tag (OR per
- * field, AND across tokens). So "Smart Phone" matches "Smartphone" (both "smart" and "phone" occur).
- */
 public final class ProductSearchSpecifications {
 
   private ProductSearchSpecifications() {}

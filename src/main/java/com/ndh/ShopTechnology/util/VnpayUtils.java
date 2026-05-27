@@ -10,9 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * Mã hóa và chuỗi ký theo tài liệu VNPAY (HMAC-SHA512, sắp xếp tham số tăng dần).
- */
 public final class VnpayUtils {
 
     private VnpayUtils() {
@@ -62,9 +59,6 @@ public final class VnpayUtils {
         return query.toString();
     }
 
-    /**
-     * Xác thực chữ ký callback (IPN / Return): cùng quy tắc tạo chuỗi, so khớp v_secureHash từ VNPAY.
-     */
     public static boolean verifySecureHash(
             String hashSecret, Map<String, String> allParams, String vnpSecureHash) {
         if (vnpSecureHash == null || vnpSecureHash.isEmpty()) {

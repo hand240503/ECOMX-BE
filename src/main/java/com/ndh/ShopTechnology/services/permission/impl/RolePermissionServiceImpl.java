@@ -47,8 +47,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
     private final UserPermissionRepository userPermissionRepository;
     private final PermissionService permissionService;
 
-    // ===================== ROLE MANAGEMENT =====================
-
     @Override
     @Transactional(readOnly = true)
     public List<RoleResponse> listRoles() {
@@ -99,7 +97,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
 
         if (request.getPermissionCodes() != null) {
             Set<Integer> defaults = sanitizeAndAuthorizePermissions(actor, request.getPermissionCodes());
-            // Gán Set MỚI thay vì mutate in-place — bắt buộc với cột JSON để Hibernate detect dirty.
             role.setPermissionCodes(new LinkedHashSet<>(defaults));
         }
 
@@ -122,8 +119,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         permissionService.clearAllPermissionsCache();
         log.info("Role deleted: id={}, code={}, by={}", roleId, role.getCode(), actor.getUsername());
     }
-
-    // ===================== USER PERMISSION GRANTS =====================
 
     @Override
     @Transactional(readOnly = true)
@@ -156,7 +151,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         }
 
         for (Integer code : requested) {
-            // Bỏ qua nếu role mặc định hoặc grant hiện có đã bao phủ (kể cả mã nhánh legacy).
             if (hasEquivalentPermission(target, code)) {
                 continue;
             }
@@ -220,7 +214,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         throw new CustomApiException(HttpStatus.FORBIDDEN, MessageConstant.NO_PERMISSION_ACTION);
     }
 
-    /** Xem phần cấp quyền của user khác. */
     private boolean canViewOtherUsersPermissionData(UserEntity actor) {
         if (actor.hasRole(RoleConstant.ROLE_ADMIN) || actor.hasRole(RoleConstant.ROLE_SUPER_ADMIN)) {
             return true;
@@ -231,8 +224,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
                 PermissionCode.UPDATE_USER,
                 PermissionCode.UPDATE_ALL);
     }
-
-    // ===================== HELPERS =====================
 
     private UserEntity currentActor() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -261,10 +252,6 @@ public class RolePermissionServiceImpl implements RolePermissionService {
         }
     }
 
-    /**
-     * Validate codes (tồn tại trong PermissionCode) và đảm bảo actor đang có TẤT CẢ các code này.
-     * Trả về tập đã chuẩn hoá (merge nhóm catalogue) + loại trùng + bỏ null/0.
-     */
     private Set<Integer> sanitizeAndAuthorizePermissions(UserEntity actor, Collection<Integer> rawCodes) {
         Set<Integer> cleaned = sanitizeCodes(rawCodes);
         if (cleaned.isEmpty()) return cleaned;

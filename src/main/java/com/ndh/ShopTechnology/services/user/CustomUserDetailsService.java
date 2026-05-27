@@ -20,15 +20,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Build authorities từ role + permission code (Integer) của user.
- *
- * <p>Ánh xạ:
- * <ul>
- *   <li>Role code → authority {@code ROLE_<code>} (vd ADMIN → ROLE_ADMIN). Dùng cho {@code hasRole(...)}.</li>
- *   <li>Permission code (Integer) → authority {@code PERM_<code>} (vd 100002 → PERM_100002). Dùng cho debug/log; logic check chính thực hiện qua bean {@code @perm.check(...)}.</li>
- * </ul>
- */
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
 
@@ -65,9 +56,6 @@ public class CustomUserDetailsService implements UserDetailsService {
         return myUserDetail;
     }
 
-    /**
-     * Build authority list = role authorities (ROLE_*) + permission authorities (PERM_*).
-     */
     private List<GrantedAuthority> buildAuthorities(UserEntity user) {
         Set<Integer> effective = new LinkedHashSet<>();
         List<GrantedAuthority> authorities = new ArrayList<>();

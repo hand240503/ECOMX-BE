@@ -63,7 +63,6 @@ public class RefreshTokenEntity {
     @Column(name = "revoked_reason", length = 64)
     private String revokedReason;
 
-    // Helper method
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiryDate);
     }

@@ -14,15 +14,11 @@ import lombok.NoArgsConstructor;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class CreateBrandRequest {
 
-    /**
-     * Mã hãng (duy nhất, so khớp không phân biệt hoa thường). Lưu dạng đã chuẩn hoá (trim + upper).
-     */
     @NotBlank(message = "code is required")
     private String code;
 
     @NotBlank(message = "name is required")
     private String name;
 
-    /** Trạng thái (vd {@code SystemConstant.ACTIVE_STATUS}). Null = active. */
     private Integer status;
 }

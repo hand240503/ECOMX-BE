@@ -21,10 +21,6 @@ public class OTPController {
 
     private final OTPService otpService;
 
-    /**
-     * Gửi mã OTP đến email/phone (Async)
-     * POST /api/v1/auth/otp/send
-     */
     @PostMapping("/send")
     public CompletableFuture<ResponseEntity<APIResponse<Void>>> sendOTP(
             @Valid @RequestBody SendOTPRequest request) {
@@ -57,10 +53,6 @@ public class OTPController {
         });
     }
 
-    /**
-     * Xác thực mã OTP
-     * POST /api/v1/auth/otp/verify
-     */
     @PostMapping("/verify")
     public ResponseEntity<APIResponse<Boolean>> verifyOTP(
             @Valid @RequestBody VerifyOTPRequest request) {

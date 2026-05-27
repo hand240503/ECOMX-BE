@@ -28,16 +28,10 @@ public class CreateProductRequest {
   @NotNull(message = "Category ID is required")
   private Long categoryId;
 
-  /** Hãng (tùy chọn). */
   private Long brandId;
 
-  /** Mã SKU (số), tùy chọn. */
   private Long sku;
 
-  /**
-   * Biến thể (dung lượng, màu, …) kèm giá. Khi rỗng và {@link #prices} có dữ liệu,
-   * hệ thống tạo một biến thể mặc định và gắn {@link #prices} vào đó.
-   */
   @Valid
   private List<CreateProductVariantRequest> variants;
 

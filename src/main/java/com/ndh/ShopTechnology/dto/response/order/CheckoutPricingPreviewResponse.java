@@ -18,15 +18,9 @@ public class CheckoutPricingPreviewResponse {
 
     private List<CheckoutPricingLineItemResponse> lines;
 
-    /** Tổng tiền hàng (chưa ship, chưa thuế). */
     @JsonProperty("items_subtotal")
     private Double itemsSubtotal;
 
-    /**
-     * Danh sách gợi ý mua kèm PwP: SP neo đang có trong giỏ nhưng SP companion chưa được thêm vào.
-     * FE dùng để hiển thị lựa chọn "Mua kèm giá ưu đãi" / "Không áp dụng" bên dưới mỗi dòng SP neo.
-     * Empty list khi không có gợi ý nào.
-     */
     @JsonProperty("pwp_suggestions")
     private List<CheckoutPwpSuggestionDto> pwpSuggestions;
 }

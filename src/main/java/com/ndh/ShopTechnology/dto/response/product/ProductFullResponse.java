@@ -22,23 +22,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-/**
- * DTO thống nhất cho mọi API trả về sản phẩm (home, tìm kiếm, gợi ý, theo category, …).
- *
- * <p>JSON gồm {@code description}, {@code l_description} (mô tả dài) và các field khác map trực tiếp từ
- * {@link ProductEntity}.
- *
- * <p>Trường {@link #prices} là giá catalog (theo đơn vị) của biến thể đại diện — active và rẻ nhất
- * (ưu tiên {@link #fromEffectiveUnitPrice} / map giá hiển thị khi {@code ProductServiceImpl} truyền map vào overload đầy đủ của {@code fromEntity}).
- * Chi tiết từng SKU nằm trong {@link #variants}; mỗi variant có thêm {@code effective_unit_price}
- * (khi có price change hiệu lực thì trùng giá áp dụng PC) và {@code active_price_change}.
- *
- * <p>{@link #purchaseWithPurchasePrograms} gom chương trình PWP liên quan SPU. **Mix-and-match** hiển thị trên từng
- * phân loại: {@link ProductVariantResponse#getVolumePriceTiers()}.
- *
- * <p>Các URL ảnh ({@code thumbnailUrl}, {@code mainImageUrl}, {@code imageUrls}) và danh sách {@link #documents}
- * được gán từ bảng {@code document} trong service, không được gán trong {@link #fromEntity}.
- */
 @Getter
 @Setter
 @Builder
@@ -48,7 +31,6 @@ import java.util.stream.Collectors;
 public class ProductFullResponse {
 
   private Long id;
-  /** Mã SKU (số), có thể null. */
   private Long sku;
   private String productName;
   private String description;
@@ -66,57 +48,35 @@ public class ProductFullResponse {
 
   private BrandSummaryResponse brand;
   private CategorySummaryResponse category;
-  /** Giá catalog theo đơn vị của biến thể đại diện (active, rẻ nhất — có thể theo giá hiển thị khi đã resolve). */
   private List<ProductPriceResponse> prices;
-  /**
-   * Min của {@code effective_unit_price} trong các biến thể đang {@code active} — tiện gắn nhãn “Từ …” trên card.
-   */
   @JsonProperty("from_effective_unit_price")
   private Double fromEffectiveUnitPrice;
-  /** Đầy đủ biến thể (SKU) kèm giá — dùng cho PDP / admin. */
   private List<ProductVariantResponse> variants;
-  /** Có dữ liệu khi entity đã fetch policies (vd. GET /products/{id}, GET /products/{id}/detail). */
   private List<PolicyResponse> policies;
 
-  /**
-   * @deprecated Chuyển sang {@link ProductVariantResponse#getVolumePriceTiers()}. JSON thường không còn field này.
-   */
   @Deprecated
   @JsonProperty("volume_price_tiers")
   private List<VolumePriceTierResponse> volumePriceTiers;
 
-  /**
-   * Chương trình PWP đang bật có liên quan đến SPU; {@code role} trong phần tử là {@code companion} hoặc {@code anchor}.
-   */
   @JsonProperty("purchase_with_purchase_programs")
   private List<ProductPurchaseWithPurchaseProgramResponse> purchaseWithPurchasePrograms;
 
-  /** Chỉ có ý nghĩa với API recommendation — các API khác để null. */
   private Double recommendationScore;
-  /** Chỉ có ý nghĩa với API recommendation — các API khác để null. */
   private String recommendationSource;
 
   private Double averageRating;
   private Long ratingCount;
 
-  /** Địa chỉ ảnh đại diện (thường trùng {@link #mainImageUrl}; document đầu tiên của SP). */
   private String thumbnailUrl;
-  /** Ảnh cover / PDP chính — URL đầy đủ (Cloudinary hoặc tương đương). */
   private String mainImageUrl;
-  /** Tất cả URL ảnh gallery ({@code document.type} = ảnh hoặc legacy 0), không trùng; thumbnail ưu tiên {@code isMain}. */
   private List<String> imageUrls;
-  /**
-   * Tóm tắt media (ảnh/video) của sản phẩm, thứ tự theo id document tăng dần. Xem {@link ProductDocumentSummary}.
-   */
   private List<ProductDocumentSummary> documents;
 
-  /** Alias storefront: cùng giá trị {@link #mainImageUrl}. Chỉ xuất JSON, không lưu field. */
   @JsonProperty(value = "imageUrl", access = JsonProperty.Access.READ_ONLY)
   public String getImageUrl() {
     return mainImageUrl;
   }
 
-  /** Alias storefront (cover): cùng {@link #mainImageUrl}. */
   @JsonProperty(value = "coverImageUrl", access = JsonProperty.Access.READ_ONLY)
   public String getCoverImageUrl() {
     return mainImageUrl;
@@ -142,9 +102,6 @@ public class ProductFullResponse {
     return fromEntity(entity, recommendationScore, recommendationSource, averageRating, ratingCount, null);
   }
 
-  /**
-   * @param variantDisplayUnitPrices map variantId → đơn giá hiển thị (price change + catalog); null = không gắn effective.
-   */
   public static ProductFullResponse fromEntity(
       ProductEntity entity,
       Double recommendationScore,

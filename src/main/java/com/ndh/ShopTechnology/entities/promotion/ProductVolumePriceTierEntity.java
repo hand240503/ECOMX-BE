@@ -5,10 +5,6 @@ import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
-/**
- * Mix-and-match / giá theo bậc số lượng theo **phân loại (SKU)**: khi tổng số lượng **đúng variant đó** trên đơn
- * đạt {@code minQuantity} thì áp {@code unitPrice} cho các đơn vị của variant đó (không gộp chéo SKU khác).
- */
 @Getter
 @Setter
 @AllArgsConstructor
@@ -24,7 +20,6 @@ public class ProductVolumePriceTierEntity extends BaseEntity {
     @JoinColumn(name = "product_variant_id", nullable = false)
     private ProductVariantEntity productVariant;
 
-    /** Từ số lượng này trở lên (theo tổng SL **variant** trên đơn) áp dụng bậc giá này. */
     @Column(name = "min_quantity", nullable = false)
     private Integer minQuantity;
 

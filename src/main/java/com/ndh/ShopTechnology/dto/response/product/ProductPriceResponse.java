@@ -27,7 +27,6 @@ public class ProductPriceResponse {
   private String unitName;
   private Integer unitRatio;
 
-  /** Thông tin SKU (không kèm giá) — tiện admin list giá theo SPU. */
   private ProductVariantSummaryResponse variant;
 
   public static ProductPriceResponse fromEntity(PriceEntity entity) {

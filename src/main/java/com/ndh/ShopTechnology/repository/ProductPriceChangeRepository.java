@@ -2,6 +2,7 @@ package com.ndh.ShopTechnology.repository;
 
 import com.ndh.ShopTechnology.entities.product.ProductPriceChangeEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -22,35 +23,49 @@ public interface ProductPriceChangeRepository extends JpaRepository<ProductPrice
               AND pc.productVariant.id = :variantId
               AND pc.startAt <= :at
               AND (pc.endAt IS NULL OR pc.endAt >= :at)
+              AND (pc.quantityLimit IS NULL OR pc.soldQuantity < pc.quantityLimit)
             ORDER BY pc.startAt DESC, pc.id DESC
             """)
     Optional<ProductPriceChangeEntity> findEffectiveForVariantAt(
             @Param("variantId") Long variantId,
             @Param("at") Date at);
 
-    /**
-     * Mọi dòng price change có thể đang hiệu lực tại {@code at} cho các biến thể trong {@code variantIds}.
-     * Đã sắp xếp để lấy “dòng ưu tiên” theo cùng quy tắc {@link #findEffectiveForVariantAt}: startAt DESC, id DESC.
-     */
     @Query("""
             SELECT pc FROM ProductPriceChangeEntity pc
             WHERE pc.enabled = true
               AND pc.productVariant.id IN :variantIds
               AND pc.startAt <= :at
               AND (pc.endAt IS NULL OR pc.endAt >= :at)
+              AND (pc.quantityLimit IS NULL OR pc.soldQuantity < pc.quantityLimit)
             ORDER BY pc.productVariant.id ASC, pc.startAt DESC, pc.id DESC
             """)
     List<ProductPriceChangeEntity> findAllActiveCandidatesForVariantIdsAt(
             @Param("variantIds") Collection<Long> variantIds,
             @Param("at") Date at);
 
-    /** Distinct product IDs có ít nhất một price change đang hiệu lực tại {@code at}. */
     @Query("""
             SELECT DISTINCT pc.productId FROM ProductPriceChangeEntity pc
             WHERE pc.enabled = true
               AND pc.startAt <= :at
               AND (pc.endAt IS NULL OR pc.endAt >= :at)
+              AND (pc.quantityLimit IS NULL OR pc.soldQuantity < pc.quantityLimit)
             """)
     List<Long> findDistinctProductIdsWithActivePCAt(@Param("at") Date at);
-}
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ProductPriceChangeEntity pc
+            SET pc.soldQuantity = pc.soldQuantity + :qty
+            WHERE pc.id = :pcId
+              AND (pc.quantityLimit IS NULL OR pc.soldQuantity + :qty <= pc.quantityLimit)
+            """)
+    int incrementSoldQuantity(@Param("pcId") Long pcId, @Param("qty") int qty);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ProductPriceChangeEntity pc
+            SET pc.soldQuantity = GREATEST(0, pc.soldQuantity - :qty)
+            WHERE pc.id = :pcId
+            """)
+    int decrementSoldQuantity(@Param("pcId") Long pcId, @Param("qty") int qty);
+}

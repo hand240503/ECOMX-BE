@@ -20,10 +20,8 @@ public class ProductDocumentResponse {
 
     private Long id;
     private String fileName;
-    /** URL đầy đủ (Cloudinary) hoặc path kiểu {@code /uploads/...}. */
     private String filePath;
     private String fileSize;
-    /** {@link DocumentKind}: {@code 1} ảnh, {@code 2} video, {@code 3} tài liệu. */
     private Integer type;
 
     @JsonProperty("isMain")

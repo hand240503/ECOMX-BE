@@ -72,8 +72,6 @@ public class UserServiceImpl implements UserService {
     private static final String EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
     private static final String PHONE_REGEX = "\\d{10,15}";
 
-    /* ================== Helpers ================== */
-
     @Transactional(readOnly = true)
     protected UserEntity getCurrentUserEntity() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -85,10 +83,6 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new AuthenticationFailedException(MessageConstant.AUTH_FAILED));
     }
 
-    /**
-     * Coi user là admin nếu có ít nhất 1 trong các quyền hệ thống "*_ALL" (101..104).
-     * Đây là tiêu chí dùng cho các flow cập nhật user theo id (admin update bất kỳ user nào).
-     */
     protected boolean isAdmin(UserEntity user) {
         if (user == null) return false;
         return PermissionEvaluator.hasAnyPermission(
@@ -99,10 +93,6 @@ public class UserServiceImpl implements UserService {
                 PermissionCode.DELETE_ALL);
     }
 
-    /**
-     * Load user directly from database for write flows to avoid detached entities.
-     * Cache is intentionally skipped because JPA must track this entity in current session.
-     */
     @Transactional(readOnly = true)
     protected UserEntity loadUserForWrite(Long id) {
         if (id == null) {
@@ -113,9 +103,6 @@ public class UserServiceImpl implements UserService {
                         String.format(MessageConstant.USER_NOT_FOUND_BY_ID, id)));
     }
 
-    /**
-     * Load user from cache for read-only flows.
-     */
     @Cacheable(value = "users", key = "#id")
     @Transactional(readOnly = true)
     public UserEntity loadUser(Long id) {
@@ -139,9 +126,6 @@ public class UserServiceImpl implements UserService {
         return r;
     }
 
-    /**
-     * Update profile fields shared by both normal users and admins.
-     */
     protected void applyProfileFields(UserEntity user, AdminModUserInfoRequest req) {
         if (req == null || user == null)
             return;
@@ -171,9 +155,6 @@ public class UserServiceImpl implements UserService {
             userInfo.setInfo04(req.getInfo04());
     }
 
-    /**
-     * Update sensitive fields for admin-only flows.
-     */
     protected void applyAdminFields(UserEntity user, AdminModUserInfoRequest req) {
         if (req == null || user == null)
             return;
@@ -202,14 +183,6 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    /**
-     * Core method for user update.
-     * <ul>
-     *   <li>Admin (wildcard 101–104) hoặc quyền UPDATE_USER/UPDATE_ALL: chỉnh mọi trường hợp lệ.</li>
-     *   <li>Người có {@link PermissionCode#UPDATE_USER}, hoặc nhân viên có {@code man_id} trỏ về actor: chỉ đổi khóa/mở (status).</li>
-     *   <li>Còn lại: chỉ sửa profile của chính mình.</li>
-     * </ul>
-     */
     @Transactional
     protected UserResponse doUpdateUser(AdminModUserInfoRequest req, UserEntity actor) {
         if (req == null || req.getId() == null) {
@@ -246,7 +219,6 @@ public class UserServiceImpl implements UserService {
         return toResponse(saved);
     }
 
-    /** Khóa/mở (status): quản lý trực tiếp theo man_id, hoặc có quyền UPDATE_USER — body chỉ gồm id + status. */
     protected boolean canApplyAccountLock(UserEntity actor, UserEntity other, AdminModUserInfoRequest req) {
         if (req.getStatus() == null) {
             return false;
@@ -310,13 +282,10 @@ public class UserServiceImpl implements UserService {
         user.setStatus(req.getStatus());
     }
 
-    /** Admin hoặc SUPER_ADMIN: có thể tạo tài khoản với mọi role. Ngược lại: chỉ MANAGER/EMPLOYEE cho nhân viên. */
     protected boolean isPrivilegedAccountCreator(UserEntity actor) {
         return actor.hasRole(RoleConstant.ROLE_ADMIN)
                 || actor.hasRole(RoleConstant.ROLE_SUPER_ADMIN);
     }
-
-    /* ================== Services ================== */
 
     @Override
     @Transactional(readOnly = true)
@@ -543,11 +512,6 @@ public class UserServiceImpl implements UserService {
         return response;
     }
 
-    /**
-     * Đồng bộ cấp/thu hồi quyền cấp thêm trong cùng request cập nhật staff/employee.
-     * User không phải {@link RoleConstant#ROLE_SUPER_ADMIN} hoặc {@link RoleConstant#ROLE_ADMIN}
-     * không được tự grant/revoke cho chính mình.
-     */
     private boolean applyPermissionMutationsIfAny(AdminModUserInfoRequest req, UserEntity actor) {
         boolean hasGrants = req.getGrantPermissionCodes() != null && !req.getGrantPermissionCodes().isEmpty();
         boolean hasRevokes = req.getRevokePermissionCodes() != null && !req.getRevokePermissionCodes().isEmpty();
@@ -625,7 +589,6 @@ public class UserServiceImpl implements UserService {
     public UserResponse updateProfileInfo(ModUserInfoRequest req) {
         UserEntity currentUser = getCurrentUserEntity();
 
-        // Reuse central update flow by converting to admin request shape.
         AdminModUserInfoRequest adminReq = AdminModUserInfoRequest.builder()
                 .id(currentUser.getId())
                 .fullName(req != null ? req.getFullName() : null)
@@ -759,7 +722,6 @@ public class UserServiceImpl implements UserService {
 
         UserEntity saved = userRepository.save(currentUser);
 
-        // Clear permission cache before returning refreshed login tokens.
         permissionService.clearUserPermissionsCache(saved.getUsername());
 
         log.info("Contact changed: userId={}, username={}", saved.getId(), saved.getUsername());
@@ -819,10 +781,6 @@ public class UserServiceImpl implements UserService {
         return toResponse(saved, generatedPlain ? passwordPlain : null);
     }
 
-    /**
-     * Mật khẩu 6 chữ số: 5 chữ số đầu lấy từ SĐT (bỏ ký tự không phải số), chữ số thứ 6 ngẫu nhiên.
-     * Nếu không đủ 5 chữ số từ SĐT, phần đầu được bù bằng chữ số ngẫu nhiên.
-     */
     private String generateStaffInitialPassword(String normalizedPhone) {
         String digits = normalizedPhone == null ? "" : normalizedPhone.replaceAll("\\D", "");
         StringBuilder prefix = new StringBuilder();
@@ -938,10 +896,6 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new NotFoundEntityException("Chưa cấu hình role EMPLOYEE trong hệ thống."));
     }
 
-    /**
-     * Admin/SUPER_ADMIN: như {@link RoleAssignmentService#assignRoleForPrivilegedCreator(Long)} (mặc định CUSTOMER nếu không gửi roleId).
-     * Other: chỉ gán MANAGER / EMPLOYEE, mặc định EMPLOYEE nếu không gửi roleId.
-     */
     protected RoleEntity resolveRoleForCreate(UserEntity actor, Long roleId) {
         if (isPrivilegedAccountCreator(actor)) {
             return roleAssignmentService.assignRoleForPrivilegedCreator(roleId);
@@ -961,9 +915,6 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new NotFoundEntityException("Chưa cấu hình role EMPLOYEE trong hệ thống."));
     }
 
-    /**
-     * Thêm tài khoản ADMIN/SUPER_ADMIN chỉ khi người tạo là ADMIN hoặc SUPER_ADMIN.
-     */
     protected void validateHighPrivilegeRolesForPrivilegedCreator(UserEntity actor, RoleEntity role) {
         if (role == null) {
             return;

@@ -5,9 +5,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-/**
- * Curated trending search keywords for the empty search screen (max 12 items for the storefront).
- */
 @Service
 public class SearchTrendingService {
 

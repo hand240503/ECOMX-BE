@@ -33,9 +33,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariantEn
             """)
     Optional<ProductVariantEntity> findWithProductAndPricesById(@Param("id") Long id);
 
-    /**
-     * Các biến thể active của nhiều SPU (đã sắp xếp) — dùng để chọn 1 biến thể mặc định / dòng legacy chỉ gửi {@code productId}.
-     */
     @Query("""
             SELECT DISTINCT v FROM ProductVariant v
             JOIN FETCH v.product p

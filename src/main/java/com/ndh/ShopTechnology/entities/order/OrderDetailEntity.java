@@ -30,9 +30,6 @@ public class OrderDetailEntity extends BaseEntity {
     @Column(name = COL_QUANTITY, nullable = true)
     private Integer quantity;
 
-    /**
-     * Đơn giá áp dụng tại thời điểm đặt hàng (snapshot; không đổi khi giá sản phẩm cập nhật sau này).
-     */
     @Column(name = COL_UNIT_PRICE, nullable = false)
     private Double unitPrice;
 
@@ -47,15 +44,10 @@ public class OrderDetailEntity extends BaseEntity {
     @JoinColumn(name = COL_PRODUCT_ID, nullable = false)
     private ProductEntity product;
 
-    /** Biến thể đã chọn khi đặt hàng ({@code null} với dữ liệu đơn cũ trước migration). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = COL_PRODUCT_VARIANT_ID, nullable = true)
     private ProductVariantEntity productVariant;
 
-    /**
-     * JSON snapshot {@link com.ndh.ShopTechnology.dto.response.order.OrderLinePricingProgramsDto} tại thời điểm đặt —
-     * PC, volume tier, PWP. Null với dòng đơn cũ trước khi có cột này.
-     */
     @Column(name = COL_PRICING_PROGRAMS_JSON, columnDefinition = "TEXT")
     private String pricingProgramsJson;
 

@@ -85,4 +85,3 @@ public class CloudinaryService {
     public record UploadResult(String url, String publicId) {
     }
 }
-

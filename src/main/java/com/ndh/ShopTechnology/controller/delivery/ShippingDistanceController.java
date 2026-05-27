@@ -12,9 +12,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Ước lượng quãng đường giao hàng (OSM/OSRM) từ địa chỉ khách chọn tới kho mặc định.
- */
 @RestController
 @RequestMapping("${api.prefix}/shipping")
 @Validated

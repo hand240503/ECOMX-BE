@@ -20,12 +20,8 @@ public class CreateUnitRequest {
     @JsonProperty("name_unit")
     private String nameUnit;
 
-    /**
-     * Hệ số quy đổi so với đơn vị cơ sở (vd 1 thùng = 12 cái). Null = 1.
-     */
     @Min(1)
     private Integer ratio;
 
-    /** Trạng thái (vd {@code SystemConstant.ACTIVE_STATUS}). Null = active. */
     private Integer status;
 }

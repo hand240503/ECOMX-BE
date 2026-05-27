@@ -61,15 +61,17 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.ndh.ShopTechnology.entities.product.ProductPriceChangeUsageEntity;
+import com.ndh.ShopTechnology.repository.ProductPriceChangeUsageRepository;
+import com.ndh.ShopTechnology.services.product.ProductPriceChangeService;
+import com.ndh.ShopTechnology.services.promotion.PromotionPricingService.PricingContext;
+
 @Slf4j
 @Service
 public class OrderServiceImpl implements OrderService {
 
     private static final int CHECKOUT_SESSION_VALID_MINUTES = 30;
 
-    /**
-     * Bảng mã {@code vnp_TransactionStatus} (tài liệu Thanh toán Pay VNPAY) — bản rút gọn dùng cho API.
-     */
     private static final String VNP_TXN_ST_SUCCESS = "00";
     private static final String VNP_TXN_ST_NOT_FINISHED = "01";
     private static final String VNP_TXN_ST_ERROR = "02";
@@ -88,6 +90,8 @@ public class OrderServiceImpl implements OrderService {
     private final VnpayProperties vnpayProperties;
     private final UserAddressRepository userAddressRepository;
     private final PromotionPricingService promotionPricingService;
+    private final ProductPriceChangeService priceChangeService;
+    private final ProductPriceChangeUsageRepository priceChangeUsageRepository;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
@@ -100,7 +104,9 @@ public class OrderServiceImpl implements OrderService {
             ObjectMapper objectMapper,
             VnpayProperties vnpayProperties,
             UserAddressRepository userAddressRepository,
-            PromotionPricingService promotionPricingService) {
+            PromotionPricingService promotionPricingService,
+            ProductPriceChangeService priceChangeService,
+            ProductPriceChangeUsageRepository priceChangeUsageRepository) {
         this.orderRepository = orderRepository;
         this.orderDetailRepository = orderDetailRepository;
         this.productRepository = productRepository;
@@ -112,6 +118,8 @@ public class OrderServiceImpl implements OrderService {
         this.vnpayProperties = vnpayProperties;
         this.userAddressRepository = userAddressRepository;
         this.promotionPricingService = promotionPricingService;
+        this.priceChangeService = priceChangeService;
+        this.priceChangeUsageRepository = priceChangeUsageRepository;
     }
 
     @Override
@@ -159,6 +167,8 @@ public class OrderServiceImpl implements OrderService {
         validateOrderHeaderForShipping(request.getOrder());
 
         OrderPlaceDraft draft = buildDraft(request);
+
+        validatePcPerCustomerFromDraft(draft, currentUser.getId());
 
         String pmCode = draft.paymentMethod().getCode() != null
                 ? draft.paymentMethod().getCode().trim()
@@ -242,10 +252,6 @@ public class OrderServiceImpl implements OrderService {
         return finalizeVnpayCheckoutSession(checkoutSessionId, false);
     }
 
-    /**
-     * @param ignoreExpiry Nếu {@code true} (chỉ luồng dev mô phỏng IPN), bỏ kiểm tra hết hạn phiên; IPN thật luôn dùng
-     *                    {@code false}.
-     */
     private VnpaySessionFinalizeResult finalizeVnpayCheckoutSession(long checkoutSessionId, boolean ignoreExpiry) {
         CheckoutSessionEntity session = checkoutSessionRepository
                 .findByIdWithUserAndPaymentMethod(checkoutSessionId)
@@ -497,13 +503,8 @@ public class OrderServiceImpl implements OrderService {
         return buildOrderResponse(order, mapDetailResponses(details));
     }
 
-    /**
-     * Gắn trừ tồn giữ / lock theo {@code checkout_session} tại đây (ví dụ theo {@link CheckoutSessionEntity#getId()}
-     * hoặc {@link CheckoutSessionEntity#getPublicId()}) rồi trả tồn khi hủy.
-     */
     private void releaseWarehouseLockForAbandonedCheckoutSession(CheckoutSessionEntity session) {
         Objects.requireNonNull(session, "session");
-        // Khi bảng tồn/warehouse nối với session: implement release tại đây; gọi trước khi gán CANCELLED + save.
     }
 
     private VnpayPendingTransactionResponse toPendingFromSession(CheckoutSessionEntity session, String publicId) {
@@ -610,10 +611,6 @@ public class OrderServiceImpl implements OrderService {
                 .build();
     }
 
-    /**
-     * Điền dòng hàng, địa chỉ, tổng từ {@link CheckoutSessionEntity#getRequestPayloadJson()} cùng giá tại
-     * thời điểm tra cứu. Trả null nếu parse lỗi hoặc sản phẩm thay đổi/đã bị gỡ.
-     */
     private VnpayCheckoutOrderInfoResponse buildOrderInfoFromSessionPayload(CheckoutSessionEntity session) {
         if (session == null || session.getRequestPayloadJson() == null) {
             return null;
@@ -727,10 +724,62 @@ public class OrderServiceImpl implements OrderService {
         return first;
     }
 
+    private void validatePcPerCustomerFromDraft(OrderPlaceDraft draft, Long userId) {
+        if (userId == null || draft.detailsToSave() == null) return;
+        for (OrderDetailEntity d : draft.detailsToSave()) {
+            if (d.getPricingProgramsJson() == null) continue;
+            try {
+                OrderLinePricingProgramsDto programs = objectMapper.readValue(
+                        d.getPricingProgramsJson(), OrderLinePricingProgramsDto.class);
+                if (programs == null || programs.getPriceChange() == null) continue;
+                Long pcId = programs.getPriceChange().getId();
+                if (pcId == null) continue;
+                int qty = d.getQuantity() != null ? d.getQuantity() : 1;
+                if (!priceChangeService.isWithinPerCustomerLimit(pcId, userId, qty)) {
+                    throw new CustomApiException(HttpStatus.CONFLICT,
+                            "Bạn đã đạt giới hạn số lượng cho phép theo giá ưu đãi đặc biệt này (đợt PC #"
+                                    + pcId + "). Mỗi khách hàng chỉ được mua một số lượng nhất định.");
+                }
+            } catch (CustomApiException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                log.warn("Could not validate PC per-customer limit for draft detail, skipping", ex);
+            }
+        }
+    }
+
+    private void validatePcPerCustomerLimits(
+            List<PromotionPricingService.PricedLineWithPrograms> pricedLines,
+            Long userId) {
+        if (userId == null || pricedLines == null) return;
+        for (PromotionPricingService.PricedLineWithPrograms pl : pricedLines) {
+            if (pl.programs() == null || pl.programs().getPriceChange() == null) continue;
+            Long pcId = pl.programs().getPriceChange().getId();
+            if (pcId == null) continue;
+            int qty = pl.line() != null && pl.line().getQuantity() != null ? pl.line().getQuantity() : 1;
+            boolean within = priceChangeService.isWithinPerCustomerLimit(pcId, userId, qty);
+            if (!within) {
+                throw new CustomApiException(HttpStatus.CONFLICT,
+                        "Bạn đã đạt giới hạn số lượng cho phép theo giá ưu đãi đặc biệt này (đợt PC #"
+                                + pcId + "). Mỗi khách hàng chỉ được mua một số lượng nhất định.");
+            }
+        }
+    }
+
     private OrderPlaceDraft buildDraft(CreateOrderRequest request) {
+        CreateOrderHeaderRequest headerForPm = request.getOrder();
+        PaymentMethodEntity paymentMethodEarly = paymentMethodRepository
+                .findById(headerForPm.getPaymentMethodId())
+                .orElseThrow(() -> new NotFoundEntityException(
+                        "Payment method not found with id: " + headerForPm.getPaymentMethodId()));
+        if (!Boolean.TRUE.equals(paymentMethodEarly.getActive())) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Payment method is not available");
+        }
+        PricingContext pricingCtx = new PricingContext(paymentMethodEarly.getCode());
+
         List<PromotionPricingService.OrderVariantLine> orderLines = resolveOrderLines(request);
         List<PromotionPricingService.PricedLineWithPrograms> priced =
-                promotionPricingService.priceLinesWithPrograms(orderLines);
+                promotionPricingService.priceLinesWithPrograms(orderLines, pricingCtx);
 
         double orderTotal = 0.0;
         List<OrderDetailResponse> detailResponses = new ArrayList<>();
@@ -783,15 +832,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         CreateOrderHeaderRequest header = request.getOrder();
-        PaymentMethodEntity paymentMethod = paymentMethodRepository
-                .findById(header.getPaymentMethodId())
-                .orElseThrow(() -> new NotFoundEntityException(
-                        "Payment method not found with id: " + header.getPaymentMethodId()));
-        if (!Boolean.TRUE.equals(paymentMethod.getActive())) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Payment method is not available");
-        }
-
-        return new OrderPlaceDraft(orderTotal, detailsToSave, detailResponses, header, paymentMethod);
+        return new OrderPlaceDraft(orderTotal, detailsToSave, detailResponses, header, paymentMethodEarly);
     }
 
     private OrderEntity persistOrderFromDraft(
@@ -844,6 +885,35 @@ public class OrderServiceImpl implements OrderService {
             d.setOrder(order);
         }
         orderDetailRepository.saveAll(detailsToSave);
+
+        final Long finalOrderId = order.getId();
+        final Long currentUserId = currentUser.getId();
+        for (OrderDetailEntity d : detailsToSave) {
+            OrderLinePricingProgramsDto programs = null;
+            try {
+                if (d.getPricingProgramsJson() != null) {
+                    programs = objectMapper.readValue(d.getPricingProgramsJson(), OrderLinePricingProgramsDto.class);
+                }
+            } catch (Exception ex) {
+                log.warn("Could not deserialize pricingProgramsJson for order detail, skipping PC quota update", ex);
+            }
+            if (programs == null || programs.getPriceChange() == null) continue;
+            Long pcId = programs.getPriceChange().getId();
+            if (pcId == null) continue;
+            int qty = d.getQuantity() != null ? d.getQuantity() : 1;
+            boolean ok = priceChangeService.incrementSoldQuantity(pcId, qty);
+            if (!ok) {
+                log.warn("PC quota may be exceeded for priceChangeId={} on order={} — sold_quantity increment returned 0 rows affected",
+                        pcId, finalOrderId);
+            }
+            priceChangeUsageRepository.save(ProductPriceChangeUsageEntity.builder()
+                    .priceChangeId(pcId)
+                    .userId(currentUserId)
+                    .orderId(finalOrderId)
+                    .quantity(qty)
+                    .build());
+        }
+
         return order;
     }
 
@@ -855,12 +925,8 @@ public class OrderServiceImpl implements OrderService {
             PaymentMethodEntity paymentMethod) {
     }
 
-    /**
-     * Khoảng cách + phí + chuỗi địa chỉ lưu trên đơn (địa chỉ lấy từ {@code user_address} khi có id).
-     */
     private record CheckoutShipping(Double distanceMeters, Long shippingFeeVnd, String deliveryAddressForOrder) {}
 
-    /** Tổng thanh toán (VND): tiền hàng (chi tiết) + phí ship; phí null coi như 0. */
     private static double grandOrderTotalVnd(double merchandiseSubtotal, Long shippingFeeVnd) {
         long shipVnd = shippingFeeVnd != null ? shippingFeeVnd : 0L;
         return merchandiseSubtotal + shipVnd;
@@ -902,7 +968,6 @@ public class OrderServiceImpl implements OrderService {
     private static final java.util.regex.Pattern WORK_SESSION_PUBLIC_ID_PATTERN =
             java.util.regex.Pattern.compile("^[a-zA-Z0-9._:\\-]+$");
 
-    /** {@code public_id} = id phiên (chuỗi); từ chối rỗng / quá dài. */
     private static String normalizeCheckoutSessionPublicId(String publicId) {
         if (publicId == null) {
             throw new CustomApiException(HttpStatus.BAD_REQUEST, "Invalid transaction public id");
@@ -914,10 +979,6 @@ public class OrderServiceImpl implements OrderService {
         return t;
     }
 
-    /**
-     * Ưu tiên snapshot phiên VNPAY (nếu có khoảng cách hoặc phí); không gọi OSM/OSRM.
-     * Ngược lại: ưu tiên {@code userAddressId} (đọc {@code distance_to_warehouse_meters}, {@code shipping_fee_vnd} trên DB).
-     */
     private CheckoutShipping resolveCheckoutShipping(
             CreateOrderHeaderRequest header,
             long userId,
@@ -1093,10 +1154,6 @@ public class OrderServiceImpl implements OrderService {
         return buildOrderResponse(order, mapDetailResponses(details));
     }
 
-    // =====================================================================
-    // ADMIN METHODS
-    // =====================================================================
-
     @Override
     @Transactional(readOnly = true)
     public List<OrderResponse> adminGetAllOrders(Integer status) {
@@ -1126,7 +1183,6 @@ public class OrderServiceImpl implements OrderService {
 
         int current = order.getStatus() != null ? order.getStatus() : 0;
 
-        // Trạng thái khoá — không cho chỉnh thêm
         if (current == OrderConstants.STATUS_COMPLETED || current == OrderConstants.STATUS_CANCELLED) {
             throw new CustomApiException(
                     org.springframework.http.HttpStatus.BAD_REQUEST,
@@ -1148,7 +1204,6 @@ public class OrderServiceImpl implements OrderService {
         return buildOrderResponse(order, mapDetailResponses(details));
     }
 
-    /** Luồng chuyển hợp lệ: 1→2/5, 2→3/5, 3→4/5. */
     private static boolean isValidAdminTransition(int from, int to) {
         switch (from) {
             case OrderConstants.STATUS_AWAITING_CONFIRM:

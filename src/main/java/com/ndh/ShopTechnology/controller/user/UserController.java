@@ -147,5 +147,4 @@ public class UserController {
                 return ResponseEntity.status(HttpStatus.OK).body(response);
         }
 
-        // Avatar is updated via POST /profile with multipart/form-data
 }

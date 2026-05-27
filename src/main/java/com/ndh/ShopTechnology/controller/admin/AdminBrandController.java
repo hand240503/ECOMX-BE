@@ -14,10 +14,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Quản trị hãng / thương hiệu ({@link com.ndh.ShopTechnology.entities.product.BrandEntity}).
- * Dùng khi cấu hình sản phẩm ({@code brand_id}).
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/brands")
 public class AdminBrandController {

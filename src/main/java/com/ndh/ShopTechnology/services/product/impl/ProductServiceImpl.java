@@ -71,7 +71,6 @@ public class ProductServiceImpl implements ProductService {
     private static final int MAX_SEARCH_TOKENS = 12;
     private static final int MAX_TOKEN_LENGTH = 64;
 
-    /** Trần {@code limit} cho {@link #getFeaturedProducts} / {@link #getHotSaleProducts} khi {@code all == false}. */
     public static final int MAX_FLAGGED_PRODUCT_LIST_LIMIT = 500;
 
     private final ProductRepository productRepository;
@@ -92,7 +91,6 @@ public class ProductServiceImpl implements ProductService {
     private final ProductVolumePriceTierRepository productVolumePriceTierRepository;
     private final PurchaseWithPurchaseOfferRepository purchaseWithPurchaseOfferRepository;
 
-    /** Legacy {@code entity_type} trong bảng document cho sản phẩm (đồng bộ {@link ProductImageAttachService}). */
     private static final int LEGACY_PRODUCT_DOCUMENT_ENTITY_TYPE = 1;
 
     public ProductServiceImpl(ProductRepository productRepository,
@@ -345,9 +343,6 @@ public class ProductServiceImpl implements ProductService {
                 .build();
     }
 
-    /**
-     * Hybrid PDP recommendations use {@code int} product ids internally; wider ids return no recs.
-     */
     private static Integer toHybridProductId(Long id) {
         if (id == null || id < 1L || id > (long) Integer.MAX_VALUE) {
             return null;
@@ -428,10 +423,6 @@ public class ProductServiceImpl implements ProductService {
         return new ProductSearchResult(mapped, null);
     }
 
-    /**
-     * Splits on whitespace; each token is matched (AND) against name / description / {@code l_description} / tag so spaced
-     * queries still hit compact product titles (e.g. "Smart Phone" vs "Smartphone").
-     */
     private static List<String> tokenizeSearchKeywords(String sanitizedQuery) {
         String[] parts = sanitizedQuery.split("\\s+");
         List<String> tokens = new ArrayList<>();
@@ -451,9 +442,6 @@ public class ProductServiceImpl implements ProductService {
         return tokens;
     }
 
-    /**
-     * Trims and strips LIKE wildcards so user input cannot broaden the pattern; caps length.
-     */
     private static String sanitizeSearchKeyword(String raw) {
         if (raw == null) {
             return "";
@@ -486,7 +474,6 @@ public class ProductServiceImpl implements ProductService {
         return toFullWithRatings(full);
     }
 
-    /** Đồ thị đầy đủ (variants + prices + …) dùng cho cập nhật / trả response admin. */
     private ProductEntity loadProductGraphForUpdate(long productId) {
         ProductEntity product = productRepository.findWithFullRelationsById(productId)
                 .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + productId));
@@ -594,10 +581,6 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    /**
-     * Các field giá “cũ” trên {@link UpdateProductRequest} ({@code newPrices} / {@code updatedPrices} / {@code removedPriceIds})
-     * áp vào một biến thể đại diện (sortOrder nhỏ nhất, rồi id) — tương thích FE chưa gửi {@code product_variant_id} từng dòng.
-     */
     private void applyLegacyRootPriceMutations(ProductEntity product, UpdateProductRequest request) {
         Long productId = product.getId();
         boolean touchesLegacyPrices = (request.getRemovedPriceIds() != null && !request.getRemovedPriceIds().isEmpty())
@@ -917,13 +900,10 @@ public class ProductServiceImpl implements ProductService {
     public ActivePromotionsResponse getActivePromotions() {
         java.util.Date now = new java.util.Date();
 
-        // 1. Price Change: dùng cột productId lưu sẵn trong entity → không cần join
         List<Long> pcIds = productPriceChangeRepository.findDistinctProductIdsWithActivePCAt(now);
 
-        // 2. Volume Tier
         List<Long> vtIds = productVolumePriceTierRepository.findDistinctProductIdsWithEnabledTiers();
 
-        // 3. PwP: gộp anchor + companion, loại trùng
         List<Long> pwpAnchorIds = purchaseWithPurchaseOfferRepository.findDistinctAnchorProductIdsEnabled();
         List<Long> pwpCompanionIds = purchaseWithPurchaseOfferRepository.findDistinctCompanionProductIdsEnabled();
         Set<Long> pwpSet = new LinkedHashSet<>();

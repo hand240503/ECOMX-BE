@@ -38,7 +38,6 @@ public class ProductEntity extends BaseEntity {
     @Column(name = COL_DESCRIPTION, nullable = true)
     private String description;
 
-    /** Mô tả dài / rich-text (tuỳ nghiệp vụ). */
     @Column(name = COL_L_DESCRIPTION, nullable = true, columnDefinition = "TEXT")
     private String lDescription;
 
@@ -65,7 +64,6 @@ public class ProductEntity extends BaseEntity {
     @Column(name = COL_TAG)
     private String tag;
 
-    /** Mã SKU dạng số (tùy nghiệp vụ, có thể null với dữ liệu cũ). */
     @Column(name = COL_SKU)
     private Long sku;
 
@@ -75,9 +73,6 @@ public class ProductEntity extends BaseEntity {
     @Builder.Default
     private java.util.List<ProductVariantEntity> variants = new java.util.ArrayList<>();
 
-    /**
-     * Chính sách áp dụng cho sản phẩm (cùng một bản ghi {@link PolicyEntity} có thể dùng cho nhiều SP).
-     */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "product_policies",

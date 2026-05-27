@@ -17,9 +17,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Quản lý tài khoản <b>role EMPLOYEE</b> (tập con của nhân viên nội bộ).
- */
 @RestController
 @RequestMapping("${api.prefix}/admin/employees")
 @RequiredArgsConstructor

@@ -12,13 +12,10 @@ public class SessionContext {
 
     private Long userId;
 
-    /** Product IDs user đã tương tác trong session hiện tại */
     private Set<Long> sessionProductIds;
 
-    /** Map &lt;categoryId, weight&gt; — category xem gần đây/nhiều lần có weight cao */
     private Map<Long, Double> categoryWeights;
 
-    /** Map &lt;brand, weight&gt; */
     private Map<String, Double> brandWeights;
 
     public boolean isEmpty() {
