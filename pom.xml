@@ -143,6 +143,12 @@
 			<groupId>io.lettuce</groupId>
 			<artifactId>lettuce-core</artifactId>
 		</dependency>
+
+		<!-- AOP – dùng cho AdminActivityLogAspect -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
+		</dependency>
     </dependencies>
 
 	<build>

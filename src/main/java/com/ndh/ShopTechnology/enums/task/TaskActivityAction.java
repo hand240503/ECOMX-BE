@@ -1,0 +1,17 @@
+package com.ndh.ShopTechnology.enums.task;
+
+public enum TaskActivityAction {
+    CREATED,
+    STATUS_CHANGED,
+    ASSIGNEE_CHANGED,
+    TITLE_UPDATED,
+    PRIORITY_CHANGED,
+    DUE_DATE_CHANGED,
+    COMMENTED,
+    ATTACHMENT_ADDED,
+    CHECKLIST_UPDATED,
+    LABEL_CHANGED,
+    PARTICIPANT_ADDED,
+    PARTICIPANT_REMOVED,
+    DELETED
+}

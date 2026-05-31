@@ -1,5 +1,6 @@
 package com.ndh.ShopTechnology.controller.order;
 
+import com.ndh.ShopTechnology.dto.request.order.CancelOrderRequest;
 import com.ndh.ShopTechnology.dto.request.order.CheckoutPricingPreviewRequest;
 import com.ndh.ShopTechnology.dto.request.order.CreateOrderRequest;
 import com.ndh.ShopTechnology.dto.request.order.OrderReturnRequest;
@@ -7,6 +8,7 @@ import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.order.CheckoutPricingPreviewResponse;
 import com.ndh.ShopTechnology.dto.response.order.CreateOrderResultResponse;
 import com.ndh.ShopTechnology.dto.response.order.OrderResponse;
+import com.ndh.ShopTechnology.dto.response.order.OrderTimelineResponse;
 import com.ndh.ShopTechnology.dto.response.order.VnpayPendingTransactionResponse;
 import com.ndh.ShopTechnology.dto.response.order.VnpayTransactionStatusResponse;
 import com.ndh.ShopTechnology.services.order.OrderService;
@@ -43,6 +45,43 @@ public class OrderController {
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<OrderResponse>> getMyOrder(@PathVariable Long id) {
         OrderResponse data = orderService.getMyOrderById(id);
+        return ResponseEntity.ok(APIResponse.of(true, "OK", data, null, null));
+    }
+
+    /**
+     * Lấy tiến trình đơn hàng dưới dạng stepper để hiển thị trên user FE.
+     *
+     * <p>Ví dụ response (đơn đang ở bước "Đã giao cho ĐVVC"):
+     * <pre>
+     * GET /orders/42/timeline
+     * {
+     *   "orderCode": "ORD-2026-0042",
+     *   "currentStatus": 3,
+     *   "currentStatusLabel": "Đang giao hàng",
+     *   "finished": false,
+     *   "steps": [
+     *     { "stepIndex": 1, "statusCode": 1, "statusLabel": "Đơn hàng đã đặt",
+     *       "completed": true, "current": false, "timestamp": "2026-05-25T07:25:00" },
+     *     { "stepIndex": 2, "statusCode": 2, "statusLabel": "Đã xác nhận",
+     *       "completed": true, "current": false, "timestamp": "2026-05-25T07:30:00",
+     *       "updatedByUserId": 5, "updatedByUsername": "employee01",
+     *       "updatedByFullName": "Nguyễn Văn A" },
+     *     { "stepIndex": 3, "statusCode": 3, "statusLabel": "Đã giao cho ĐVVC",
+     *       "completed": true, "current": true, "timestamp": "2026-05-25T17:27:00",
+     *       "updatedByUserId": 5, "updatedByUsername": "employee01",
+     *       "updatedByFullName": "Nguyễn Văn A" },
+     *     { "stepIndex": 4, "statusCode": 4, "statusLabel": "Hoàn thành",
+     *       "completed": false, "current": false },
+     *     { "stepIndex": 5, "statusLabel": "Đánh giá",
+     *       "completed": false, "current": false }
+     *   ]
+     * }
+     * </pre>
+     */
+    @GetMapping("/{id}/timeline")
+    public ResponseEntity<APIResponse<OrderTimelineResponse>> getMyOrderTimeline(
+            @PathVariable Long id) {
+        OrderTimelineResponse data = orderService.getMyOrderTimeline(id);
         return ResponseEntity.ok(APIResponse.of(true, "OK", data, null, null));
     }
 
@@ -108,8 +147,10 @@ public class OrderController {
     }
 
     @PostMapping("/{id}/cancel")
-    public ResponseEntity<APIResponse<OrderResponse>> cancelMyOrder(@PathVariable Long id) {
-        OrderResponse data = orderService.cancelMyOrder(id);
+    public ResponseEntity<APIResponse<OrderResponse>> cancelMyOrder(
+            @PathVariable Long id,
+            @Valid @RequestBody CancelOrderRequest request) {
+        OrderResponse data = orderService.cancelMyOrder(id, request.getReason());
         return ResponseEntity.ok(APIResponse.of(true, "Order cancelled", data, null, null));
     }
 

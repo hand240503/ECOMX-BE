@@ -11,7 +11,11 @@ public interface UserAuthService {
 
     LoginResponse registerUser(RegisterUserRequest request);
 
+    /** Login trang User — chỉ chấp nhận CUSTOMER. */
     LoginResponse login(LoginRequest request);
+
+    /** Login trang Admin — chỉ chấp nhận non-CUSTOMER. */
+    LoginResponse adminLogin(LoginRequest request);
 
     LoginResponse refreshToken(String refreshToken, String deviceId, String ipAddress, String userAgent);
 

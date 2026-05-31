@@ -58,6 +58,11 @@ public class UserEntity extends BaseEntity {
     @Builder.Default
     private Set<UserPermissionEntity> userPermissions = new HashSet<>();
 
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    @JsonIgnore
+    @Builder.Default
+    private Set<com.ndh.ShopTechnology.entities.department.UserDepartmentEntity> userDepartments = new HashSet<>();
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnore
     @Builder.Default
@@ -87,18 +92,28 @@ public class UserEntity extends BaseEntity {
     public Set<Integer> getAllPermissions() {
         Set<Integer> permissions = new HashSet<>();
 
+        // 1. Quyền từ Role
         if (role != null && role.getPermissionCodes() != null) {
             permissions.addAll(role.getPermissionCodes());
         }
 
+        // 2. Quyền cá nhân (UserPermissionGrants)
         if (userPermissions != null) {
             LocalDateTime now = LocalDateTime.now();
             for (UserPermissionEntity up : userPermissions) {
                 if (up.getPermissionCode() == null) continue;
-                if (up.getExpiresAt() != null && up.getExpiresAt().isBefore(now)) {
-                    continue;
-                }
+                if (up.getExpiresAt() != null && up.getExpiresAt().isBefore(now)) continue;
                 permissions.add(up.getPermissionCode());
+            }
+        }
+
+        // 3. Quyền từ Phòng ban (Department)
+        if (userDepartments != null) {
+            for (com.ndh.ShopTechnology.entities.department.UserDepartmentEntity ud : userDepartments) {
+                com.ndh.ShopTechnology.entities.department.DepartmentEntity dept = ud.getDepartment();
+                if (dept != null && Integer.valueOf(1).equals(dept.getStatus())) {
+                    permissions.addAll(dept.getPermissionCodes());
+                }
             }
         }
 

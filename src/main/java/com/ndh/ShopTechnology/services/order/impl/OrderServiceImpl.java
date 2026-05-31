@@ -15,7 +15,10 @@ import com.ndh.ShopTechnology.dto.response.order.CheckoutPricingPreviewResponse;
 import com.ndh.ShopTechnology.dto.response.order.CreateOrderResultResponse;
 import com.ndh.ShopTechnology.dto.response.order.OrderDetailResponse;
 import com.ndh.ShopTechnology.dto.response.order.OrderResponse;
+import com.ndh.ShopTechnology.dto.response.order.OrderTimelineResponse;
+import com.ndh.ShopTechnology.dto.response.order.OrderTimelineResponse.TimelineStep;
 import com.ndh.ShopTechnology.dto.response.order.PaymentMethodSummaryResponse;
+import com.ndh.ShopTechnology.entities.log.OrderHistoryEntity;
 import com.ndh.ShopTechnology.dto.response.order.VnpayCheckoutOrderInfoResponse;
 import com.ndh.ShopTechnology.dto.response.order.VnpayPendingTransactionResponse;
 import com.ndh.ShopTechnology.dto.response.order.OrderLinePricingProgramsDto;
@@ -40,11 +43,16 @@ import com.ndh.ShopTechnology.repository.ProductRepository;
 import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.repository.UserAddressRepository;
 import com.ndh.ShopTechnology.utils.ShippingFeeCalculator;
+import com.ndh.ShopTechnology.services.log.OrderHistoryService;
 import com.ndh.ShopTechnology.services.order.OrderService;
 import com.ndh.ShopTechnology.services.order.VnpaySessionFinalizeResult;
 import com.ndh.ShopTechnology.services.promotion.PromotionPricingService;
+import com.ndh.ShopTechnology.services.task.OrderCancelledEvent;
+import com.ndh.ShopTechnology.services.task.OrderCreatedEvent;
+import com.ndh.ShopTechnology.services.task.OrderReturnedEvent;
 import com.ndh.ShopTechnology.services.user.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +72,7 @@ import java.util.stream.Stream;
 import com.ndh.ShopTechnology.entities.product.ProductPriceChangeUsageEntity;
 import com.ndh.ShopTechnology.repository.ProductPriceChangeUsageRepository;
 import com.ndh.ShopTechnology.services.product.ProductPriceChangeService;
+import com.ndh.ShopTechnology.services.product.impl.ProductImageAttachService;
 import com.ndh.ShopTechnology.services.promotion.PromotionPricingService.PricingContext;
 
 @Slf4j
@@ -92,6 +101,10 @@ public class OrderServiceImpl implements OrderService {
     private final PromotionPricingService promotionPricingService;
     private final ProductPriceChangeService priceChangeService;
     private final ProductPriceChangeUsageRepository priceChangeUsageRepository;
+    private final OrderHistoryService orderHistoryService;
+    private final com.ndh.ShopTechnology.repository.OrderHistoryRepository orderHistoryRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final ProductImageAttachService productImageAttachService;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
@@ -106,7 +119,11 @@ public class OrderServiceImpl implements OrderService {
             UserAddressRepository userAddressRepository,
             PromotionPricingService promotionPricingService,
             ProductPriceChangeService priceChangeService,
-            ProductPriceChangeUsageRepository priceChangeUsageRepository) {
+            ProductPriceChangeUsageRepository priceChangeUsageRepository,
+            OrderHistoryService orderHistoryService,
+            com.ndh.ShopTechnology.repository.OrderHistoryRepository orderHistoryRepository,
+            ApplicationEventPublisher eventPublisher,
+            ProductImageAttachService productImageAttachService) {
         this.orderRepository = orderRepository;
         this.orderDetailRepository = orderDetailRepository;
         this.productRepository = productRepository;
@@ -120,6 +137,10 @@ public class OrderServiceImpl implements OrderService {
         this.promotionPricingService = promotionPricingService;
         this.priceChangeService = priceChangeService;
         this.priceChangeUsageRepository = priceChangeUsageRepository;
+        this.orderHistoryService = orderHistoryService;
+        this.orderHistoryRepository = orderHistoryRepository;
+        this.eventPublisher = eventPublisher;
+        this.productImageAttachService = productImageAttachService;
     }
 
     @Override
@@ -177,6 +198,9 @@ public class OrderServiceImpl implements OrderService {
         if (OrderConstants.PM_CODE_COD.equalsIgnoreCase(pmCode)) {
             OrderEntity order = persistOrderFromDraft(draft, currentUser, false, null);
             List<OrderDetailEntity> savedDetails = orderDetailRepository.findByOrder_IdOrderByIdAsc(order.getId());
+            int totalQty   = savedDetails.stream().mapToInt(d -> d.getQuantity() != null ? d.getQuantity() : 0).sum();
+            eventPublisher.publishEvent(new OrderCreatedEvent(this, order.getId(),
+                    order.getOrderCode(), savedDetails.size(), totalQty));
             OrderResponse orderRes = buildOrderResponse(order, mapDetailResponses(savedDetails));
             return CreateOrderResultResponse.builder()
                     .outcome("ORDER_CREATED")
@@ -306,6 +330,10 @@ public class OrderServiceImpl implements OrderService {
             session.setOrderId(order.getId());
             session.setStatus(CheckoutSessionStatus.COMPLETED);
             checkoutSessionRepository.save(session);
+            List<OrderDetailEntity> vnDetails = orderDetailRepository.findByOrder_IdOrderByIdAsc(order.getId());
+            int vnTotalQty = vnDetails.stream().mapToInt(d -> d.getQuantity() != null ? d.getQuantity() : 0).sum();
+            eventPublisher.publishEvent(new OrderCreatedEvent(this, order.getId(),
+                    order.getOrderCode(), vnDetails.size(), vnTotalQty));
             return VnpaySessionFinalizeResult.CREATED;
         } catch (Exception e) {
             return VnpaySessionFinalizeResult.BUSINESS_ERROR;
@@ -1078,32 +1106,156 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public OrderTimelineResponse getMyOrderTimeline(Long orderId) {
+        UserEntity currentUser = userService.getCurrentUser();
+        OrderEntity order = orderRepository.findByIdAndUser_Id(orderId, currentUser.getId())
+                .orElseThrow(() -> new NotFoundEntityException("Order not found with id: " + orderId));
+
+        int currentStatus = order.getStatus() != null ? order.getStatus() : OrderConstants.STATUS_AWAITING_CONFIRM;
+        boolean cancelled = currentStatus == OrderConstants.STATUS_CANCELLED;
+
+        // ── Lấy toàn bộ lịch sử thay đổi trạng thái đơn hàng ─────────────────
+        // Map: newStatus → entry đầu tiên đạt status đó (lấy sớm nhất)
+        List<OrderHistoryEntity> statusHistory = orderHistoryRepository
+                .findByOrderIdAndChangeTypeOrderByCreatedAtDesc(
+                        orderId, OrderHistoryEntity.CHANGE_TYPE_ORDER_STATUS);
+
+        // Lấy bản ghi sớm nhất (index cuối vì sort DESC) cho từng newStatus
+        Map<Integer, OrderHistoryEntity> firstEntryByStatus = new java.util.LinkedHashMap<>();
+        for (int i = statusHistory.size() - 1; i >= 0; i--) {
+            OrderHistoryEntity e = statusHistory.get(i);
+            if (e.getNewStatus() != null) {
+                firstEntryByStatus.putIfAbsent(e.getNewStatus(), e);
+            }
+        }
+
+        // ── Định nghĩa các bước timeline ──────────────────────────────────────
+        // Luồng bình thường: 1 → 2 → 3 → 4 → (đánh giá virtual)
+        // Luồng hủy:         1 → ... → 5
+        record StepDef(int statusCode, String label) {}
+
+        List<StepDef> stepDefs = new ArrayList<>();
+        stepDefs.add(new StepDef(OrderConstants.STATUS_AWAITING_CONFIRM,  "Đơn hàng đã đặt"));
+        stepDefs.add(new StepDef(OrderConstants.STATUS_AWAITING_SHIPMENT, "Đã xác nhận"));
+        stepDefs.add(new StepDef(OrderConstants.STATUS_AWAITING_DELIVERY, "Đã giao cho ĐVVC"));
+        if (cancelled) {
+            stepDefs.add(new StepDef(OrderConstants.STATUS_CANCELLED, "Đã hủy"));
+        } else {
+            stepDefs.add(new StepDef(OrderConstants.STATUS_COMPLETED, "Hoàn thành"));
+            stepDefs.add(new StepDef(0, "Đánh giá")); // virtual step, statusCode=0
+        }
+
+        // ── Build danh sách bước ───────────────────────────────────────────────
+        List<TimelineStep> steps = new ArrayList<>();
+        for (int i = 0; i < stepDefs.size(); i++) {
+            StepDef def = stepDefs.get(i);
+            int code = def.statusCode();
+
+            // Bước đầu tiên (status 1) luôn completed, dùng createdDate của đơn
+            boolean completed;
+            boolean current;
+            Date timestamp = null;
+            Long updatedByUserId = null;
+            String updatedByUsername = null;
+            String updatedByFullName = null;
+            String note = null;
+
+            if (code == OrderConstants.STATUS_AWAITING_CONFIRM) {
+                // Bước khởi tạo – luôn hoàn thành
+                completed = true;
+                current   = (currentStatus == OrderConstants.STATUS_AWAITING_CONFIRM);
+                timestamp = order.getCreatedDate();
+            } else if (code == 0) {
+                // Bước virtual "Đánh giá" – chỉ hiển thị sau khi hoàn thành
+                completed = false;
+                current   = false;
+                timestamp = null;
+            } else {
+                OrderHistoryEntity entry = firstEntryByStatus.get(code);
+                if (entry != null) {
+                    completed = true;
+                    current   = (currentStatus == code);
+                    timestamp = entry.getCreatedAt();
+                    if (entry.getChangedByUser() != null) {
+                        updatedByUserId   = entry.getChangedByUser().getId();
+                        updatedByUsername = entry.getChangedByUsername();
+                        if (entry.getChangedByUser().getUserInfo() != null) {
+                            updatedByFullName = entry.getChangedByUser().getUserInfo().getFullName();
+                        }
+                    } else {
+                        updatedByUsername = entry.getChangedByUsername();
+                    }
+                    note = entry.getNote();
+                } else {
+                    // Chưa đạt tới bước này
+                    completed = false;
+                    current   = false;
+                }
+            }
+
+            steps.add(TimelineStep.builder()
+                    .stepIndex(i + 1)
+                    .statusCode(code == 0 ? null : code)
+                    .statusLabel(def.label())
+                    .completed(completed)
+                    .current(current)
+                    .timestamp(timestamp)
+                    .updatedByUserId(updatedByUserId)
+                    .updatedByUsername(updatedByUsername)
+                    .updatedByFullName(updatedByFullName)
+                    .note(note)
+                    .build());
+        }
+
+        return OrderTimelineResponse.builder()
+                .orderCode(order.getOrderCode())
+                .currentStatus(currentStatus)
+                .currentStatusLabel(orderStatusLabel(currentStatus))
+                .finished(currentStatus == OrderConstants.STATUS_COMPLETED
+                        || currentStatus == OrderConstants.STATUS_CANCELLED)
+                .steps(steps)
+                .build();
+    }
+
+    @Override
     @Transactional
     public OrderResponse requestReturn(Long orderId, OrderReturnRequest request) {
         UserEntity currentUser = userService.getCurrentUser();
         OrderEntity order = orderRepository.findByIdAndUser_Id(orderId, currentUser.getId())
                 .orElseThrow(() -> new NotFoundEntityException("Order not found with id: " + orderId));
 
-        if (order.getStatus() != null
-                && order.getStatus() == OrderConstants.STATUS_CANCELLED) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Order is cancelled");
+        if (order.getStatus() == null
+                || order.getStatus() != OrderConstants.STATUS_COMPLETED) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "Return / refund is only available for completed orders");
         }
         if (order.getReturnRefundStatus() != null) {
             throw new CustomApiException(HttpStatus.BAD_REQUEST,
                     "Return or refund request already exists for this order");
         }
-        if (!Boolean.TRUE.equals(order.getPaid()) || order.getPaidAt() == null) {
+        // Ưu tiên completedAt; fallback sang modifiedDate cho đơn cũ chưa có completedAt.
+        Date deliveredAt = order.getCompletedAt() != null
+                ? order.getCompletedAt()
+                : order.getModifiedDate();
+        if (!isWithinReturnWindowAfterDelivered(deliveredAt)) {
             throw new CustomApiException(HttpStatus.BAD_REQUEST,
-                    "Return / refund is only available after payment is recorded");
-        }
-        if (!isWithinReturnWindowAfterPaid(order.getPaidAt())) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST,
-                    "Return / refund is only available within 7 days after payment");
+                    "Return / refund is only available within "
+                            + OrderConstants.RETURN_ELIGIBLE_DAYS_AFTER_PAID
+                            + " days after delivery");
         }
 
+        String note = buildReturnNote(request);
+        Integer oldReturnRefundStatus = order.getReturnRefundStatus();
         order.setReturnRefundStatus(OrderConstants.RETURN_STATUS_REQUESTED);
-        order.setReturnRefundNote(request.getReason());
+        order.setReturnRefundNote(note);
         order = orderRepository.save(order);
+
+        orderHistoryService.logReturnRefundStatusChange(
+                order, oldReturnRefundStatus, OrderConstants.RETURN_STATUS_REQUESTED,
+                "Khách hàng yêu cầu trả hàng / hoàn tiền: " + note);
+
+        eventPublisher.publishEvent(new OrderReturnedEvent(this, order.getId()));
 
         List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(order.getId());
         return buildOrderResponse(order, mapDetailResponses(details));
@@ -1111,7 +1263,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse cancelMyOrder(Long orderId) {
+    public OrderResponse cancelMyOrder(Long orderId, String cancelReason) {
         UserEntity currentUser = userService.getCurrentUser();
         OrderEntity order = orderRepository.findByIdAndUser_Id(orderId, currentUser.getId())
                 .orElseThrow(() -> new NotFoundEntityException("Order not found with id: " + orderId));
@@ -1128,8 +1280,24 @@ public class OrderServiceImpl implements OrderService {
             throw new CustomApiException(HttpStatus.BAD_REQUEST,
                     "Cannot cancel: payment has already been recorded for this order");
         }
+        Integer oldStatusBeforeCancel = order.getStatus();
         order.setStatus(OrderConstants.STATUS_CANCELLED);
+        order.setCancelledBy("CUSTOMER");
+        if (cancelReason != null && !cancelReason.isBlank()) {
+            order.setCancelNote(cancelReason.trim());
+        }
         order = orderRepository.save(order);
+
+        String historyNote = "Khách hàng tự hủy đơn hàng"
+                + (cancelReason != null && !cancelReason.isBlank()
+                    ? ". Lý do: " + cancelReason.trim()
+                    : "");
+        orderHistoryService.logOrderStatusChange(
+                order, oldStatusBeforeCancel, OrderConstants.STATUS_CANCELLED, historyNote);
+
+        // Tự động hủy task Kanban tương ứng (nếu có)
+        eventPublisher.publishEvent(new OrderCancelledEvent(this, order.getId()));
+
         List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(order.getId());
         return buildOrderResponse(order, mapDetailResponses(details));
     }
@@ -1177,7 +1345,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse adminUpdateOrderStatus(Long orderId, Integer newStatus) {
+    public OrderResponse adminUpdateOrderStatus(Long orderId, Integer newStatus, String cancelNote) {
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new NotFoundEntityException("Không tìm thấy đơn hàng id=" + orderId));
 
@@ -1196,9 +1364,77 @@ public class OrderServiceImpl implements OrderService {
                             + "' sang '" + orderStatusLabel(newStatus) + "'.");
         }
 
+        // Bắt buộc lý do khi admin hủy đơn
+        if (newStatus == OrderConstants.STATUS_CANCELLED
+                && (cancelNote == null || cancelNote.isBlank())) {
+            throw new CustomApiException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Vui lòng cung cấp lý do hủy đơn hàng.");
+        }
+
         order.setStatus(newStatus);
+        if (newStatus == OrderConstants.STATUS_COMPLETED) {
+            order.setCompletedAt(new Date());
+        }
+        if (newStatus == OrderConstants.STATUS_CANCELLED) {
+            order.setCancelledBy("ADMIN");
+            if (cancelNote != null && !cancelNote.isBlank()) {
+                order.setCancelNote(cancelNote.trim());
+            }
+        }
         order = orderRepository.save(order);
         log.info("Admin updated order status: orderId={}, {} → {}", orderId, current, newStatus);
+
+        String historyNote = "Admin cập nhật: " + orderStatusLabel(current) + " → " + orderStatusLabel(newStatus)
+                + (newStatus == OrderConstants.STATUS_CANCELLED && cancelNote != null && !cancelNote.isBlank()
+                    ? ". Lý do: " + cancelNote.trim()
+                    : "");
+        orderHistoryService.logOrderStatusChange(order, current, newStatus, historyNote);
+
+        // Khi admin hủy đơn → tự động chuyển task liên kết sang CANCELLED
+        if (newStatus == OrderConstants.STATUS_CANCELLED) {
+            eventPublisher.publishEvent(new OrderCancelledEvent(this, order.getId()));
+        }
+
+        List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(orderId);
+        return buildOrderResponse(order, mapDetailResponses(details));
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse adminUpdateReturnStatus(Long orderId, Integer newReturnStatus, String note) {
+        OrderEntity order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundEntityException("Không tìm thấy đơn hàng id=" + orderId));
+
+        Integer currentReturnStatus = order.getReturnRefundStatus();
+        if (currentReturnStatus == null || currentReturnStatus == OrderConstants.RETURN_STATUS_NONE) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "Đơn hàng này chưa có yêu cầu trả hàng.");
+        }
+        if (currentReturnStatus == OrderConstants.RETURN_STATUS_REFUNDED
+                || currentReturnStatus == OrderConstants.RETURN_STATUS_REJECTED) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "Yêu cầu trả hàng đã được xử lý xong — không thể cập nhật thêm.");
+        }
+        if (!isValidAdminReturnTransition(currentReturnStatus, newReturnStatus)) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "Không thể chuyển trạng thái trả hàng từ '"
+                            + returnStatusLabel(currentReturnStatus) + "' sang '"
+                            + returnStatusLabel(newReturnStatus) + "'.");
+        }
+
+        order.setReturnRefundStatus(newReturnStatus);
+        if (note != null && !note.isBlank()) {
+            order.setReturnRefundNote(note);
+        }
+        order = orderRepository.save(order);
+        log.info("Admin updated return status: orderId={}, {} -> {}", orderId, currentReturnStatus, newReturnStatus);
+
+        orderHistoryService.logReturnRefundStatusChange(
+                order, currentReturnStatus, newReturnStatus,
+                "Admin cập nhật trả hàng: " + returnStatusLabel(currentReturnStatus)
+                        + " -> " + returnStatusLabel(newReturnStatus)
+                        + (note != null && !note.isBlank() ? ". Ghi chú: " + note : ""));
 
         List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(orderId);
         return buildOrderResponse(order, mapDetailResponses(details));
@@ -1228,13 +1464,89 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private static boolean isWithinReturnWindowAfterPaid(Date paidAt) {
-        if (paidAt == null) {
+    private static boolean isWithinReturnWindowAfterDelivered(Date completedAt) {
+        if (completedAt == null) {
             return false;
         }
-        Instant p = paidAt.toInstant();
+        Instant p = completedAt.toInstant();
         Instant end = p.plus(OrderConstants.RETURN_ELIGIBLE_DAYS_AFTER_PAID, ChronoUnit.DAYS);
         return !Instant.now().isAfter(end);
+    }
+
+    private static boolean isValidAdminReturnTransition(int from, int to) {
+        switch (from) {
+            case OrderConstants.RETURN_STATUS_REQUESTED:
+                return to == OrderConstants.RETURN_STATUS_ACCEPTED || to == OrderConstants.RETURN_STATUS_REJECTED;
+            case OrderConstants.RETURN_STATUS_ACCEPTED:
+                return to == OrderConstants.RETURN_STATUS_REFUNDING || to == OrderConstants.RETURN_STATUS_REJECTED;
+            case OrderConstants.RETURN_STATUS_REFUNDING:
+                return to == OrderConstants.RETURN_STATUS_REFUNDED || to == OrderConstants.RETURN_STATUS_REJECTED;
+            default:
+                return false;
+        }
+    }
+
+    private static String returnStatusLabel(int status) {
+        switch (status) {
+            case 1: return "Yêu cầu trả hàng";
+            case 2: return "Đã chấp nhận";
+            case 3: return "Đang hoàn tiền";
+            case 4: return "Hoàn tiền xong";
+            case 5: return "Từ chối";
+            default: return "Không xác định (" + status + ")";
+        }
+    }
+
+    /** Ghép note từ các trường trong request thành chuỗi lưu DB. */
+    private static String buildReturnNote(OrderReturnRequest request) {
+        StringBuilder sb = new StringBuilder();
+        if (request.getReason() != null && !request.getReason().isBlank()) {
+            sb.append(request.getReason());
+        }
+        if (request.getRefundMethod() != null && !request.getRefundMethod().isBlank()) {
+            sb.append(" | refundMethod=").append(request.getRefundMethod());
+        }
+        if (request.getBankName() != null && !request.getBankName().isBlank()) {
+            sb.append(" | bank=").append(request.getBankName());
+        }
+        if (request.getBankAccountNumber() != null && !request.getBankAccountNumber().isBlank()) {
+            sb.append(" | acct=").append(request.getBankAccountNumber());
+        }
+        if (request.getBankEmail() != null && !request.getBankEmail().isBlank()) {
+            sb.append(" | email=").append(request.getBankEmail());
+        }
+        return sb.toString().trim();
+    }
+
+    /**
+     * Xác định ai hủy đơn.
+     * - Ưu tiên field `cancelledBy` (đã lưu với đơn mới).
+     * - Fallback: tra order_history → kiểm tra role của người thực hiện hủy.
+     *   · Nếu CUSTOMER role → "CUSTOMER"
+     *   · Ngược lại (employee, manager, admin, …) → "ADMIN"
+     */
+    private String resolveCancelledBy(OrderEntity order) {
+        if (order.getCancelledBy() != null) return order.getCancelledBy();
+        if (!Integer.valueOf(OrderConstants.STATUS_CANCELLED).equals(order.getStatus())) return null;
+
+        // Tra lịch sử (kèm fetch changedByUser + role để tránh N+1)
+        List<com.ndh.ShopTechnology.entities.log.OrderHistoryEntity> history =
+                orderHistoryRepository.findByOrderIdAndChangeTypeWithActorOrderByCreatedAtDesc(
+                        order.getId(),
+                        com.ndh.ShopTechnology.entities.log.OrderHistoryEntity.CHANGE_TYPE_ORDER_STATUS);
+
+        return history.stream()
+                .filter(h -> Integer.valueOf(OrderConstants.STATUS_CANCELLED).equals(h.getNewStatus()))
+                .findFirst()
+                .map(h -> {
+                    // Nếu không có user gắn vào entry → coi là CUSTOMER (self-cancel cũ)
+                    if (h.getChangedByUser() == null) return "CUSTOMER";
+                    // Kiểm tra role của người thực hiện
+                    boolean isCustomer = h.getChangedByUser().hasRole(
+                            com.ndh.ShopTechnology.constants.RoleConstant.ROLE_CUSTOMER);
+                    return isCustomer ? "CUSTOMER" : "ADMIN";
+                })
+                .orElse(null);
     }
 
     private OrderResponse buildOrderResponse(OrderEntity order, List<OrderDetailResponse> orderDetails) {
@@ -1245,6 +1557,8 @@ public class OrderServiceImpl implements OrderService {
                 .status(order.getStatus())
                 .returnRefundStatus(order.getReturnRefundStatus())
                 .returnRefundNote(order.getReturnRefundNote())
+                .cancelNote(order.getCancelNote())
+                .cancelledBy(resolveCancelledBy(order))
                 .description(order.getDescription())
                 .total(order.getTotal())
                 .typeOrder(order.getTypeOrder())
@@ -1253,6 +1567,7 @@ public class OrderServiceImpl implements OrderService {
                 .shippingFeeVnd(order.getShippingFeeVnd())
                 .paid(order.getPaid())
                 .paidAt(order.getPaidAt())
+                .completedAt(order.getCompletedAt())
                 .paymentMethod(pm == null ? null : PaymentMethodSummaryResponse.builder()
                         .id(pm.getId())
                         .name(pm.getName())
@@ -1265,6 +1580,16 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private List<OrderDetailResponse> mapDetailResponses(List<OrderDetailEntity> details) {
+        if (details == null || details.isEmpty()) return List.of();
+        // Batch-fetch thumbnail URLs cho tất cả productId trong list
+        List<Long> productIds = details.stream()
+                .map(d -> d.getProduct() != null ? d.getProduct().getId() : null)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, String> thumbnailByProductId =
+                productImageAttachService.getPrimaryImageUrlsByProductIds(productIds);
+
         return details.stream()
                 .map(d -> {
                     OrderLinePricingProgramsDto programs = null;
@@ -1276,24 +1601,25 @@ public class OrderServiceImpl implements OrderService {
                             log.warn("order_detail id={}: could not parse pricing_programs_json", d.getId(), e);
                         }
                     }
-                    var b = OrderDetailResponse.builder()
+                    Long productId = d.getProduct().getId();
+                    OrderDetailResponse.OrderDetailResponseBuilder b = OrderDetailResponse.builder()
                             .id(d.getId())
-                            .productId(d.getProduct().getId())
+                            .productId(productId)
                             .productName(d.getProduct().getProductName())
-                            .quantity(d.getQuantity())
+                            .thumbnailUrl(thumbnailByProductId.get(productId));
+                    ProductVariantEntity pv = d.getProductVariant();
+                    if (pv != null) {
+                        b.productVariantId(pv.getId())
+                         .variantSkuCode(pv.getSkuCode())
+                         .variantOptions(pv.getOptionValues());
+                    }
+                    return b.quantity(d.getQuantity())
                             .unitPrice(d.getUnitPrice())
                             .lineTotal(d.getTotalPrice())
                             .description(d.getDescription())
-                            .lDescription(d.getProduct().getLDescription())
-                            .pricingPrograms(programs);
-                    if (d.getProductVariant() != null) {
-                        b.productVariantId(d.getProductVariant().getId())
-                                .variantSkuCode(d.getProductVariant().getSkuCode())
-                                .variantOptions(d.getProductVariant().getOptionValues());
-                    }
-                    return b.build();
+                            .pricingPrograms(programs)
+                            .build();
                 })
                 .collect(Collectors.toList());
     }
-
 }

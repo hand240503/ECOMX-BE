@@ -14,6 +14,7 @@ import com.ndh.ShopTechnology.repository.OrderRepository;
 import com.ndh.ShopTechnology.services.order.OrderService;
 import com.ndh.ShopTechnology.services.order.VnpaySessionFinalizeResult;
 import com.ndh.ShopTechnology.services.payment.VnpayService;
+import com.ndh.ShopTechnology.entities.user.UserEntity;
 import com.ndh.ShopTechnology.services.user.UserService;
 import com.ndh.ShopTechnology.util.VnpayUtils;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -71,7 +73,7 @@ public class VnpayServiceImpl implements VnpayService {
         if (!StringUtils.hasText(vnpayProperties.getTmnCode())) {
             throw new CustomApiException(HttpStatus.SERVICE_UNAVAILABLE, "VNPAY tmn code is not set");
         }
-        var currentUser = userService.getCurrentUser();
+        UserEntity currentUser = userService.getCurrentUser();
         CheckoutSessionEntity session = checkoutSessionRepository
                 .findByIdAndUser_IdAndStatus(checkoutSessionId, currentUser.getId(), CheckoutSessionStatus.PENDING)
                 .orElseThrow(() -> new NotFoundEntityException(
@@ -180,7 +182,7 @@ public class VnpayServiceImpl implements VnpayService {
                 return handleIpnForCheckoutSession(p, session, vnpLong);
             }
 
-            var orderByTxn = orderRepository.findByVnpayCheckoutTxnRef(refId);
+            Optional<OrderEntity> orderByTxn = orderRepository.findByVnpayCheckoutTxnRef(refId);
             if (orderByTxn.isPresent()) {
                 return handleIpnForOrderFromDeletedCheckout(p, orderByTxn.get(), vnpLong);
             }

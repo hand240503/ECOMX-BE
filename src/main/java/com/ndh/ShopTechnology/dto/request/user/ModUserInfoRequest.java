@@ -10,7 +10,9 @@ import lombok.*;
 public class ModUserInfoRequest {
 
     private String fullName;
-    private String telephone;
+    private String telephone; // Optional, might be used as alternative or extra
+    private String email;
+    private String phoneNumber;
     private String avatar;
     private Long managerId;
 

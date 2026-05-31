@@ -4,6 +4,7 @@ import com.ndh.ShopTechnology.constants.SystemConstant;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtParser;
+import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
@@ -84,7 +85,7 @@ public class TokenProvider implements Serializable {
         Date now = new Date();
         Date exp = new Date(now.getTime() + refreshTokenExpirationMs);
 
-        var builder = Jwts.builder()
+        JwtBuilder builder = Jwts.builder()
                 .setId(tokenId)
                 .setIssuer(issuer)
                 .setSubject(username)

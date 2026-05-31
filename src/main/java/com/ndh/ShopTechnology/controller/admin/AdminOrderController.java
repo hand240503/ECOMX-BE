@@ -2,6 +2,7 @@ package com.ndh.ShopTechnology.controller.admin;
 
 import com.ndh.ShopTechnology.constants.PermissionCode;
 import com.ndh.ShopTechnology.dto.request.order.AdminUpdateOrderStatusRequest;
+import com.ndh.ShopTechnology.dto.request.order.AdminUpdateReturnStatusRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.order.OrderResponse;
 import com.ndh.ShopTechnology.services.order.OrderService;
@@ -51,10 +52,24 @@ public class AdminOrderController {
     public ResponseEntity<APIResponse<OrderResponse>> updateOrderStatus(
             @PathVariable Long id,
             @Valid @RequestBody AdminUpdateOrderStatusRequest request) {
-        OrderResponse order = orderService.adminUpdateOrderStatus(id, request.getStatus());
+        OrderResponse order = orderService.adminUpdateOrderStatus(id, request.getStatus(), request.getCancelNote());
         return ResponseEntity.ok(APIResponse.of(
                 true,
                 "Cập nhật trạng thái đơn hàng thành công",
+                order,
+                null,
+                null));
+    }
+
+    @PatchMapping("/{id}/return-status")
+    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_ORDER + ")")
+    public ResponseEntity<APIResponse<OrderResponse>> updateReturnStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody AdminUpdateReturnStatusRequest request) {
+        OrderResponse order = orderService.adminUpdateReturnStatus(id, request.getReturnStatus(), request.getNote());
+        return ResponseEntity.ok(APIResponse.of(
+                true,
+                "Cập nhật trạng thái trả hàng thành công",
                 order,
                 null,
                 null));

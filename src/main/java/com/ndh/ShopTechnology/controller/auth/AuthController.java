@@ -47,11 +47,32 @@ public class AuthController {
                 .body(response);
     }
 
+    /** Đăng nhập trang User (FE) — chỉ chấp nhận tài khoản CUSTOMER. */
     @PostMapping("/login")
     public ResponseEntity<APIResponse<LoginResponse>> login(
             @RequestBody @Valid LoginRequest request) {
 
         LoginResponse loginResponse = authService.login(request);
+
+        APIResponse<LoginResponse> response = APIResponse.of(
+                true,
+                MessageConstant.LOGIN_SUCCESS,
+                loginResponse,
+                null,
+                null
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(response);
+    }
+
+    /** Đăng nhập trang Admin — chỉ chấp nhận tài khoản KHÔNG phải CUSTOMER. */
+    @PostMapping("/admin/login")
+    public ResponseEntity<APIResponse<LoginResponse>> adminLogin(
+            @RequestBody @Valid LoginRequest request) {
+
+        LoginResponse loginResponse = authService.adminLogin(request);
 
         APIResponse<LoginResponse> response = APIResponse.of(
                 true,

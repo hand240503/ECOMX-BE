@@ -10,38 +10,42 @@ import java.util.List;
 
 public interface PopularityRepository extends Repository<CollectorLogEntity, Long> {
 
+    /** Toàn thời gian — bao gồm cả sản phẩm chưa có tương tác (cnt = 0) */
     @Query(value = """
-        SELECT product_id AS productId,
-               SUM(CASE event
-                       WHEN 'buy'          THEN 5
-                       WHEN 'moreDetails' THEN 2
-                       WHEN 'details'     THEN 1
-                       ELSE 0
-                   END) AS cnt
-        FROM collector_log
-        WHERE product_id IS NOT NULL
-          AND event IN ('details', 'moreDetails', 'buy')
-        GROUP BY product_id
-        HAVING cnt > 0
+        SELECT p.id AS productId,
+               COALESCE(SUM(CASE cl.event
+                                WHEN 'buy'         THEN 5
+                                WHEN 'moreDetails' THEN 2
+                                WHEN 'details'     THEN 1
+                                ELSE 0
+                            END), 0) AS cnt
+        FROM products p
+        LEFT JOIN collector_log cl
+               ON cl.product_id = p.id
+              AND cl.event IN ('details', 'moreDetails', 'buy')
+        GROUP BY p.id
         ORDER BY cnt DESC
         """, nativeQuery = true)
     List<PopularProductRow> findTopPopular(Pageable pageable);
 
+    /** Theo khoảng thời gian — bao gồm cả sản phẩm chưa có tương tác trong kỳ */
     @Query(value = """
-        SELECT product_id AS productId,
-               SUM(CASE event
-                       WHEN 'buy'          THEN 5
-                       WHEN 'moreDetails' THEN 2
-                       WHEN 'details'     THEN 1
-                       ELSE 0
-                   END) AS cnt
-        FROM collector_log
-        WHERE product_id IS NOT NULL
-          AND event IN ('details', 'moreDetails', 'buy')
-          AND `timestamp` >= (NOW() - INTERVAL 30 DAY)
-        GROUP BY product_id
-        HAVING cnt > 0
+        SELECT p.id AS productId,
+               COALESCE(SUM(CASE cl.event
+                                WHEN 'buy'         THEN 5
+                                WHEN 'moreDetails' THEN 2
+                                WHEN 'details'     THEN 1
+                                ELSE 0
+                            END), 0) AS cnt
+        FROM products p
+        LEFT JOIN collector_log cl
+               ON cl.product_id = p.id
+              AND cl.event IN ('details', 'moreDetails', 'buy')
+              AND cl.`timestamp` >= :since
+        GROUP BY p.id
         ORDER BY cnt DESC
         """, nativeQuery = true)
-    List<PopularProductRow> findTopTrending(Pageable pageable);
+    List<PopularProductRow> findTopTrendingSince(
+            @org.springframework.data.repository.query.Param("since") java.util.Date since,
+            Pageable pageable);
 }

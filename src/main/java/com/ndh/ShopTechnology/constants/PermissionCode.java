@@ -91,6 +91,13 @@ public final class PermissionCode {
     public static final int UPDATE_USER = 700003;
     public static final int DELETE_USER = 700004;
 
+    /** Module phòng ban (850xxx) */
+    public static final int MODULE_DEPARTMENT = 850;
+    public static final int CREATE_DEPARTMENT = 850001;
+    public static final int READ_DEPARTMENT   = 850002;
+    public static final int UPDATE_DEPARTMENT = 850003;
+    public static final int DELETE_DEPARTMENT = 850004;
+
     public static int moduleAction(int moduleCode, int actionCode) {
         if (moduleCode < 100 || moduleCode > 999) {
             throw new IllegalArgumentException("moduleCode must be 3 digits: " + moduleCode);

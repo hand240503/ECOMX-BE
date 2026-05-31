@@ -28,6 +28,7 @@ public class OrderEntity extends BaseEntity {
     public static final String COL_RETURN_REFUND_NOTE  = "return_refund_note";
     public static final String COL_PAID = "is_paid";
     public static final String COL_PAID_AT = "paid_at";
+    public static final String COL_COMPLETED_AT = "completed_at";
     public static final String COL_CHECKOUT_SESSION_PUBLIC_ID = "checkout_session_public_id";
     public static final String COL_VNPAY_CHECKOUT_TXN_REF = "vnpay_checkout_txn_ref";
 
@@ -40,12 +41,24 @@ public class OrderEntity extends BaseEntity {
     @Column(name = COL_RETURN_REFUND_NOTE, columnDefinition = "TEXT")
     private String returnRefundNote;
 
+    /** Lý do hủy đơn. */
+    @Column(name = "cancel_note", columnDefinition = "TEXT")
+    private String cancelNote;
+
+    /** Ai hủy đơn: "CUSTOMER" hoặc "ADMIN". */
+    @Column(name = "cancelled_by", length = 20)
+    private String cancelledBy;
+
     @Column(name = COL_PAID, nullable = false)
     @Builder.Default
     private Boolean paid = false;
 
     @Column(name = COL_PAID_AT, nullable = true)
     private java.util.Date paidAt;
+
+    /** Thời điểm đơn hàng chuyển sang trạng thái HOÀN THÀNH (status=4). Dùng để tính cửa sổ 7 ngày trả hàng. */
+    @Column(name = COL_COMPLETED_AT, nullable = true)
+    private java.util.Date completedAt;
 
     @Column(name = COL_DESCRIPTION, nullable = true)
     private String description;

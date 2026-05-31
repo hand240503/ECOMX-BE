@@ -6,6 +6,7 @@ import com.ndh.ShopTechnology.dto.response.product.ProductPurchaseWithPurchasePr
 import com.ndh.ShopTechnology.dto.response.product.ProductVariantResponse;
 import com.ndh.ShopTechnology.dto.response.promotion.VolumePriceTierResponse;
 import com.ndh.ShopTechnology.entities.product.ProductPriceChangeEntity;
+import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.entities.promotion.ProductVolumePriceTierEntity;
 import com.ndh.ShopTechnology.entities.promotion.PurchaseWithPurchaseOfferEntity;
 import com.ndh.ShopTechnology.repository.ProductVolumePriceTierRepository;
@@ -145,7 +146,7 @@ public class ProductPricingProgramsAttachService {
     }
 
     private static VolumePriceTierResponse toVolumeTierResponse(ProductVolumePriceTierEntity e) {
-        var pv = e.getProductVariant();
+        ProductVariantEntity pv = e.getProductVariant();
         Long vid = pv != null ? pv.getId() : null;
         Long pid = pv != null && pv.getProduct() != null ? pv.getProduct().getId() : null;
         return VolumePriceTierResponse.builder()

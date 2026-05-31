@@ -1,14 +1,17 @@
 package com.ndh.ShopTechnology.services.promotion.impl;
 
+import com.ndh.ShopTechnology.annotation.AdminAudit;
 import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.dto.request.promotion.VolumePriceTierItemRequest;
 import com.ndh.ShopTechnology.dto.response.promotion.VolumePriceTierResponse;
+import com.ndh.ShopTechnology.entities.log.AdminActivityLogEntity;
 import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.entities.promotion.ProductVolumePriceTierEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.repository.ProductVolumePriceTierRepository;
+import com.ndh.ShopTechnology.services.log.PriceEventHistoryService;
 import com.ndh.ShopTechnology.services.promotion.ProductVolumePriceTierService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -25,12 +28,15 @@ public class ProductVolumePriceTierServiceImpl implements ProductVolumePriceTier
 
     private final ProductVolumePriceTierRepository tierRepository;
     private final ProductVariantRepository variantRepository;
+    private final PriceEventHistoryService priceEventHistoryService;
 
     public ProductVolumePriceTierServiceImpl(
             ProductVolumePriceTierRepository tierRepository,
-            ProductVariantRepository variantRepository) {
+            ProductVariantRepository variantRepository,
+            PriceEventHistoryService priceEventHistoryService) {
         this.tierRepository = tierRepository;
         this.variantRepository = variantRepository;
+        this.priceEventHistoryService = priceEventHistoryService;
     }
 
     @Override
@@ -42,14 +48,22 @@ public class ProductVolumePriceTierServiceImpl implements ProductVolumePriceTier
                 .collect(Collectors.toList());
     }
 
+    /**
+     * replaceTiers là thao tác bulk UPDATE – ghi log là UPDATE trên VOLUME_TIER,
+     * idArgIndex=1 (variantId là đủ để identify).
+     */
     @Override
     @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_VOLUME_TIER,
+        action     = AdminActivityLogEntity.ACTION_UPDATE,
+        idArgIndex = 1
+    )
     public List<VolumePriceTierResponse> replaceTiers(
             Long productId, Long variantId, List<VolumePriceTierItemRequest> tiers) {
         ProductVariantEntity variant = ensureVariantBelongsToProduct(variantId, productId);
-        if (tiers == null) {
-            tiers = List.of();
-        }
+        if (tiers == null) tiers = List.of();
+
         Set<Integer> seen = new HashSet<>();
         for (VolumePriceTierItemRequest t : tiers) {
             if (!seen.add(t.getMinQuantity())) {
@@ -72,7 +86,11 @@ public class ProductVolumePriceTierServiceImpl implements ProductVolumePriceTier
                     .build();
             saved.add(tierRepository.save(e));
         }
-        return saved.stream().map(ProductVolumePriceTierServiceImpl::toResponse).collect(Collectors.toList());
+        List<VolumePriceTierResponse> result = saved.stream()
+                .map(ProductVolumePriceTierServiceImpl::toResponse)
+                .collect(Collectors.toList());
+        priceEventHistoryService.logVolumeTierReplaced(variantId, productId);
+        return result;
     }
 
     private static void assertNoDropOfActiveVolumeTiers(

@@ -28,6 +28,9 @@ public class OrderDetailResponse {
     @JsonProperty("l_description")
     private String lDescription;
 
+    @JsonProperty("thumbnail_url")
+    private String thumbnailUrl;
+
     @JsonProperty("pricing_programs")
     private OrderLinePricingProgramsDto pricingPrograms;
 }

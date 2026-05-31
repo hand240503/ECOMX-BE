@@ -27,6 +27,10 @@ public class ProductPriceResponse {
   private String unitName;
   private Integer unitRatio;
 
+  /** Tên hiển thị tuỳ chỉnh cho dòng giá. Nullable. */
+  @JsonProperty("display_name")
+  private String displayName;
+
   private ProductVariantSummaryResponse variant;
 
   public static ProductPriceResponse fromEntity(PriceEntity entity) {
@@ -43,7 +47,8 @@ public class ProductPriceResponse {
         .productVariantId(entity.getVariant() != null ? entity.getVariant().getId() : null)
         .variant(variantSummary)
         .currentValue(entity.getCurrentValue())
-        .oldValue(entity.getOldValue());
+        .oldValue(entity.getOldValue())
+        .displayName(entity.getDisplayName());
     if (entity.getUnit() != null) {
       b.unitId(entity.getUnit().getId())
           .unitName(entity.getUnit().getNameUnit())

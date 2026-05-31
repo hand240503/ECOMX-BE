@@ -1,6 +1,7 @@
 package com.ndh.ShopTechnology.repository.spec;
 
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -28,10 +29,10 @@ public final class ProductSearchSpecifications {
           continue;
         }
         String pattern = "%" + token + "%";
-        var name = cb.lower(cb.coalesce(root.get("productName"), ""));
-        var desc = cb.lower(cb.coalesce(root.get("description"), ""));
-        var lDesc = cb.lower(cb.coalesce(root.get("lDescription"), ""));
-        var tag = cb.lower(cb.coalesce(root.get("tag"), ""));
+        Expression<String> name = cb.lower(cb.coalesce(root.get("productName"), ""));
+        Expression<String> desc = cb.lower(cb.coalesce(root.get("description"), ""));
+        Expression<String> lDesc = cb.lower(cb.coalesce(root.get("lDescription"), ""));
+        Expression<String> tag = cb.lower(cb.coalesce(root.get("tag"), ""));
         tokenAnd.add(cb.or(
             cb.like(name, pattern),
             cb.like(desc, pattern),

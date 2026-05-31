@@ -81,14 +81,15 @@ public class AdminStaffController {
                 APIResponse.of(true, "Staff user retrieved successfully", userResponse, null, null));
     }
 
-    @PutMapping("")
+    @PutMapping("/{id}")
     public ResponseEntity<APIResponse<UserResponse>> updateStaffUser(
+            @PathVariable Long id,
             @RequestBody AdminModUserInfoRequest request) {
         permissionService.requireAnyPermission(
                 PermissionCode.UPDATE_USER,
-                PermissionCode.UPDATE_ALL,
-                PermissionCode.UPDATE_USER);
+                PermissionCode.UPDATE_ALL);
 
+        request.setId(id);
         UserResponse userResponse = userService.updateStaffUser(request);
 
         return ResponseEntity.ok(

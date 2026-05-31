@@ -36,6 +36,35 @@ public class CloudinaryService {
         return uploadImageToFolder(file, documentsFolder, "document", "Upload file thất bại", "Không thể upload file. Vui lòng thử lại.");
     }
 
+    /**
+     * Upload file đính kèm task — hỗ trợ cả image và raw file (pdf, docx, xlsx, ...).
+     * Cloudinary resource_type="auto" tự phát hiện loại file.
+     */
+    public UploadResult uploadTaskAttachment(MultipartFile file, Long taskId) {
+        requireNonEmptyFile(file, "File đính kèm không hợp lệ");
+        String folder = "ecomx/task-attachments/" + taskId;
+        try {
+            Map<?, ?> res = cloudinary.uploader().upload(
+                    file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", folder,
+                            "resource_type", "auto",
+                            "use_filename", true,
+                            "unique_filename", true
+                    )
+            );
+            String url      = (String) res.get("secure_url");
+            String publicId = (String) res.get("public_id");
+            if (url == null || publicId == null) {
+                throw new CustomApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Upload đính kèm thất bại");
+            }
+            return new UploadResult(url, publicId);
+        } catch (IOException e) {
+            log.error("Failed to upload task attachment for task {}", taskId, e);
+            throw new CustomApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể upload file đính kèm");
+        }
+    }
+
     private static void requireNonEmptyFile(MultipartFile file, String message) {
         if (file == null || file.isEmpty()) {
             throw new CustomApiException(HttpStatus.BAD_REQUEST, message);

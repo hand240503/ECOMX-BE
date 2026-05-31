@@ -1,5 +1,8 @@
 package com.ndh.ShopTechnology.services.product.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ndh.ShopTechnology.annotation.AdminAudit;
+import com.ndh.ShopTechnology.aspect.SnapshotFetcherRegistry;
 import com.ndh.ShopTechnology.constants.DocumentEntityType;
 import com.ndh.ShopTechnology.constants.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
@@ -38,7 +41,9 @@ import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.repository.ProductVolumePriceTierRepository;
 import com.ndh.ShopTechnology.repository.PurchaseWithPurchaseOfferRepository;
 import com.ndh.ShopTechnology.dto.response.product.ActivePromotionsResponse;
+import com.ndh.ShopTechnology.entities.log.AdminActivityLogEntity;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -90,8 +95,24 @@ public class ProductServiceImpl implements ProductService {
     private final ProductPriceChangeRepository productPriceChangeRepository;
     private final ProductVolumePriceTierRepository productVolumePriceTierRepository;
     private final PurchaseWithPurchaseOfferRepository purchaseWithPurchaseOfferRepository;
+    private final SnapshotFetcherRegistry snapshotFetcherRegistry;
+    private final ObjectMapper objectMapper;
 
     private static final int LEGACY_PRODUCT_DOCUMENT_ENTITY_TYPE = 1;
+
+    @PostConstruct
+    public void registerSnapshotFetcher() {
+        snapshotFetcherRegistry.register(AdminActivityLogEntity.ENTITY_PRODUCT, id ->
+                productRepository.findById(id).map(e -> {
+                    try {
+                        return objectMapper.writeValueAsString(
+                                java.util.Map.of("id", e.getId(), "productName", e.getProductName(),
+                                        "status", e.getStatus()));
+                    } catch (Exception ex) {
+                        return null;
+                    }
+                }).orElse(null));
+    }
 
     public ProductServiceImpl(ProductRepository productRepository,
             CategoryRepository categoryRepository,
@@ -109,7 +130,9 @@ public class ProductServiceImpl implements ProductService {
             ProductVariantRepository productVariantRepository,
             ProductPriceChangeRepository productPriceChangeRepository,
             ProductVolumePriceTierRepository productVolumePriceTierRepository,
-            PurchaseWithPurchaseOfferRepository purchaseWithPurchaseOfferRepository) {
+            PurchaseWithPurchaseOfferRepository purchaseWithPurchaseOfferRepository,
+            SnapshotFetcherRegistry snapshotFetcherRegistry,
+            ObjectMapper objectMapper) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
@@ -127,10 +150,17 @@ public class ProductServiceImpl implements ProductService {
         this.productPriceChangeRepository = productPriceChangeRepository;
         this.productVolumePriceTierRepository = productVolumePriceTierRepository;
         this.purchaseWithPurchaseOfferRepository = purchaseWithPurchaseOfferRepository;
+        this.snapshotFetcherRegistry = snapshotFetcherRegistry;
+        this.objectMapper = objectMapper;
     }
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_PRODUCT,
+        action     = AdminActivityLogEntity.ACTION_CREATE,
+        idArgIndex = -1
+    )
     public ProductFullResponse createProduct(CreateProductRequest request) {
         CategoryEntity category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(
@@ -459,6 +489,12 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType            = AdminActivityLogEntity.ENTITY_PRODUCT,
+        action                = AdminActivityLogEntity.ACTION_UPDATE,
+        idArgIndex            = 0,
+        captureSnapshotBefore = true
+    )
     public ProductFullResponse updateProduct(Long id, UpdateProductRequest request, List<MultipartFile> newImages) {
         ProductEntity product = loadProductGraphForUpdate(id);
         applyScalarUpdates(product, request);
@@ -846,6 +882,12 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType            = AdminActivityLogEntity.ENTITY_PRODUCT,
+        action                = AdminActivityLogEntity.ACTION_DELETE,
+        idArgIndex            = 0,
+        captureSnapshotBefore = true
+    )
     public void deleteProduct(Long id) {
         ProductEntity product = productRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + id));

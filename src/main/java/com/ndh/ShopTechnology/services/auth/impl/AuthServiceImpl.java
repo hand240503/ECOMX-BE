@@ -20,6 +20,11 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public LoginResponse adminLogin(LoginRequest request) {
+        return userAuthService.adminLogin(request);
+    }
+
+    @Override
     public LoginResponse refreshToken(RefreshTokenRequest request, String ipAddress, String userAgent) {
         return userAuthService.refreshToken(
                 request.getRefreshToken(),

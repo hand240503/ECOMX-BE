@@ -1,10 +1,14 @@
 package com.ndh.ShopTechnology.services.category.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ndh.ShopTechnology.annotation.AdminAudit;
+import com.ndh.ShopTechnology.aspect.SnapshotFetcherRegistry;
 import com.ndh.ShopTechnology.constants.DocumentEntityType;
 import com.ndh.ShopTechnology.dto.request.category.CreateCategoryRequest;
 import com.ndh.ShopTechnology.dto.request.category.UpdateCategoryRequest;
 import com.ndh.ShopTechnology.dto.response.category.CategoryResponse;
 import com.ndh.ShopTechnology.dto.response.product.BrandSummaryResponse;
+import com.ndh.ShopTechnology.entities.log.AdminActivityLogEntity;
 import com.ndh.ShopTechnology.entities.product.CategoryEntity;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
@@ -13,6 +17,7 @@ import com.ndh.ShopTechnology.repository.CategoryRepository;
 import com.ndh.ShopTechnology.repository.DocumentRepository;
 import com.ndh.ShopTechnology.services.category.CategoryService;
 import com.ndh.ShopTechnology.services.user.UserService;
+import jakarta.annotation.PostConstruct;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -29,15 +34,34 @@ public class CategoryServiceImpl implements CategoryService {
     private final DocumentRepository documentRepository;
     private final BrandRepository brandRepository;
     private final UserService userService;
+    private final SnapshotFetcherRegistry snapshotFetcherRegistry;
+    private final ObjectMapper objectMapper;
 
     public CategoryServiceImpl(CategoryRepository categoryRepository,
                                DocumentRepository documentRepository,
                                BrandRepository brandRepository,
-                               UserService userService) {
+                               UserService userService,
+                               SnapshotFetcherRegistry snapshotFetcherRegistry,
+                               ObjectMapper objectMapper) {
         this.categoryRepository = categoryRepository;
         this.documentRepository = documentRepository;
         this.brandRepository = brandRepository;
         this.userService = userService;
+        this.snapshotFetcherRegistry = snapshotFetcherRegistry;
+        this.objectMapper = objectMapper;
+    }
+
+    @PostConstruct
+    public void registerSnapshotFetcher() {
+        snapshotFetcherRegistry.register(AdminActivityLogEntity.ENTITY_CATEGORY, id ->
+                categoryRepository.findById(id).map(e -> {
+                    try {
+                        return objectMapper.writeValueAsString(
+                                CategoryResponse.fromEntitySimple(e, resolveThumbnail(e.getId())));
+                    } catch (Exception ex) {
+                        return null;
+                    }
+                }).orElse(null));
     }
 
     private String resolveThumbnail(Long categoryId) {
@@ -49,6 +73,11 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_CATEGORY,
+        action     = AdminActivityLogEntity.ACTION_CREATE,
+        idArgIndex = -1
+    )
     public CategoryResponse createCategory(CreateCategoryRequest req) {
         UserEntity currentUser = userService.getCurrentUser();
 
@@ -120,7 +149,6 @@ public class CategoryServiceImpl implements CategoryService {
     public List<CategoryResponse> getChildCategories(Long parentId) {
         categoryRepository.findById(parentId)
                 .orElseThrow(() -> new NotFoundEntityException("Parent category not found with id: " + parentId));
-
         List<CategoryEntity> children = categoryRepository.findByParentId(parentId);
         return children.stream()
                 .map(c -> CategoryResponse.fromEntitySimple(c, resolveThumbnail(c.getId())))
@@ -136,6 +164,12 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType            = AdminActivityLogEntity.ENTITY_CATEGORY,
+        action                = AdminActivityLogEntity.ACTION_UPDATE,
+        idArgIndex            = 0,
+        captureSnapshotBefore = true
+    )
     public CategoryResponse updateCategory(Long id, UpdateCategoryRequest req) {
         CategoryEntity category = categoryRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Category not found with id: " + id));
@@ -146,24 +180,17 @@ public class CategoryServiceImpl implements CategoryService {
             }
             category.setCode(req.getCode());
         }
-
-        if (req.getName() != null) {
-            category.setName(req.getName());
-        }
-
-        if (req.getStatus() != null) {
-            category.setStatus(req.getStatus());
-        }
+        if (req.getName() != null)   category.setName(req.getName());
+        if (req.getStatus() != null) category.setStatus(req.getStatus());
 
         if (req.getParentId() != null) {
-            if (req.getParentId().equals(id)) {
+            if (req.getParentId().equals(id))
                 throw new IllegalArgumentException("Category cannot be its own parent");
-            }
             CategoryEntity parent = categoryRepository.findById(req.getParentId())
                     .orElseThrow(() -> new NotFoundEntityException(
                             "Parent category not found with id: " + req.getParentId()));
             category.setParent(parent);
-        } else if (req.getParentId() == null && category.getParent() != null) {
+        } else if (category.getParent() != null) {
             category.setParent(null);
         }
 
@@ -173,6 +200,12 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType            = AdminActivityLogEntity.ENTITY_CATEGORY,
+        action                = AdminActivityLogEntity.ACTION_DELETE,
+        idArgIndex            = 0,
+        captureSnapshotBefore = true
+    )
     public void deleteCategory(Long id) {
         CategoryEntity category = categoryRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Category not found with id: " + id));
@@ -181,11 +214,9 @@ public class CategoryServiceImpl implements CategoryService {
             throw new IllegalArgumentException(
                     "Cannot delete category with children. Please delete or move children first.");
         }
-
         if (category.getProducts() != null && !category.getProducts().isEmpty()) {
             throw new IllegalArgumentException("Cannot delete category with products. Please remove products first.");
         }
-
         categoryRepository.delete(category);
     }
 }

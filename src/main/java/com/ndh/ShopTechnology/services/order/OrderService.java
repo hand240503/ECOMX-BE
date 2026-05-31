@@ -6,6 +6,7 @@ import com.ndh.ShopTechnology.dto.request.order.OrderReturnRequest;
 import com.ndh.ShopTechnology.dto.response.order.CheckoutPricingPreviewResponse;
 import com.ndh.ShopTechnology.dto.response.order.CreateOrderResultResponse;
 import com.ndh.ShopTechnology.dto.response.order.OrderResponse;
+import com.ndh.ShopTechnology.dto.response.order.OrderTimelineResponse;
 import com.ndh.ShopTechnology.dto.response.order.VnpayPendingTransactionResponse;
 import com.ndh.ShopTechnology.dto.response.order.VnpayTransactionStatusResponse;
 
@@ -21,9 +22,18 @@ public interface OrderService {
 
     OrderResponse getMyOrderById(Long id);
 
+    /**
+     * Lấy tiến trình đơn hàng dưới dạng danh sách bước (stepper) cho user FE.
+     * Chỉ trả về nếu đơn hàng thuộc về user đang đăng nhập.
+     *
+     * @param orderId ID đơn hàng
+     * @return {@link OrderTimelineResponse} với các bước và trạng thái từng bước
+     */
+    OrderTimelineResponse getMyOrderTimeline(Long orderId);
+
     OrderResponse requestReturn(Long orderId, OrderReturnRequest request);
 
-    OrderResponse cancelMyOrder(Long orderId);
+    OrderResponse cancelMyOrder(Long orderId, String cancelReason);
 
     OrderResponse confirmPayment(Long orderId);
 
@@ -41,5 +51,7 @@ public interface OrderService {
 
     OrderResponse adminGetOrderById(Long orderId);
 
-    OrderResponse adminUpdateOrderStatus(Long orderId, Integer newStatus);
+    OrderResponse adminUpdateOrderStatus(Long orderId, Integer newStatus, String cancelNote);
+
+    OrderResponse adminUpdateReturnStatus(Long orderId, Integer newReturnStatus, String note);
 }

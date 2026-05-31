@@ -6,7 +6,11 @@ import com.ndh.ShopTechnology.dto.response.user.LoginResponse;
 
 public interface AuthService {
 
+    /** Login cho trang User (FE) — chỉ chấp nhận tài khoản có role CUSTOMER. */
     LoginResponse login(LoginRequest request);
+
+    /** Login cho trang Admin — chỉ chấp nhận tài khoản KHÔNG phải CUSTOMER. */
+    LoginResponse adminLogin(LoginRequest request);
 
     LoginResponse refreshToken(RefreshTokenRequest request, String ipAddress, String userAgent);
 

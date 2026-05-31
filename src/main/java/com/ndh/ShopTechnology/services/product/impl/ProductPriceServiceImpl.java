@@ -69,6 +69,7 @@ public class ProductPriceServiceImpl implements ProductPriceService {
                 .unit(unit)
                 .currentValue(request.getCurrentValue())
                 .oldValue(request.getOldValue() != null ? request.getOldValue() : 0.0)
+                .displayName(request.getDisplayName())
                 .build();
         return ProductPriceResponse.fromEntity(priceRepository.save(entity));
     }
@@ -94,6 +95,10 @@ public class ProductPriceServiceImpl implements ProductPriceService {
         entity.setCurrentValue(request.getCurrentValue());
         if (request.getOldValue() != null) {
             entity.setOldValue(request.getOldValue());
+        }
+        // displayName: null = giữ nguyên; "" = xoá tên; chuỗi bất kỳ = cập nhật
+        if (request.getDisplayName() != null) {
+            entity.setDisplayName(request.getDisplayName().isBlank() ? null : request.getDisplayName().trim());
         }
         return ProductPriceResponse.fromEntity(priceRepository.save(entity));
     }

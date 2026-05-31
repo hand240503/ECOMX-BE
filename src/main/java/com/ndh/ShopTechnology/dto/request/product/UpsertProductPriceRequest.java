@@ -30,4 +30,8 @@ public class UpsertProductPriceRequest {
     @Min(0)
     @JsonProperty("old_value")
     private Double oldValue;
+
+    /** Tên hiển thị tuỳ chỉnh (ví dụ: "Hộp 6 chiếc"). Không bắt buộc. */
+    @JsonProperty("display_name")
+    private String displayName;
 }

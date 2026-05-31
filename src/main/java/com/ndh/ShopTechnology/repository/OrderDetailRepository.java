@@ -23,4 +23,17 @@ public interface OrderDetailRepository extends JpaRepository<OrderDetailEntity, 
             @Param("userId") Long userId,
             @Param("productId") Long productId,
             @Param("status") Integer status);
+
+    @Query(value = """
+        SELECT od.product_id as productId, SUM(od.quantity) as cnt
+        FROM order_detail od
+        JOIN orders o ON od.order_id = o.id
+        WHERE o.status = 4
+          AND o.created_date >= :since
+        GROUP BY od.product_id
+        ORDER BY cnt DESC
+        """, nativeQuery = true)
+    List<Object[]> findTopSellingSince(
+            @Param("since") java.util.Date since,
+            org.springframework.data.domain.Pageable pageable);
 }

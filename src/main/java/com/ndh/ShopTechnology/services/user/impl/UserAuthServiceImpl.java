@@ -1,6 +1,7 @@
 package com.ndh.ShopTechnology.services.user.impl;
 
 import com.ndh.ShopTechnology.constants.MessageConstant;
+import com.ndh.ShopTechnology.constants.RoleConstant;
 import com.ndh.ShopTechnology.constants.SystemConstant;
 import com.ndh.ShopTechnology.dto.request.auth.ForgotPasswordRequest;
 import com.ndh.ShopTechnology.dto.request.auth.LoginRequest;
@@ -158,18 +159,62 @@ public class UserAuthServiceImpl implements UserAuthService {
             throw new AuthenticationFailedException(MessageConstant.AUTH_FAILED);
         }
 
+        // Chỉ cho phép tài khoản CUSTOMER đăng nhập vào trang mua hàng
+        if (!user.hasRole(RoleConstant.ROLE_CUSTOMER)) {
+            log.warn("Non-customer account attempted user portal login: username={}", user.getUsername());
+            throw new CustomApiException(HttpStatus.FORBIDDEN,
+                    "Tài khoản này không có quyền truy cập trang mua hàng. Vui lòng dùng tài khoản khách hàng.");
+        }
+
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(user.getUsername(), password)
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         String accessToken = jwtService.generateAccessToken(authentication.getName());
-
         RefreshTokenEntity refreshToken = refreshTokenService.createInitialRefreshToken(user.getUsername(), null);
-
         UserResponse userResponse = UserResponse.fromEntity(user);
 
         log.info("User logged in successfully: username={}", user.getUsername());
+
+        return LoginResponse.builder()
+                .userInfo(userResponse)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken.getToken())
+                .tokenType("Bearer")
+                .expiresIn(jwtService.getAccessTokenExpirationSeconds())
+                .build();
+    }
+
+    @Override
+    public LoginResponse adminLogin(LoginRequest request) {
+        String login = validateLoginInput(request.getLogin());
+        String password = request.getPassword();
+
+        UserEntity user = loadUserForLogin(login);
+
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            log.warn("Failed admin login attempt for user: {}", login);
+            throw new AuthenticationFailedException(MessageConstant.AUTH_FAILED);
+        }
+
+        // Tài khoản CUSTOMER không được truy cập trang quản trị
+        if (user.hasRole(RoleConstant.ROLE_CUSTOMER)) {
+            log.warn("Customer account attempted admin portal login: username={}", user.getUsername());
+            throw new CustomApiException(HttpStatus.FORBIDDEN,
+                    "Tài khoản khách hàng không được dùng bảng quản trị.");
+        }
+
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(user.getUsername(), password)
+        );
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        String accessToken = jwtService.generateAccessToken(authentication.getName());
+        RefreshTokenEntity refreshToken = refreshTokenService.createInitialRefreshToken(user.getUsername(), null);
+        UserResponse userResponse = UserResponse.fromEntity(user);
+
+        log.info("Admin logged in successfully: username={}", user.getUsername());
 
         return LoginResponse.builder()
                 .userInfo(userResponse)

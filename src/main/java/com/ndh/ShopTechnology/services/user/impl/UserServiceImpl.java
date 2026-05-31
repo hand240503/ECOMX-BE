@@ -576,11 +576,13 @@ public class UserServiceImpl implements UserService {
         }
         UserEntity target = loadUserForWrite(id);
         assertMatchesAdminKind(target, AdminManagedUserKind.STAFF);
-        String plain = generateStaffInitialPassword(target.getPhoneNumber());
+        // Mật khẩu mặc định = 6 chữ số cuối mã SAP (info01)
+        String sapCode = (target.getUserInfo() != null) ? target.getUserInfo().getInfo01() : null;
+        String plain = deriveSapDefaultPassword(sapCode);
         target.setPassword(passwordEncoder.encode(plain));
         userRepository.save(target);
         permissionService.clearUserPermissionsCache(target.getUsername());
-        log.info("Staff password reset: id={}, by={}", id, actor.getUsername());
+        log.info("Staff password reset to SAP default: id={}, by={}", id, actor.getUsername());
         return toResponse(target, plain);
     }
 
@@ -600,6 +602,27 @@ public class UserServiceImpl implements UserService {
                 .info03(req != null ? req.getInfo03() : null)
                 .info04(req != null ? req.getInfo04() : null)
                 .build();
+
+        if (req != null) {
+            if (org.springframework.util.StringUtils.hasText(req.getEmail())) {
+                String normalized = req.getEmail().trim().toLowerCase();
+                if (!normalized.equals(currentUser.getEmail())) {
+                    if (userRepository.existsByEmailAndIdNot(normalized, currentUser.getId())) {
+                        throw new com.ndh.ShopTechnology.exception.CustomApiException(org.springframework.http.HttpStatus.CONFLICT, "Email này đã được đăng ký");
+                    }
+                    currentUser.setEmail(normalized);
+                }
+            }
+            if (org.springframework.util.StringUtils.hasText(req.getPhoneNumber())) {
+                String normalized = req.getPhoneNumber().trim();
+                if (!normalized.equals(currentUser.getPhoneNumber())) {
+                    if (userRepository.existsByPhoneNumberAndIdNot(normalized, currentUser.getId())) {
+                        throw new com.ndh.ShopTechnology.exception.CustomApiException(org.springframework.http.HttpStatus.CONFLICT, "Số điện thoại này đã được đăng ký");
+                    }
+                    currentUser.setPhoneNumber(normalized);
+                }
+            }
+        }
 
         UserResponse response = doUpdateUser(adminReq, currentUser);
 
@@ -779,6 +802,25 @@ public class UserServiceImpl implements UserService {
         String encodedPassword = passwordEncoder.encode(passwordPlain);
         UserEntity saved = persistNewAdminUser(request, role, currentUser, username, phone, encodedPassword);
         return toResponse(saved, generatedPlain ? passwordPlain : null);
+    }
+
+    /**
+     * Mật khẩu mặc định = 6 chữ số cuối mã SAP.
+     * Nếu SAP code null / ngắn hơn 6 ký tự, dùng toàn bộ phần số; thiếu thì báo lỗi.
+     */
+    private String deriveSapDefaultPassword(String sapCode) {
+        if (sapCode == null || sapCode.isBlank()) {
+            throw new com.ndh.ShopTechnology.exception.CustomApiException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Không thể đặt lại mật khẩu: tài khoản chưa có mã SAP (info01).");
+        }
+        String digits = sapCode.replaceAll("\\D", "");
+        if (digits.length() < 6) {
+            throw new com.ndh.ShopTechnology.exception.CustomApiException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Mã SAP không đủ 6 chữ số để tạo mật khẩu mặc định.");
+        }
+        return digits.substring(digits.length() - 6);
     }
 
     private String generateStaffInitialPassword(String normalizedPhone) {

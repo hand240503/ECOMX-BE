@@ -1,8 +1,10 @@
 package com.ndh.ShopTechnology.services.product.impl;
 
+import com.ndh.ShopTechnology.annotation.AdminAudit;
 import com.ndh.ShopTechnology.dto.request.product.UpsertPriceChangeRequest;
 import com.ndh.ShopTechnology.dto.response.product.ProductPriceChangeResponse;
 import com.ndh.ShopTechnology.constants.MessageConstant;
+import com.ndh.ShopTechnology.entities.log.AdminActivityLogEntity;
 import com.ndh.ShopTechnology.entities.product.ProductPriceChangeEntity;
 import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
@@ -10,6 +12,7 @@ import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.ProductPriceChangeRepository;
 import com.ndh.ShopTechnology.repository.ProductPriceChangeUsageRepository;
 import com.ndh.ShopTechnology.repository.ProductVariantRepository;
+import com.ndh.ShopTechnology.services.log.PriceEventHistoryService;
 import com.ndh.ShopTechnology.services.product.ProductPriceChangeService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -25,14 +28,17 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
     private final ProductVariantRepository variantRepository;
     private final ProductPriceChangeRepository priceChangeRepository;
     private final ProductPriceChangeUsageRepository usageRepository;
+    private final PriceEventHistoryService priceEventHistoryService;
 
     public ProductPriceChangeServiceImpl(
             ProductVariantRepository variantRepository,
             ProductPriceChangeRepository priceChangeRepository,
-            ProductPriceChangeUsageRepository usageRepository) {
+            ProductPriceChangeUsageRepository usageRepository,
+            PriceEventHistoryService priceEventHistoryService) {
         this.variantRepository = variantRepository;
         this.priceChangeRepository = priceChangeRepository;
         this.usageRepository = usageRepository;
+        this.priceEventHistoryService = priceEventHistoryService;
     }
 
     @Override
@@ -46,6 +52,11 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_PRICE_CHANGE,
+        action     = AdminActivityLogEntity.ACTION_CREATE,
+        idArgIndex = -1
+    )
     public ProductPriceChangeResponse create(Long productId, Long variantId, UpsertPriceChangeRequest request) {
         ProductVariantEntity v = ensureVariant(productId, variantId);
         validateWindow(request.getStartAt(), request.getEndAt());
@@ -63,11 +74,17 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
                 .requiredPaymentMethodCode(normalizeCode(request.getRequiredPaymentMethodCode()))
                 .build();
         e = priceChangeRepository.save(e);
+        priceEventHistoryService.logPriceChangeCreated(e);
         return toResponse(e);
     }
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_PRICE_CHANGE,
+        action     = AdminActivityLogEntity.ACTION_UPDATE,
+        idArgIndex = 2
+    )
     public ProductPriceChangeResponse update(Long productId, Long variantId, long priceChangeId,
             UpsertPriceChangeRequest request) {
         ensureVariant(productId, variantId);
@@ -78,29 +95,39 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
                     "PriceChange not found for variant: " + variantId);
         }
         validateWindow(request.getStartAt(), request.getEndAt());
+        // Snapshot before
+        ProductPriceChangeEntity before = ProductPriceChangeEntity.builder()
+                .basePrice(e.getBasePrice())
+                .salePrice(e.getSalePrice())
+                .quantityLimit(e.getQuantityLimit())
+                .startAt(e.getStartAt())
+                .endAt(e.getEndAt())
+                .enabled(e.getEnabled())
+                .maxPerCustomer(e.getMaxPerCustomer())
+                .requiredPaymentMethodCode(e.getRequiredPaymentMethodCode())
+                .build();
         e.setProductId(productId);
         e.setBasePrice(request.getBasePrice());
         e.setSalePrice(request.getSalePrice());
         e.setStartAt(request.getStartAt());
         e.setEndAt(request.getEndAt());
-        if (request.getEnabled() != null) {
-            e.setEnabled(request.getEnabled());
-        }
-        if (request.getQuantityLimit() != null) {
-            e.setQuantityLimit(request.getQuantityLimit());
-        }
-        if (request.getMaxPerCustomer() != null) {
-            e.setMaxPerCustomer(request.getMaxPerCustomer());
-        }
-        if (request.getRequiredPaymentMethodCode() != null) {
+        if (request.getEnabled() != null)               e.setEnabled(request.getEnabled());
+        if (request.getQuantityLimit() != null)         e.setQuantityLimit(request.getQuantityLimit());
+        if (request.getMaxPerCustomer() != null)        e.setMaxPerCustomer(request.getMaxPerCustomer());
+        if (request.getRequiredPaymentMethodCode() != null)
             e.setRequiredPaymentMethodCode(normalizeCode(request.getRequiredPaymentMethodCode()));
-        }
         e = priceChangeRepository.save(e);
+        priceEventHistoryService.logPriceChangeUpdated(before, e);
         return toResponse(e);
     }
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_PRICE_CHANGE,
+        action     = AdminActivityLogEntity.ACTION_DELETE,
+        idArgIndex = 2
+    )
     public void delete(Long productId, Long variantId, long priceChangeId) {
         ensureVariant(productId, variantId);
         ProductPriceChangeEntity e = priceChangeRepository.findById(priceChangeId)
@@ -111,6 +138,7 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
         }
         assertDeletablePriceChange(e);
         priceChangeRepository.delete(e);
+        priceEventHistoryService.logPriceChangeDeleted(e);
     }
 
     @Override
@@ -149,12 +177,9 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
     }
 
     private static void validateWindow(Date startAt, Date endAt) {
-        if (startAt == null) {
-            throw new CustomApiException(HttpStatus.BAD_REQUEST, "startAt is required");
-        }
-        if (endAt != null && endAt.before(startAt)) {
+        if (startAt == null) throw new CustomApiException(HttpStatus.BAD_REQUEST, "startAt is required");
+        if (endAt != null && endAt.before(startAt))
             throw new CustomApiException(HttpStatus.BAD_REQUEST, "endAt must be >= startAt");
-        }
     }
 
     private static String normalizeCode(String code) {

@@ -1,14 +1,17 @@
 package com.ndh.ShopTechnology.services.promotion.impl;
 
+import com.ndh.ShopTechnology.annotation.AdminAudit;
 import com.ndh.ShopTechnology.constants.MessageConstant;
 import com.ndh.ShopTechnology.dto.request.promotion.UpsertPurchaseWithPurchaseRequest;
 import com.ndh.ShopTechnology.dto.response.promotion.PurchaseWithPurchaseOfferResponse;
+import com.ndh.ShopTechnology.entities.log.AdminActivityLogEntity;
 import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
 import com.ndh.ShopTechnology.entities.promotion.PurchaseWithPurchaseOfferEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.repository.PurchaseWithPurchaseOfferRepository;
+import com.ndh.ShopTechnology.services.log.PriceEventHistoryService;
 import com.ndh.ShopTechnology.services.promotion.PurchaseWithPurchaseOfferService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,12 +25,15 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
 
     private final PurchaseWithPurchaseOfferRepository pwpRepository;
     private final ProductVariantRepository variantRepository;
+    private final PriceEventHistoryService priceEventHistoryService;
 
     public PurchaseWithPurchaseOfferServiceImpl(
             PurchaseWithPurchaseOfferRepository pwpRepository,
-            ProductVariantRepository variantRepository) {
+            ProductVariantRepository variantRepository,
+            PriceEventHistoryService priceEventHistoryService) {
         this.pwpRepository = pwpRepository;
         this.variantRepository = variantRepository;
+        this.priceEventHistoryService = priceEventHistoryService;
     }
 
     @Override
@@ -40,6 +46,11 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_PWP_OFFER,
+        action     = AdminActivityLogEntity.ACTION_CREATE,
+        idArgIndex = -1
+    )
     public PurchaseWithPurchaseOfferResponse create(UpsertPurchaseWithPurchaseRequest request) {
         validateIds(request.getAnchorProductId(), request.getCompanionProductId());
         ProductVariantEntity anchorVar = loadVariantStrict(
@@ -60,11 +71,17 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
                 .enabled(request.getEnabled() != null ? request.getEnabled() : true)
                 .build();
         e = pwpRepository.save(e);
+        priceEventHistoryService.logPwpCreated(e);
         return toResponse(e);
     }
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_PWP_OFFER,
+        action     = AdminActivityLogEntity.ACTION_UPDATE,
+        idArgIndex = 0
+    )
     public PurchaseWithPurchaseOfferResponse update(long id, UpsertPurchaseWithPurchaseRequest request) {
         PurchaseWithPurchaseOfferEntity e = pwpRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Purchase-with-purchase offer not found: " + id));
@@ -79,22 +96,22 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
         e.setCompanionProduct(companionVar.getProduct());
         e.setCompanionVariant(companionVar);
         e.setPromoUnitPrice(request.getPromoUnitPrice());
-        if (request.getMinAnchorQuantity() != null) {
-            e.setMinAnchorQuantity(request.getMinAnchorQuantity());
-        }
-        if (request.getCompanionPromoUnitsPerAnchor() != null) {
-            e.setCompanionPromoUnitsPerAnchor(request.getCompanionPromoUnitsPerAnchor());
-        }
+        if (request.getMinAnchorQuantity() != null)          e.setMinAnchorQuantity(request.getMinAnchorQuantity());
+        if (request.getCompanionPromoUnitsPerAnchor() != null) e.setCompanionPromoUnitsPerAnchor(request.getCompanionPromoUnitsPerAnchor());
         e.setMaxCompanionPromoUnits(request.getMaxCompanionPromoUnits());
-        if (request.getEnabled() != null) {
-            e.setEnabled(request.getEnabled());
-        }
+        if (request.getEnabled() != null) e.setEnabled(request.getEnabled());
         e = pwpRepository.save(e);
+        priceEventHistoryService.logPwpUpdated(e);
         return toResponse(e);
     }
 
     @Override
     @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_PWP_OFFER,
+        action     = AdminActivityLogEntity.ACTION_DELETE,
+        idArgIndex = 0
+    )
     public void delete(long id) {
         PurchaseWithPurchaseOfferEntity e = pwpRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Purchase-with-purchase offer not found: " + id));
@@ -102,6 +119,7 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
             throw new CustomApiException(HttpStatus.CONFLICT, MessageConstant.PWP_CANNOT_DELETE_WHILE_ACTIVE);
         }
         pwpRepository.delete(e);
+        priceEventHistoryService.logPwpDeleted(e);
     }
 
     private void assertCompanionVariantFree(Long companionVariantId, Long excludeOfferId) {
@@ -122,8 +140,7 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
 
     private ProductVariantEntity loadVariantStrict(Long variantId, Long productId, String role) {
         ProductVariantEntity v = variantRepository.findById(variantId)
-                .orElseThrow(() -> new NotFoundEntityException(
-                        role + " variant not found: " + variantId));
+                .orElseThrow(() -> new NotFoundEntityException(role + " variant not found: " + variantId));
         if (v.getProduct() == null || !v.getProduct().getId().equals(productId)) {
             throw new CustomApiException(HttpStatus.BAD_REQUEST,
                     role + " variant " + variantId + " does not belong to product " + productId);

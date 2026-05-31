@@ -21,6 +21,9 @@ public class OrderResponse {
     private Integer status;
     private Integer returnRefundStatus;
     private String returnRefundNote;
+    private String cancelNote;
+    /** "CUSTOMER" hoặc "ADMIN" — chỉ có khi status=5 */
+    private String cancelledBy;
     private String description;
     private Double total;
     private Integer typeOrder;
@@ -29,6 +32,7 @@ public class OrderResponse {
     private Long shippingFeeVnd;
     private Boolean paid;
     private Date paidAt;
+    private Date completedAt;
     private PaymentMethodSummaryResponse paymentMethod;
     private List<OrderDetailResponse> orderDetails;
     private Date createdDate;
