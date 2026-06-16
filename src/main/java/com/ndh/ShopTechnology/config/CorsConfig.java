@@ -17,6 +17,8 @@ public class CorsConfig {
         config.setAllowCredentials(true);
         config.addAllowedOrigin("http://localhost:5173");
         config.addAllowedOrigin("http://localhost:5174");
+        config.addAllowedOrigin("https://ndhtech.id.vn");
+        config.addAllowedOrigin("https://www.ndhtech.id.vn");
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
 
