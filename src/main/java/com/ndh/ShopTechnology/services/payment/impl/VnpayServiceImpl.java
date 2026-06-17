@@ -410,11 +410,74 @@ public class VnpayServiceImpl implements VnpayService {
                         vnpayProperties.getHashSecret().trim(), p, vnpHash.trim())) {
             return fullBase + (fullBase.contains("?") ? "&" : "?") + "vnpay_verify=invalid";
         }
+
+        // Checksum hợp lệ => dữ liệu do VNPAY ký, đáng tin. Tạo đơn ngay tại Return như một
+        // fallback khi IPN không được VNPAY gọi (thường gặp ở sandbox). Idempotent + kiểm số tiền.
+        try {
+            finalizeFromTrustedParamsIfSuccess(p);
+        } catch (Exception e) {
+            log.warn("VNPAY return-finalize failed: {}", e.toString());
+        }
+
         String qs = request.getQueryString();
         if (StringUtils.hasText(qs)) {
             return fullBase + (fullBase.contains("?") ? "&" : "?") + qs;
         }
         return fullBase;
+    }
+
+    /**
+     * Tạo đơn từ tham số Return/IPN ĐÃ verify checksum, khi giao dịch thành công.
+     * An toàn để gọi lặp: chỉ tạo khi phiên còn PENDING, đúng phương thức VNPAY, đúng số tiền.
+     */
+    private void finalizeFromTrustedParamsIfSuccess(Map<String, String> p) {
+        if (!SUCCESS_RESPONSE.equals(p.get("vnp_ResponseCode"))
+                || !SUCCESS_STATUS.equals(p.get("vnp_TransactionStatus"))) {
+            return;
+        }
+        String txnRef = p.get("vnp_TxnRef");
+        if (!StringUtils.hasText(txnRef)) {
+            return;
+        }
+        long refId;
+        try {
+            refId = Long.parseLong(txnRef.trim());
+        } catch (NumberFormatException e) {
+            return;
+        }
+        String amountStr = p.get("vnp_Amount");
+        if (!StringUtils.hasText(amountStr)) {
+            return;
+        }
+        long vnpAmount;
+        try {
+            vnpAmount = Long.parseLong(amountStr.trim());
+        } catch (NumberFormatException e) {
+            return;
+        }
+
+        CheckoutSessionEntity session = checkoutSessionRepository
+                .findByIdWithUserAndPaymentMethod(refId)
+                .orElse(null);
+        if (session == null || session.getStatus() != CheckoutSessionStatus.PENDING) {
+            return; // không tồn tại hoặc đã xử lý (idempotent)
+        }
+        if (session.getPaymentMethod() == null
+                || !vnpayProperties.getPaymentMethodCode()
+                        .equalsIgnoreCase(Objects.toString(session.getPaymentMethod().getCode(), ""))) {
+            return;
+        }
+        if (session.getTotal() == null) {
+            return;
+        }
+        long expected = Math.round(session.getTotal() * 100.0);
+        if (vnpAmount != expected) {
+            log.warn("VNPAY return-finalize amount mismatch txnRef={} expected={} got={}",
+                    txnRef, expected, vnpAmount);
+            return;
+        }
+        VnpaySessionFinalizeResult r = orderService.finalizeVnpayCheckoutSession(session.getId());
+        log.info("VNPAY return-finalize txnRef={} -> {}", txnRef, r);
     }
 
     private static Map<String, String> toParamMap(HttpServletRequest request) {
