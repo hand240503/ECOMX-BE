@@ -14,9 +14,13 @@ import com.ndh.ShopTechnology.repository.OrderRepository;
 import com.ndh.ShopTechnology.services.order.OrderService;
 import com.ndh.ShopTechnology.services.order.VnpaySessionFinalizeResult;
 import com.ndh.ShopTechnology.services.payment.VnpayService;
+import com.ndh.ShopTechnology.services.payment.VnpayQueryDrResponse;
+import com.ndh.ShopTechnology.services.payment.VnpayQueryDrService;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 import com.ndh.ShopTechnology.services.user.UserService;
 import com.ndh.ShopTechnology.util.VnpayUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,9 +42,12 @@ import java.util.stream.Collectors;
 @Service
 public class VnpayServiceImpl implements VnpayService {
 
+    private static final Logger log = LoggerFactory.getLogger(VnpayServiceImpl.class);
     private static final DateTimeFormatter VNP_DATETIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final String SUCCESS_RESPONSE = "00";
     private static final String SUCCESS_STATUS = "00";
+    /** vnp_TransactionStatus = "02" => giao dịch lỗi (kết luận thất bại). */
+    private static final String FAILED_STATUS = "02";
     private static final ZoneId VN = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final VnpayProperties vnpayProperties;
@@ -48,18 +55,21 @@ public class VnpayServiceImpl implements VnpayService {
     private final CheckoutSessionRepository checkoutSessionRepository;
     private final OrderService orderService;
     private final UserService userService;
+    private final VnpayQueryDrService queryDrService;
 
     public VnpayServiceImpl(
             VnpayProperties vnpayProperties,
             OrderRepository orderRepository,
             CheckoutSessionRepository checkoutSessionRepository,
             OrderService orderService,
-            UserService userService) {
+            UserService userService,
+            VnpayQueryDrService queryDrService) {
         this.vnpayProperties = vnpayProperties;
         this.orderRepository = orderRepository;
         this.checkoutSessionRepository = checkoutSessionRepository;
         this.orderService = orderService;
         this.userService = userService;
+        this.queryDrService = queryDrService;
     }
 
     @Override
@@ -306,6 +316,70 @@ public class VnpayServiceImpl implements VnpayService {
             orderRepository.save(order);
         }
         return new VnpayIpnResponse("00", "Confirm Success");
+    }
+
+    @Override
+    public void reconcilePendingCheckoutSession(long checkoutSessionId) {
+        // Tải phiên (eager user + paymentMethod nhờ EntityGraph) — KHÔNG mở transaction quanh HTTP call.
+        CheckoutSessionEntity session = checkoutSessionRepository
+                .findByIdWithUserAndPaymentMethod(checkoutSessionId)
+                .orElse(null);
+        if (session == null || session.getStatus() != CheckoutSessionStatus.PENDING) {
+            return;
+        }
+        if (session.getPaymentMethod() == null
+                || !vnpayProperties.getPaymentMethodCode()
+                        .equalsIgnoreCase(Objects.toString(session.getPaymentMethod().getCode(), ""))) {
+            return;
+        }
+        if (session.getTotal() == null || session.getTotal() <= 0) {
+            return;
+        }
+        // Quá hạn phiên thì để luồng hết hạn xử lý, không truy vấn nữa.
+        if (session.getExpiresAt() != null && session.getExpiresAt().before(new Date())) {
+            return;
+        }
+
+        String txnRef = String.valueOf(session.getId());
+        VnpayQueryDrResponse r = queryDrService.query(txnRef, session.getCreatedDate(), "127.0.0.1");
+        if (!r.callOk()) {
+            return; // mạng/parse lỗi — thử lại ở chu kỳ sau
+        }
+        if (vnpayProperties.isQueryDrRequireValidSignature() && !r.signatureValid()) {
+            log.warn("VNPAY querydr response signature invalid for txnRef={}", txnRef);
+            return;
+        }
+        if (!r.signatureValid()) {
+            log.warn("VNPAY querydr response signature mismatch (tolerated) for txnRef={}", txnRef);
+        }
+
+        // vnp_ResponseCode của API truy vấn: "00" = truy vấn được; khác (vd "91" not found) => chưa kết luận.
+        if (!SUCCESS_RESPONSE.equals(r.responseCode())) {
+            return;
+        }
+
+        String transStatus = r.transactionStatus();
+        if (SUCCESS_STATUS.equals(transStatus)) {
+            long expectedVnp = Math.round(session.getTotal() * 100.0);
+            if (r.amount() == null || r.amount() != expectedVnp) {
+                log.warn("VNPAY querydr amount mismatch txnRef={} expected={} got={}",
+                        txnRef, expectedVnp, r.amount());
+                return; // không finalize nếu số tiền không khớp
+            }
+            VnpaySessionFinalizeResult fin = orderService.finalizeVnpayCheckoutSession(session.getId());
+            log.info("VNPAY querydr reconciled SUCCESS txnRef={} -> {}", txnRef, fin);
+            return;
+        }
+        if (FAILED_STATUS.equals(transStatus)) {
+            // Tải lại để tránh ghi đè nếu IPN vừa hoàn tất phiên này ở luồng khác.
+            CheckoutSessionEntity fresh = checkoutSessionRepository.findById(session.getId()).orElse(null);
+            if (fresh != null && fresh.getStatus() == CheckoutSessionStatus.PENDING) {
+                fresh.setStatus(CheckoutSessionStatus.FAILED);
+                checkoutSessionRepository.save(fresh);
+                log.info("VNPAY querydr reconciled FAILED txnRef={}", txnRef);
+            }
+        }
+        // transStatus "01" (chưa hoàn tất) hoặc khác => giữ PENDING, thử lại chu kỳ sau.
     }
 
     @Override

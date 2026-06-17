@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -16,6 +18,10 @@ public interface CheckoutSessionRepository extends JpaRepository<CheckoutSession
     @EntityGraph(attributePaths = {"user", "paymentMethod"})
     Optional<CheckoutSessionEntity> findByIdAndUser_IdAndStatus(
             Long id, Long userId, CheckoutSessionStatus status);
+
+    /** Phiên ở trạng thái cho trước, tạo sau mốc thời gian (dùng cho cửa sổ đối soát querydr). */
+    List<CheckoutSessionEntity> findByStatusAndCreatedDateAfter(
+            CheckoutSessionStatus status, Date createdAfter);
 
     @EntityGraph(attributePaths = {"user", "paymentMethod"})
     @Query("select c from CheckoutSessionEntity c where c.id = :id")

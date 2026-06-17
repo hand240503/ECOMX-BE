@@ -16,6 +16,22 @@ public class VnpayProperties {
 
     private String payUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
 
+    /** Endpoint truy vấn kết quả giao dịch (querydr) / hoàn tiền (refund) của VNPAY. */
+    private String apiUrl = "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction";
+
+    /**
+     * Cửa sổ thời gian (giây) BE chủ động gọi querydr để đối soát một phiên PENDING,
+     * tính từ lúc tạo phiên. Hết cửa sổ này BE ngừng truy vấn (không treo vô hạn).
+     */
+    private int reconcileWindowSeconds = 120;
+
+    /**
+     * Bắt buộc chữ ký phản hồi querydr hợp lệ mới chấp nhận kết quả.
+     * Mặc định false: phản hồi đến qua HTTPS từ endpoint VNPAY đã biết + request đã ký,
+     * nên chỉ log cảnh báo nếu chữ ký không khớp (tránh chặn nhầm giao dịch thật ở sandbox).
+     */
+    private boolean queryDrRequireValidSignature = false;
+
     private String returnUrl = "http://127.0.0.1:8080/api/v1/payment/vnpay/return";
 
     private String frontendRedirectBase = "http://localhost:5173";
