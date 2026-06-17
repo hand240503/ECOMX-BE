@@ -107,6 +107,10 @@ public class VnpayQueryDrServiceImpl implements VnpayQueryDrService {
             Long amount = parseLongOrNull(text(node, "vnp_Amount"));
             boolean signatureValid = verifyResponseSignature(node);
 
+            log.info("VNPAY querydr resp txnRef={} transDate={} responseCode={} message=\"{}\" "
+                            + "transactionStatus={} amount={} sigValid={}",
+                    txnRef, transDate, responseCode, message, transactionStatus, amount, signatureValid);
+
             return new VnpayQueryDrResponse(true, responseCode, message, transactionStatus, amount, signatureValid);
         } catch (Exception e) {
             log.warn("VNPAY querydr call failed for txnRef={}: {}", txnRef, e.toString());
