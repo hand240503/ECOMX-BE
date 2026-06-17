@@ -1,3 +1,72 @@
 spring:
-  profiles:
-    active: local
+  datasource:
+    url: jdbc:mysql://localhost:3306/ShopTechnology?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
+    username: ecomx
+    password: ecomx240503
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        enable_lazy_load_no_trans: true
+        format_sql: true
+    show-sql: false
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: dangha24052003@gmail.com
+    password: voyobmjzbyupnyut
+
+server:
+  port: 8080
+
+api:
+  prefix: api/v1
+
+jwt:
+  issuer: ecomx-be
+  access-token-expiration-ms: 604800000
+  refresh-token-expiration-ms: 2592000000
+
+cloudinary:
+  cloud-name: dmzz1qyzc
+  api-key: 384556151754457
+  api-secret: ZE-5-pfdEPbz4_BxIPqHfy5rWAU
+  folder: ecomx/avatars
+  documents-folder: ecomx/documents
+
+recommendation:
+  session:
+    window-minutes: 10
+    max-recent-products: 10
+  blend:
+    long-weight: 0.3
+    short-weight: 0.7
+
+# VNPAY Sandbox — trỏ callback về domain production
+vnpay:
+  enabled: true
+  tmn-code: K7VF8QSV
+  hash-secret: VNG8SCFEII1VH87UPSRACYS9GKB6VI4D
+  pay-url: "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
+  return-url: ${VNP_RETURN_URL:https://ndhtech.id.vn/api/v1/payment/vnpay/return}
+  frontend-redirect-base: ${VNPAY_FRONTEND_BASE:https://ndhtech.id.vn}
+  frontend-result-path: ${VNPAY_FRONTEND_PATH:/payment/vnpay-callback}
+  payment-method-code: "VNPAY"
+  dev-simulate-success-enabled: false
+
+delivery:
+  routing:
+    warehouse-latitude: 15.975435631036287
+    warehouse-longitude: 108.25329136862204
+    nominatim-base-url: https://nominatim.openstreetmap.org
+    nominatim-contact-email: dangha24052003@gmail.com
+    osrm-base-url: https://router.project-osrm.org
+    country-codes: vn
+    http-user-agent: ShopTechnology/1.0 (ecomx-be)
+    photon-fallback-enabled: true
+    photon-base-url: https://photon.komoot.io
