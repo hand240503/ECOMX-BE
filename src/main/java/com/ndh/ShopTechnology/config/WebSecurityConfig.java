@@ -107,15 +107,16 @@ public class WebSecurityConfig {
                             .requestMatchers(HttpMethod.OPTIONS, "/**")
                             .permitAll()
 
+                            // auth/** phải đứng TRƯỚC admin/** để /auth/admin/login không bị chặn
+                            .requestMatchers(String.format("%s/auth/**", base))
+                            .permitAll()
+
                             .requestMatchers(String.format("%s/admin/**", base))
                             .hasAnyRole(
                                     RoleConstant.ROLE_SUPER_ADMIN,
                                     RoleConstant.ROLE_ADMIN,
                                     RoleConstant.ROLE_MANAGER,
                                     RoleConstant.ROLE_EMPLOYEE)
-
-                            .requestMatchers(String.format("%s/auth/**", base))
-                            .permitAll()
 
                             .requestMatchers(HttpMethod.GET, String.format("%s/document/**", base))
                             .permitAll()
