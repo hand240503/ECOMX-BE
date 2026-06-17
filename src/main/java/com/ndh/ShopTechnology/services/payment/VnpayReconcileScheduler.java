@@ -11,7 +11,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Định kỳ gọi querydr để đối soát các phiên VNPAY còn PENDING — chỉ trong cửa sổ
@@ -26,6 +29,9 @@ public class VnpayReconcileScheduler {
     private final VnpayService vnpayService;
     private final VnpayProperties props;
     private final CheckoutSessionRepository checkoutSessionRepository;
+
+    /** sessionId -> thời điểm (epoch ms) gọi querydr gần nhất, để giãn tần suất tránh lỗi 94. */
+    private final Map<Long, Long> lastQueryAt = new ConcurrentHashMap<>();
 
     public VnpayReconcileScheduler(
             VnpayService vnpayService,
@@ -45,20 +51,38 @@ public class VnpayReconcileScheduler {
             return;
         }
 
+        long now = System.currentTimeMillis();
         long windowMs = Math.max(1, props.getReconcileWindowSeconds()) * 1000L;
-        Date createdAfter = new Date(System.currentTimeMillis() - windowMs);
+        long minIntervalMs = Math.max(0, props.getReconcileMinIntervalMs());
+        Date createdAfter = new Date(now - windowMs);
 
         List<CheckoutSessionEntity> pending = checkoutSessionRepository
                 .findByStatusAndCreatedDateAfter(CheckoutSessionStatus.PENDING, createdAfter);
+
+        // Dọn các entry quá cũ (ngoài cửa sổ) để map không phình to.
+        long cutoff = now - windowMs - minIntervalMs;
+        for (Iterator<Map.Entry<Long, Long>> it = lastQueryAt.entrySet().iterator(); it.hasNext(); ) {
+            if (it.next().getValue() < cutoff) {
+                it.remove();
+            }
+        }
+
         if (pending.isEmpty()) {
             return;
         }
 
         for (CheckoutSessionEntity session : pending) {
+            long id = session.getId();
+            Long last = lastQueryAt.get(id);
+            // Giãn tần suất: bỏ qua nếu vừa query gần đây (tránh VNPAY trả 94 duplicate).
+            if (last != null && (now - last) < minIntervalMs) {
+                continue;
+            }
+            lastQueryAt.put(id, now);
             try {
-                vnpayService.reconcilePendingCheckoutSession(session.getId());
+                vnpayService.reconcilePendingCheckoutSession(id);
             } catch (Exception e) {
-                log.warn("VNPAY reconcile failed for sessionId={}: {}", session.getId(), e.toString());
+                log.warn("VNPAY reconcile failed for sessionId={}: {}", id, e.toString());
             }
         }
     }

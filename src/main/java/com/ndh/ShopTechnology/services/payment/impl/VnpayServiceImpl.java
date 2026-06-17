@@ -345,17 +345,20 @@ public class VnpayServiceImpl implements VnpayService {
         if (!r.callOk()) {
             return; // mạng/parse lỗi — thử lại ở chu kỳ sau
         }
+
+        // vnp_ResponseCode của API truy vấn: "00" = truy vấn được; khác (vd "91" not found,
+        // "94" duplicate do query quá dày) => chưa kết luận, không xét chữ ký, thử lại sau.
+        if (!SUCCESS_RESPONSE.equals(r.responseCode())) {
+            return;
+        }
+
+        // Đến đây response mới mang dữ liệu giao dịch -> kiểm tra chữ ký.
         if (vnpayProperties.isQueryDrRequireValidSignature() && !r.signatureValid()) {
             log.warn("VNPAY querydr response signature invalid for txnRef={}", txnRef);
             return;
         }
         if (!r.signatureValid()) {
             log.warn("VNPAY querydr response signature mismatch (tolerated) for txnRef={}", txnRef);
-        }
-
-        // vnp_ResponseCode của API truy vấn: "00" = truy vấn được; khác (vd "91" not found) => chưa kết luận.
-        if (!SUCCESS_RESPONSE.equals(r.responseCode())) {
-            return;
         }
 
         String transStatus = r.transactionStatus();
