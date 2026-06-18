@@ -59,9 +59,11 @@ import org.springframework.web.multipart.MultipartFile;
 import org.hibernate.Hibernate;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -395,18 +397,12 @@ public class ProductServiceImpl implements ProductService {
             throw new NotFoundEntityException("Category not found with id: " + categoryId);
         }
         Pageable pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "id"));
-        boolean isParentCategory = categoryRepository.existsByParent_Id(categoryId);
+        // Toàn bộ subtree: chính danh mục + mọi con/cháu ở mọi cấp.
+        Collection<Long> categoryIds = collectCategoryAndDescendantIds(categoryId);
         boolean filterByBrand = brandIds != null && !brandIds.isEmpty();
-        Page<ProductEntity> productPage;
-        if (filterByBrand) {
-            productPage = isParentCategory
-                    ? productRepository.findPageByDirectChildCategoriesOfAndBrandIds(categoryId, brandIds, pageable)
-                    : productRepository.findPageByCategoryIdAndBrandIds(categoryId, brandIds, pageable);
-        } else {
-            productPage = isParentCategory
-                    ? productRepository.findPageByDirectChildCategoriesOf(categoryId, pageable)
-                    : productRepository.findPageByCategoryId(categoryId, pageable);
-        }
+        Page<ProductEntity> productPage = filterByBrand
+                ? productRepository.findPageByCategoryIdInAndBrandIds(categoryIds, brandIds, pageable)
+                : productRepository.findPageByCategoryIdIn(categoryIds, pageable);
         List<ProductEntity> hydrated = hydrateProductsWithVariants(productPage.getContent());
         Page<ProductEntity> hydratedPage = new PageImpl<>(hydrated, pageable, productPage.getTotalElements());
         Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
@@ -424,15 +420,35 @@ public class ProductServiceImpl implements ProductService {
         if (!categoryRepository.existsById(categoryId)) {
             throw new NotFoundEntityException("Category not found with id: " + categoryId);
         }
-        boolean isParentCategory = categoryRepository.existsByParent_Id(categoryId);
-        List<BrandEntity> brands = isParentCategory
-                ? productRepository.findDistinctBrandsByDirectChildCategoriesOf(categoryId)
-                : productRepository.findDistinctBrandsByCategoryId(categoryId);
+        // Toàn bộ subtree: brand của chính danh mục + mọi con/cháu ở mọi cấp.
+        Collection<Long> categoryIds = collectCategoryAndDescendantIds(categoryId);
+        List<BrandEntity> brands = productRepository.findDistinctBrandsByCategoryIdIn(categoryIds);
         List<BrandSummaryResponse> result = new ArrayList<>(brands.size());
         for (BrandEntity b : brands) {
             result.add(BrandSummaryResponse.fromEntity(b, null));
         }
         return result;
+    }
+
+    /**
+     * Thu thập id của danh mục gốc + toàn bộ con/cháu ở mọi cấp (BFS).
+     * Dùng cho cả danh sách sản phẩm và danh sách brand để hai bên luôn khớp phạm vi.
+     */
+    private Collection<Long> collectCategoryAndDescendantIds(Long rootId) {
+        Set<Long> ids = new LinkedHashSet<>();
+        Deque<Long> queue = new ArrayDeque<>();
+        queue.add(rootId);
+        ids.add(rootId);
+        while (!queue.isEmpty()) {
+            Long current = queue.poll();
+            for (CategoryEntity child : categoryRepository.findByParentId(current)) {
+                Long childId = child.getId();
+                if (childId != null && ids.add(childId)) {
+                    queue.add(childId);
+                }
+            }
+        }
+        return ids;
     }
 
     @Override

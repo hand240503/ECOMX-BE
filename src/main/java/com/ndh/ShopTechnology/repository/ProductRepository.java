@@ -52,6 +52,19 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>, J
     @Query("SELECT DISTINCT p.brand FROM products p WHERE p.category.parent.id = :parentCategoryId AND p.brand IS NOT NULL ORDER BY p.brand.name ASC")
     List<BrandEntity> findDistinctBrandsByDirectChildCategoriesOf(@Param("parentCategoryId") Long parentCategoryId);
 
+    // --- Subtree (category + toàn bộ con/cháu ở mọi cấp) ---
+
+    @Query(value = "SELECT p FROM products p WHERE p.category.id IN :categoryIds", countQuery = "SELECT count(p) FROM products p WHERE p.category.id IN :categoryIds")
+    Page<ProductEntity> findPageByCategoryIdIn(@Param("categoryIds") Collection<Long> categoryIds, Pageable pageable);
+
+    @Query(value = "SELECT p FROM products p WHERE p.category.id IN :categoryIds AND p.brand.id IN :brandIds", countQuery = "SELECT count(p) FROM products p WHERE p.category.id IN :categoryIds AND p.brand.id IN :brandIds")
+    Page<ProductEntity> findPageByCategoryIdInAndBrandIds(@Param("categoryIds") Collection<Long> categoryIds,
+            @Param("brandIds") Collection<Long> brandIds, Pageable pageable);
+
+    /** Distinct brands có sản phẩm trong toàn bộ subtree danh mục. */
+    @Query("SELECT DISTINCT p.brand FROM products p WHERE p.category.id IN :categoryIds AND p.brand IS NOT NULL ORDER BY p.brand.name ASC")
+    List<BrandEntity> findDistinctBrandsByCategoryIdIn(@Param("categoryIds") Collection<Long> categoryIds);
+
     @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
     List<ProductEntity> findByIsFeaturedTrue(Pageable pageable);
 
