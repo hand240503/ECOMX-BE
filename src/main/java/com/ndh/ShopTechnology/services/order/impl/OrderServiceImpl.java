@@ -1140,9 +1140,18 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
+        // ── Lịch sử trả hàng / hoàn tiền (nếu có) ─────────────────────────────
+        List<OrderHistoryEntity> returnHistory = orderHistoryRepository
+                .findByOrderIdAndChangeTypeOrderByCreatedAtDesc(
+                        orderId, OrderHistoryEntity.CHANGE_TYPE_RETURN_REFUND_STATUS);
+        OrderHistoryEntity latestReturnEntry = returnHistory.isEmpty() ? null : returnHistory.get(0);
+        boolean hasReturn = order.getReturnRefundStatus() != null
+                && order.getReturnRefundStatus() != OrderConstants.RETURN_STATUS_NONE;
+
         // ── Định nghĩa các bước timeline ──────────────────────────────────────
-        // Luồng bình thường: 1 → 2 → 3 → 4 → (đánh giá virtual)
+        // Luồng bình thường: 1 → 2 → 3 → 4 → (đánh giá virtual) → (trả hàng nếu có)
         // Luồng hủy:         1 → ... → 5
+        final int RETURN_STEP_CODE = -1;
         record StepDef(int statusCode, String label) {}
 
         List<StepDef> stepDefs = new ArrayList<>();
@@ -1154,6 +1163,10 @@ public class OrderServiceImpl implements OrderService {
         } else {
             stepDefs.add(new StepDef(OrderConstants.STATUS_COMPLETED, "Hoàn thành"));
             stepDefs.add(new StepDef(0, "Đánh giá")); // virtual step, statusCode=0
+            if (hasReturn) {
+                // Bước "Trả hàng" — chỉ thêm khi khách đã yêu cầu trả hàng/hoàn tiền.
+                stepDefs.add(new StepDef(RETURN_STEP_CODE, "Trả hàng"));
+            }
         }
 
         // ── Build danh sách bước ───────────────────────────────────────────────
@@ -1181,6 +1194,23 @@ public class OrderServiceImpl implements OrderService {
                 completed = false;
                 current   = false;
                 timestamp = null;
+            } else if (code == RETURN_STEP_CODE) {
+                // Bước "Trả hàng" – đã có yêu cầu nên coi như đã đạt; ghi trạng thái chi tiết vào note.
+                completed = true;
+                current   = order.getReturnRefundStatus() != null
+                        && order.getReturnRefundStatus() != OrderConstants.RETURN_STATUS_REFUNDED
+                        && order.getReturnRefundStatus() != OrderConstants.RETURN_STATUS_REJECTED;
+                timestamp = latestReturnEntry != null ? latestReturnEntry.getCreatedAt() : order.getModifiedDate();
+                note = returnStatusLabel(order.getReturnRefundStatus());
+                if (latestReturnEntry != null && latestReturnEntry.getChangedByUser() != null) {
+                    updatedByUserId   = latestReturnEntry.getChangedByUser().getId();
+                    updatedByUsername = latestReturnEntry.getChangedByUsername();
+                    if (latestReturnEntry.getChangedByUser().getUserInfo() != null) {
+                        updatedByFullName = latestReturnEntry.getChangedByUser().getUserInfo().getFullName();
+                    }
+                } else if (latestReturnEntry != null) {
+                    updatedByUsername = latestReturnEntry.getChangedByUsername();
+                }
             } else {
                 OrderHistoryEntity entry = firstEntryByStatus.get(code);
                 if (entry != null) {
@@ -1206,7 +1236,7 @@ public class OrderServiceImpl implements OrderService {
 
             steps.add(TimelineStep.builder()
                     .stepIndex(i + 1)
-                    .statusCode(code == 0 ? null : code)
+                    .statusCode(code <= 0 ? null : code)
                     .statusLabel(def.label())
                     .completed(completed)
                     .current(current)
@@ -1472,11 +1502,12 @@ public class OrderServiceImpl implements OrderService {
     private static boolean isValidAdminTransition(int from, int to) {
         switch (from) {
             case OrderConstants.STATUS_AWAITING_CONFIRM:
+                // Chỉ được hủy khi đơn còn ở "Chờ chuẩn bị".
                 return to == OrderConstants.STATUS_AWAITING_SHIPMENT || to == OrderConstants.STATUS_CANCELLED;
             case OrderConstants.STATUS_AWAITING_SHIPMENT:
-                return to == OrderConstants.STATUS_AWAITING_DELIVERY || to == OrderConstants.STATUS_CANCELLED;
+                return to == OrderConstants.STATUS_AWAITING_DELIVERY;
             case OrderConstants.STATUS_AWAITING_DELIVERY:
-                return to == OrderConstants.STATUS_COMPLETED || to == OrderConstants.STATUS_CANCELLED;
+                return to == OrderConstants.STATUS_COMPLETED;
             default:
                 return false;
         }
