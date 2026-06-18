@@ -1,5 +1,6 @@
 package com.ndh.ShopTechnology.services.rating.impl;
 
+import com.ndh.ShopTechnology.constants.RatingConstants;
 import com.ndh.ShopTechnology.dto.request.rating.CreateUserRatingRequest;
 import com.ndh.ShopTechnology.dto.request.rating.UpdateUserRatingRequest;
 import com.ndh.ShopTechnology.dto.response.rating.UserRatingResponse;
@@ -51,6 +52,7 @@ public class UserRatingServiceImpl implements UserRatingService {
                 .product(product)
                 .rating(request.getRating())
                 .comment(request.getComment())
+                .type(RatingConstants.TYPE_EXPLICIT)
                 .build();
 
         rating = userRatingRepository.save(rating);
