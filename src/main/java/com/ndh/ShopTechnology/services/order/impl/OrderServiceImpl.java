@@ -105,6 +105,7 @@ public class OrderServiceImpl implements OrderService {
     private final com.ndh.ShopTechnology.repository.OrderHistoryRepository orderHistoryRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ProductImageAttachService productImageAttachService;
+    private final com.ndh.ShopTechnology.services.notification.NotificationService notificationService;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
@@ -123,7 +124,8 @@ public class OrderServiceImpl implements OrderService {
             OrderHistoryService orderHistoryService,
             com.ndh.ShopTechnology.repository.OrderHistoryRepository orderHistoryRepository,
             ApplicationEventPublisher eventPublisher,
-            ProductImageAttachService productImageAttachService) {
+            ProductImageAttachService productImageAttachService,
+            com.ndh.ShopTechnology.services.notification.NotificationService notificationService) {
         this.orderRepository = orderRepository;
         this.orderDetailRepository = orderDetailRepository;
         this.productRepository = productRepository;
@@ -141,6 +143,7 @@ public class OrderServiceImpl implements OrderService {
         this.orderHistoryRepository = orderHistoryRepository;
         this.eventPublisher = eventPublisher;
         this.productImageAttachService = productImageAttachService;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -334,6 +337,13 @@ public class OrderServiceImpl implements OrderService {
             int vnTotalQty = vnDetails.stream().mapToInt(d -> d.getQuantity() != null ? d.getQuantity() : 0).sum();
             eventPublisher.publishEvent(new OrderCreatedEvent(this, order.getId(),
                     order.getOrderCode(), vnDetails.size(), vnTotalQty));
+            // Thông báo thanh toán VNPAY thành công.
+            notificationService.notifyUser(
+                    user,
+                    "PAYMENT",
+                    "Thanh toán thành công",
+                    "Đơn hàng " + order.getOrderCode() + " đã được thanh toán qua VNPAY thành công.",
+                    order.getId());
             return VnpaySessionFinalizeResult.CREATED;
         } catch (Exception e) {
             return VnpaySessionFinalizeResult.BUSINESS_ERROR;
@@ -1391,6 +1401,16 @@ public class OrderServiceImpl implements OrderService {
                     : "");
         orderHistoryService.logOrderStatusChange(order, current, newStatus, historyNote);
 
+        // Thông báo cho khách hàng về thay đổi trạng thái đơn.
+        notificationService.notifyUser(
+                order.getUser(),
+                "ORDER_STATUS",
+                "Cập nhật đơn hàng " + order.getOrderCode(),
+                "Đơn hàng của bạn đã chuyển sang trạng thái: " + orderStatusLabel(newStatus)
+                        + (newStatus == OrderConstants.STATUS_CANCELLED && cancelNote != null && !cancelNote.isBlank()
+                                ? ". Lý do: " + cancelNote.trim() : ""),
+                order.getId());
+
         // Khi admin hủy đơn → tự động chuyển task liên kết sang CANCELLED
         if (newStatus == OrderConstants.STATUS_CANCELLED) {
             eventPublisher.publishEvent(new OrderCancelledEvent(this, order.getId()));
@@ -1435,6 +1455,15 @@ public class OrderServiceImpl implements OrderService {
                 "Admin cập nhật trả hàng: " + returnStatusLabel(currentReturnStatus)
                         + " -> " + returnStatusLabel(newReturnStatus)
                         + (note != null && !note.isBlank() ? ". Ghi chú: " + note : ""));
+
+        // Thông báo cho khách hàng về cập nhật trả hàng / hoàn tiền.
+        notificationService.notifyUser(
+                order.getUser(),
+                "RETURN_REFUND",
+                "Cập nhật trả hàng đơn " + order.getOrderCode(),
+                "Yêu cầu trả hàng/hoàn tiền của bạn: " + returnStatusLabel(newReturnStatus)
+                        + (note != null && !note.isBlank() ? ". Ghi chú: " + note : ""),
+                order.getId());
 
         List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(orderId);
         return buildOrderResponse(order, mapDetailResponses(details));

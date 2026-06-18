@@ -16,6 +16,8 @@ public class UserRatingResponse {
     private Long id;
     private Long userId;
     private String username;
+    private String fullName;
+    private String avatar;
     private Long productId;
     private String productName;
 
@@ -45,6 +47,11 @@ public class UserRatingResponse {
         if (entity.getUser() != null) {
             builder.userId(entity.getUser().getId())
                     .username(entity.getUser().getUsername());
+            var info = entity.getUser().getUserInfo();
+            if (info != null) {
+                builder.fullName(info.getFullName())
+                        .avatar(info.getAvatar());
+            }
         }
 
         if (entity.getProduct() != null) {
