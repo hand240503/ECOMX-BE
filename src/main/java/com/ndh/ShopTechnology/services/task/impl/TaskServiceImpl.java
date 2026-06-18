@@ -81,7 +81,7 @@ public class TaskServiceImpl implements TaskService {
     @Transactional(readOnly = true)
     public KanbanBoardResponse getKanbanBoard(Long boardId) {
         KanbanBoardEntity board = boardRepository.findById(boardId)
-            .orElseThrow(() -> new NotFoundEntityException("Board khong ton tai: " + boardId));
+            .orElseThrow(() -> new NotFoundEntityException("Bảng không tồn tại: " + boardId));
 
         // Visibility: manager/order-permission → all tasks; staff → only assigned tasks
         List<TaskEntity> allTasks = resolveVisibleTasks(boardId);
@@ -245,17 +245,17 @@ public class TaskServiceImpl implements TaskService {
             orderRepository.findById(task.getSourceId()).ifPresent(order -> {
                 if (order.getStatus() == null || order.getStatus() != OrderConstants.STATUS_COMPLETED) {
                     throw new CustomApiException(HttpStatus.BAD_REQUEST,
-                        "Don hang chua duoc giao thanh cong, khong the dong task");
+                        "Đơn hàng chưa được giao thành công, không thể đóng task.");
                 }
                 Date deliveredAt = order.getCompletedAt() != null ? order.getCompletedAt() : order.getModifiedDate();
                 if (deliveredAt == null) {
                     throw new CustomApiException(HttpStatus.BAD_REQUEST,
-                        "Khong xac dinh duoc ngay giao hang");
+                        "Không xác định được ngày giao hàng.");
                 }
                 long daysSince = ChronoUnit.DAYS.between(deliveredAt.toInstant(), Instant.now());
                 if (daysSince < 7) {
                     throw new CustomApiException(HttpStatus.BAD_REQUEST,
-                        "Task chi duoc dong sau 7 ngay ke tu khi giao hang. Con " + (7 - daysSince) + " ngay.");
+                        "Task chỉ được đóng sau 7 ngày kể từ khi giao hàng. Còn " + (7 - daysSince) + " ngày.");
                 }
             });
         }
@@ -302,11 +302,11 @@ public class TaskServiceImpl implements TaskService {
         // Only manager/order-permission can assign order tasks
         if (!canManageAllTasks(actor.getUsername())) {
             throw new CustomApiException(HttpStatus.FORBIDDEN,
-                "Chi manager hoac nguoi co quyen quan ly don hang moi duoc gan task");
+                "Chỉ manager hoặc người có quyền quản lý đơn hàng mới được gán task.");
         }
         TaskEntity task = findActiveTask(taskId);
         UserEntity newAssignee = userRepository.findById(assigneeId)
-            .orElseThrow(() -> new NotFoundEntityException("User khong ton tai: " + assigneeId));
+            .orElseThrow(() -> new NotFoundEntityException("Người dùng không tồn tại: " + assigneeId));
 
         Long oldAssigneeId = task.getAssignee() != null ? task.getAssignee().getId() : null;
         task.setAssignee(newAssignee);
@@ -345,7 +345,7 @@ public class TaskServiceImpl implements TaskService {
         if (targetBoard == null) {
             targetBoard = boardRepository.findFirstByIsDefaultTrueAndIsActiveTrueAndIsDeletedFalse()
                 .map(b -> b.getId())
-                .orElseThrow(() -> new NotFoundEntityException("Khong tim thay board mac dinh"));
+                .orElseThrow(() -> new NotFoundEntityException("Không tìm thấy bảng mặc định."));
         }
 
         // All auto-generated tasks start as NEW, awaiting manager assignment
@@ -588,13 +588,13 @@ public class TaskServiceImpl implements TaskService {
     private TaskEntity findActiveTask(Long taskId) {
         return taskRepository.findById(taskId)
             .filter(t -> !t.getIsDeleted())
-            .orElseThrow(() -> new NotFoundEntityException("Task khong ton tai: " + taskId));
+            .orElseThrow(() -> new NotFoundEntityException("Task không tồn tại: " + taskId));
     }
 
     private UserEntity getCurrentUser() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findOneByUsername(username)
-            .orElseThrow(() -> new NotFoundEntityException("User khong ton tai: " + username));
+            .orElseThrow(() -> new NotFoundEntityException("Người dùng không tồn tại: " + username));
     }
 
     /**
@@ -647,7 +647,7 @@ public class TaskServiceImpl implements TaskService {
                 org.springframework.data.domain.Page<com.ndh.ShopTechnology.entities.user.UserEntity> page =
                     userRepository.findAll(org.springframework.data.domain.PageRequest.of(0, 1));
                 if (page.isEmpty()) {
-                    throw new NotFoundEntityException("Khong tim thay user nao trong he thong de lam creator");
+                    throw new NotFoundEntityException("Không tìm thấy người dùng nào trong hệ thống để làm creator.");
                 }
                 return page.getContent().get(0);
             });
