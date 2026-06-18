@@ -8,6 +8,7 @@ import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.PaginationMetadata;
 import com.ndh.ShopTechnology.dto.response.ProductSearchPaginationMetadata;
 import com.ndh.ShopTechnology.dto.response.product.ActivePromotionsResponse;
+import com.ndh.ShopTechnology.dto.response.product.BrandSummaryResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductDetailResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 import com.ndh.ShopTechnology.dto.search.ProductSearchResult;
@@ -289,10 +290,12 @@ public class ProductController {
   public ResponseEntity<APIResponse<List<ProductFullResponse>>> getProductsByCategory(
       @PathVariable Long categoryId,
       @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int limit) {
+      @RequestParam(defaultValue = "20") int limit,
+      @RequestParam(value = "brands", required = false) String brands) {
     try {
+      List<Long> brandIds = parseIdList(brands);
       Page<ProductFullResponse> productPage =
-          productService.getProductsByCategoryId(categoryId, page, limit);
+          productService.getProductsByCategoryId(categoryId, page, limit, brandIds);
       List<ProductFullResponse> products = productPage.getContent();
       PaginationMetadata metadata = PaginationMetadata.fromPage(productPage);
 
@@ -316,6 +319,53 @@ public class ProductController {
           null);
       return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
+  }
+
+  @GetMapping("/category/{categoryId}/brands")
+  public ResponseEntity<APIResponse<List<BrandSummaryResponse>>> getCategoryBrands(
+      @PathVariable Long categoryId) {
+    try {
+      List<BrandSummaryResponse> brands = productService.getBrandsByCategoryId(categoryId);
+      APIResponse<List<BrandSummaryResponse>> response = APIResponse.of(
+          true,
+          "Brands retrieved successfully",
+          brands,
+          null,
+          null);
+      return ResponseEntity.ok(response);
+    } catch (Exception e) {
+      APIResponse<List<BrandSummaryResponse>> response = APIResponse.of(
+          false,
+          "Failed to get brands: " + e.getMessage(),
+          null,
+          List.of(ErrorResponse.builder()
+              .field("categoryId")
+              .message(e.getMessage())
+              .build()),
+          null);
+      return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+  }
+
+  /** Parse "1,2,3" -> [1,2,3]; null/blank/invalid -> null (không lọc). */
+  private static List<Long> parseIdList(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    List<Long> ids = Arrays.stream(raw.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .map(s -> {
+          try {
+            return Long.parseLong(s);
+          } catch (NumberFormatException e) {
+            return null;
+          }
+        })
+        .filter(java.util.Objects::nonNull)
+        .distinct()
+        .collect(Collectors.toList());
+    return ids.isEmpty() ? null : ids;
   }
 
   @PutMapping("/{id}")

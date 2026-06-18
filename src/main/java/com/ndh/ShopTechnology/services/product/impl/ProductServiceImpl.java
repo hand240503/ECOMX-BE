@@ -41,6 +41,7 @@ import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.repository.ProductVolumePriceTierRepository;
 import com.ndh.ShopTechnology.repository.PurchaseWithPurchaseOfferRepository;
 import com.ndh.ShopTechnology.dto.response.product.ActivePromotionsResponse;
+import com.ndh.ShopTechnology.dto.response.product.BrandSummaryResponse;
 import com.ndh.ShopTechnology.entities.log.AdminActivityLogEntity;
 
 import jakarta.annotation.PostConstruct;
@@ -383,14 +384,29 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public Page<ProductFullResponse> getProductsByCategoryId(Long categoryId, int page, int limit) {
+        return getProductsByCategoryId(categoryId, page, limit, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductFullResponse> getProductsByCategoryId(Long categoryId, int page, int limit,
+            List<Long> brandIds) {
         if (!categoryRepository.existsById(categoryId)) {
             throw new NotFoundEntityException("Category not found with id: " + categoryId);
         }
         Pageable pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "id"));
         boolean isParentCategory = categoryRepository.existsByParent_Id(categoryId);
-        Page<ProductEntity> productPage = isParentCategory
-                ? productRepository.findPageByDirectChildCategoriesOf(categoryId, pageable)
-                : productRepository.findPageByCategoryId(categoryId, pageable);
+        boolean filterByBrand = brandIds != null && !brandIds.isEmpty();
+        Page<ProductEntity> productPage;
+        if (filterByBrand) {
+            productPage = isParentCategory
+                    ? productRepository.findPageByDirectChildCategoriesOfAndBrandIds(categoryId, brandIds, pageable)
+                    : productRepository.findPageByCategoryIdAndBrandIds(categoryId, brandIds, pageable);
+        } else {
+            productPage = isParentCategory
+                    ? productRepository.findPageByDirectChildCategoriesOf(categoryId, pageable)
+                    : productRepository.findPageByCategoryId(categoryId, pageable);
+        }
         List<ProductEntity> hydrated = hydrateProductsWithVariants(productPage.getContent());
         Page<ProductEntity> hydratedPage = new PageImpl<>(hydrated, pageable, productPage.getTotalElements());
         Map<Long, ProductRatingAggregate> ratings = ratingMapForIds(
@@ -400,6 +416,23 @@ public class ProductServiceImpl implements ProductService {
         Page<ProductFullResponse> mapped = hydratedPage.map(p -> toFull(p, ratings, displayUnitPrices));
         attachProductPresentation(mapped.getContent());
         return mapped;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BrandSummaryResponse> getBrandsByCategoryId(Long categoryId) {
+        if (!categoryRepository.existsById(categoryId)) {
+            throw new NotFoundEntityException("Category not found with id: " + categoryId);
+        }
+        boolean isParentCategory = categoryRepository.existsByParent_Id(categoryId);
+        List<BrandEntity> brands = isParentCategory
+                ? productRepository.findDistinctBrandsByDirectChildCategoriesOf(categoryId)
+                : productRepository.findDistinctBrandsByCategoryId(categoryId);
+        List<BrandSummaryResponse> result = new ArrayList<>(brands.size());
+        for (BrandEntity b : brands) {
+            result.add(BrandSummaryResponse.fromEntity(b, null));
+        }
+        return result;
     }
 
     @Override

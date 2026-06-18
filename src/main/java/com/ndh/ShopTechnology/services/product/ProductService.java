@@ -4,6 +4,7 @@ import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
 import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
 import com.ndh.ShopTechnology.dto.search.ProductSearchResult;
 import com.ndh.ShopTechnology.dto.response.product.ActivePromotionsResponse;
+import com.ndh.ShopTechnology.dto.response.product.BrandSummaryResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductDetailResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 
@@ -34,6 +35,12 @@ public interface ProductService {
     ProductDetailResponse getProductDetail(Long id, Long userId, String sessionId, int recommendationLimit);
 
     Page<ProductFullResponse> getProductsByCategoryId(Long categoryId, int page, int limit);
+
+    /** Như trên nhưng lọc thêm theo danh sách brandIds (null/empty = không lọc brand). */
+    Page<ProductFullResponse> getProductsByCategoryId(Long categoryId, int page, int limit, List<Long> brandIds);
+
+    /** Danh sách brand có sản phẩm trong category (theo cùng phạm vi với getProductsByCategoryId). */
+    List<BrandSummaryResponse> getBrandsByCategoryId(Long categoryId);
 
     Page<ProductFullResponse> getAdminProductsByCategoryId(Long categoryId, int page, int limit);
 

@@ -1,5 +1,6 @@
 package com.ndh.ShopTechnology.repository;
 
+import com.ndh.ShopTechnology.entities.product.BrandEntity;
 import com.ndh.ShopTechnology.entities.product.ProductEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,6 +34,23 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>, J
     @Query(value = "SELECT p FROM products p WHERE p.category.parent.id = :parentCategoryId", countQuery = "SELECT count(p) FROM products p WHERE p.category.parent.id = :parentCategoryId")
     Page<ProductEntity> findPageByDirectChildCategoriesOf(@Param("parentCategoryId") Long parentCategoryId,
             Pageable pageable);
+
+    @Query(value = "SELECT p FROM products p WHERE p.category.id = :categoryId AND p.brand.id IN :brandIds", countQuery = "SELECT count(p) FROM products p WHERE p.category.id = :categoryId AND p.brand.id IN :brandIds")
+    Page<ProductEntity> findPageByCategoryIdAndBrandIds(@Param("categoryId") Long categoryId,
+            @Param("brandIds") Collection<Long> brandIds, Pageable pageable);
+
+    @Query(value = "SELECT p FROM products p WHERE p.category.parent.id = :parentCategoryId AND p.brand.id IN :brandIds", countQuery = "SELECT count(p) FROM products p WHERE p.category.parent.id = :parentCategoryId AND p.brand.id IN :brandIds")
+    Page<ProductEntity> findPageByDirectChildCategoriesOfAndBrandIds(
+            @Param("parentCategoryId") Long parentCategoryId,
+            @Param("brandIds") Collection<Long> brandIds, Pageable pageable);
+
+    /** Distinct brands có sản phẩm trực tiếp trong category (lá). */
+    @Query("SELECT DISTINCT p.brand FROM products p WHERE p.category.id = :categoryId AND p.brand IS NOT NULL ORDER BY p.brand.name ASC")
+    List<BrandEntity> findDistinctBrandsByCategoryId(@Param("categoryId") Long categoryId);
+
+    /** Distinct brands có sản phẩm trong các danh mục con trực tiếp của parent. */
+    @Query("SELECT DISTINCT p.brand FROM products p WHERE p.category.parent.id = :parentCategoryId AND p.brand IS NOT NULL ORDER BY p.brand.name ASC")
+    List<BrandEntity> findDistinctBrandsByDirectChildCategoriesOf(@Param("parentCategoryId") Long parentCategoryId);
 
     @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
     List<ProductEntity> findByIsFeaturedTrue(Pageable pageable);
