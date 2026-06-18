@@ -22,16 +22,27 @@ public interface UserRatingRepository extends JpaRepository<UserRatingEntity, Lo
 
     List<UserRatingEntity> findByRating(Double rating);
 
-    @Query("SELECT AVG(u.rating) FROM UserRatingEntity u WHERE u.product.id = :productId")
+    // ── Hiển thị/đếm: CHỈ explicit (type = 0 hoặc NULL), thang sao 1–5 ──
+    // (loại implicit type=1 thang 0–10 do recommend builder sinh)
+
+    /** Chỉ đánh giá explicit của 1 user (loại implicit do builder sinh). */
+    @Query("SELECT u FROM UserRatingEntity u WHERE u.user.id = :userId AND (u.type = 0 OR u.type IS NULL)")
+    List<UserRatingEntity> findExplicitByUserId(@Param("userId") Long userId);
+
+    /** Chỉ đánh giá explicit của 1 sản phẩm. */
+    @Query("SELECT u FROM UserRatingEntity u WHERE u.product.id = :productId AND (u.type = 0 OR u.type IS NULL)")
+    List<UserRatingEntity> findExplicitByProductId(@Param("productId") Long productId);
+
+    @Query("SELECT AVG(u.rating) FROM UserRatingEntity u WHERE u.product.id = :productId AND (u.type = 0 OR u.type IS NULL)")
     Double getAverageRatingByProductId(@Param("productId") Long productId);
 
-    @Query("SELECT COUNT(u) FROM UserRatingEntity u WHERE u.product.id = :productId")
+    @Query("SELECT COUNT(u) FROM UserRatingEntity u WHERE u.product.id = :productId AND (u.type = 0 OR u.type IS NULL)")
     Long countByProductId(@Param("productId") Long productId);
 
-    @Query("SELECT COUNT(u) FROM UserRatingEntity u WHERE u.product.id = :productId AND u.rating = :rating")
+    @Query("SELECT COUNT(u) FROM UserRatingEntity u WHERE u.product.id = :productId AND u.rating = :rating AND (u.type = 0 OR u.type IS NULL)")
     Long countByProductIdAndRating(@Param("productId") Long productId, @Param("rating") Double rating);
 
     @Query("SELECT u.product.id AS productId, AVG(u.rating) AS averageRating, COUNT(u) AS ratingCount "
-            + "FROM UserRatingEntity u WHERE u.product.id IN :ids GROUP BY u.product.id")
+            + "FROM UserRatingEntity u WHERE u.product.id IN :ids AND (u.type = 0 OR u.type IS NULL) GROUP BY u.product.id")
     List<ProductRatingAggregate> aggregateByProductIdIn(@Param("ids") Collection<Long> ids);
 }

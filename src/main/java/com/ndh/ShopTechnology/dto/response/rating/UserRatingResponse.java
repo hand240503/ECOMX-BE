@@ -22,7 +22,10 @@ public class UserRatingResponse {
     @JsonProperty("l_description")
     private String lDescription;
 
+    /** Thang sao 1–5 (explicit). */
     private Double rating;
+    /** 0/null = explicit (người dùng chấm), 1 = implicit (builder sinh). */
+    private Integer type;
     private String comment;
     private Date createdDate;
     private Date modifiedDate;
@@ -34,6 +37,7 @@ public class UserRatingResponse {
         UserRatingResponseBuilder builder = UserRatingResponse.builder()
                 .id(entity.getId())
                 .rating(entity.getRating())
+                .type(entity.getType())
                 .comment(entity.getComment())
                 .createdDate(entity.getCreatedDate())
                 .modifiedDate(entity.getModifiedDate());

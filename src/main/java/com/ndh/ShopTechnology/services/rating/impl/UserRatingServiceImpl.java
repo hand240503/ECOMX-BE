@@ -33,27 +33,28 @@ public class UserRatingServiceImpl implements UserRatingService {
         this.productRepository = productRepository;
     }
 
+    /**
+     * Tạo/ghi đè đánh giá explicit. Mỗi user chỉ có 1 dòng cho mỗi sản phẩm
+     * (ràng buộc unique user_id+product_id) — nếu đã tồn tại (kể cả dòng implicit
+     * type=1 do builder sinh) thì GHI ĐÈ thành explicit (type=0), đúng tinh thần
+     * "explicit rating ghi đè implicit". Lưu nguyên thang sao 1–5.
+     */
     @Override
     @Transactional
     public UserRatingResponse createRating(CreateUserRatingRequest request) {
-        userRatingRepository.findByUserIdAndProductId(request.getUserId(), request.getProductId())
-                .ifPresent(rating -> {
-                    throw new IllegalArgumentException("User has already rated this product. Use update instead.");
-                });
-
         UserEntity user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new NotFoundEntityException("User not found with id: " + request.getUserId()));
 
         ProductEntity product = productRepository.findById(request.getProductId())
                 .orElseThrow(() -> new NotFoundEntityException("Product not found with id: " + request.getProductId()));
 
-        UserRatingEntity rating = UserRatingEntity.builder()
-                .user(user)
-                .product(product)
-                .rating(request.getRating())
-                .comment(request.getComment())
-                .type(RatingConstants.TYPE_EXPLICIT)
-                .build();
+        UserRatingEntity rating = userRatingRepository
+                .findByUserIdAndProductId(request.getUserId(), request.getProductId())
+                .orElseGet(() -> UserRatingEntity.builder().user(user).product(product).build());
+
+        rating.setRating(request.getRating());
+        rating.setComment(request.getComment());
+        rating.setType(RatingConstants.TYPE_EXPLICIT);
 
         rating = userRatingRepository.save(rating);
         return UserRatingResponse.fromEntity(rating);
@@ -79,7 +80,7 @@ public class UserRatingServiceImpl implements UserRatingService {
         if (!userRepository.existsById(userId)) {
             throw new NotFoundEntityException("User not found with id: " + userId);
         }
-        List<UserRatingEntity> ratings = userRatingRepository.findByUserId(userId);
+        List<UserRatingEntity> ratings = userRatingRepository.findExplicitByUserId(userId);
         return ratings.stream()
                 .map(UserRatingResponse::fromEntity)
                 .collect(Collectors.toList());
@@ -90,7 +91,7 @@ public class UserRatingServiceImpl implements UserRatingService {
         if (!productRepository.existsById(productId)) {
             throw new NotFoundEntityException("Product not found with id: " + productId);
         }
-        List<UserRatingEntity> ratings = userRatingRepository.findByProductId(productId);
+        List<UserRatingEntity> ratings = userRatingRepository.findExplicitByProductId(productId);
         return ratings.stream()
                 .map(UserRatingResponse::fromEntity)
                 .collect(Collectors.toList());
@@ -117,6 +118,9 @@ public class UserRatingServiceImpl implements UserRatingService {
         if (request.getComment() != null) {
             rating.setComment(request.getComment());
         }
+
+        // Mọi thao tác sửa qua API đều là explicit → đảm bảo type=0 (ghi đè nếu trước đó là implicit).
+        rating.setType(RatingConstants.TYPE_EXPLICIT);
 
         rating = userRatingRepository.save(rating);
         return UserRatingResponse.fromEntity(rating);
