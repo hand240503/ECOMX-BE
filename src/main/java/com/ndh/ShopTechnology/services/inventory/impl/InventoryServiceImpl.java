@@ -192,6 +192,15 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<InventoryStockResponse> listStocks(String q) {
+        String key = (q != null && !q.isBlank()) ? q.trim() : null;
+        return variantRepository.searchForStock(key).stream()
+                .map(this::toStockResponseFromEntity)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<InventoryLedgerResponse> getLedger(Long variantId) {
         getVariantOrThrow(variantId);
         return ledgerRepository.findByVariant_IdOrderByIdDesc(variantId).stream()
@@ -290,6 +299,24 @@ public class InventoryServiceImpl implements InventoryService {
                 .skuCode(v.getSkuCode())
                 .productId(p != null ? p.getId() : null)
                 .productName(p != null ? p.getProductName() : null)
+                .optionValues(v.getOptionValues())
+                .onHand(onHand)
+                .reserved(reserved)
+                .available(onHand - reserved)
+                .build();
+    }
+
+    /** Map trực tiếp từ entity (dùng cho list, read-only — onHand/reserved đã fresh). */
+    private InventoryStockResponse toStockResponseFromEntity(ProductVariantEntity v) {
+        ProductEntity p = v.getProduct();
+        int onHand = v.getOnHand() != null ? v.getOnHand() : 0;
+        int reserved = v.getReserved() != null ? v.getReserved() : 0;
+        return InventoryStockResponse.builder()
+                .variantId(v.getId())
+                .skuCode(v.getSkuCode())
+                .productId(p != null ? p.getId() : null)
+                .productName(p != null ? p.getProductName() : null)
+                .optionValues(v.getOptionValues())
                 .onHand(onHand)
                 .reserved(reserved)
                 .available(onHand - reserved)

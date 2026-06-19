@@ -1,6 +1,7 @@
 package com.ndh.ShopTechnology.controller.admin;
 
 import com.ndh.ShopTechnology.constants.PermissionCode;
+
 import com.ndh.ShopTechnology.dto.request.inventory.InventoryAdjustRequest;
 import com.ndh.ShopTechnology.dto.request.inventory.InventoryImportRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
@@ -26,6 +27,15 @@ import java.util.Map;
 public class AdminInventoryController {
 
     private final InventoryService inventoryService;
+
+    /** Danh sách tồn kho tất cả biến thể (lọc theo tên SP / SKU qua tham số q). */
+    @GetMapping("/stocks")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
+    public ResponseEntity<APIResponse<List<InventoryStockResponse>>> listStocks(
+            @RequestParam(value = "q", required = false) String q) {
+        List<InventoryStockResponse> data = inventoryService.listStocks(q);
+        return ResponseEntity.ok(APIResponse.of(true, "OK", data, null, Map.of("count", data.size())));
+    }
 
     /** Xem tồn hiện tại của một biến thể. */
     @GetMapping("/variants/{variantId}")

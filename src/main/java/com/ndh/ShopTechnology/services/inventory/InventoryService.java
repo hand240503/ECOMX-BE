@@ -50,4 +50,7 @@ public interface InventoryService {
 
     /** Lịch sử biến động kho của một biến thể. */
     List<InventoryLedgerResponse> getLedger(Long variantId);
+
+    /** Danh sách tồn kho tất cả biến thể (lọc theo tên sản phẩm / SKU; q rỗng = tất cả). */
+    List<InventoryStockResponse> listStocks(String q);
 }

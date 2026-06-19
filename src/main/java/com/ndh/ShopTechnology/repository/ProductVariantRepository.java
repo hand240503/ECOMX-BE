@@ -125,4 +125,15 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariantEn
              WHERE v.id = :id
             """)
     int setOnHand(@Param("id") Long id, @Param("value") int value);
+
+    /** Danh sách biến thể kèm sản phẩm để hiển thị tồn kho; lọc theo tên SP hoặc SKU (q null = tất cả). */
+    @Query("""
+            SELECT v FROM ProductVariant v
+            JOIN FETCH v.product p
+            WHERE (:q IS NULL
+                   OR LOWER(p.productName) LIKE LOWER(CONCAT('%', :q, '%'))
+                   OR LOWER(v.skuCode) LIKE LOWER(CONCAT('%', :q, '%')))
+            ORDER BY p.id ASC, v.sortOrder ASC, v.id ASC
+            """)
+    List<ProductVariantEntity> searchForStock(@Param("q") String q);
 }
