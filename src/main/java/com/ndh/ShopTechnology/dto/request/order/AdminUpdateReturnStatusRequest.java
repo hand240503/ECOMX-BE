@@ -18,4 +18,10 @@ public class AdminUpdateReturnStatusRequest {
     private Integer returnStatus;
 
     private String note;
+
+    /**
+     * Khi REFUNDED: true = hàng hoàn còn tốt → nhập lại tồn bán được (mặc định);
+     * false = hàng lỗi → chỉ ghi sổ kho loại, không cộng tồn.
+     */
+    private Boolean restockToSellable = true;
 }

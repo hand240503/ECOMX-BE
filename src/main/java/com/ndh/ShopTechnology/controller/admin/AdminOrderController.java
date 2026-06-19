@@ -66,7 +66,9 @@ public class AdminOrderController {
     public ResponseEntity<APIResponse<OrderResponse>> updateReturnStatus(
             @PathVariable Long id,
             @Valid @RequestBody AdminUpdateReturnStatusRequest request) {
-        OrderResponse order = orderService.adminUpdateReturnStatus(id, request.getReturnStatus(), request.getNote());
+        boolean restockToSellable = request.getRestockToSellable() == null || request.getRestockToSellable();
+        OrderResponse order = orderService.adminUpdateReturnStatus(
+                id, request.getReturnStatus(), request.getNote(), restockToSellable);
         return ResponseEntity.ok(APIResponse.of(
                 true,
                 "Cập nhật trạng thái trả hàng thành công",

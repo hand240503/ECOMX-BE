@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -103,4 +104,15 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>, J
     Optional<ProductEntity> findByProductName(String productName);
 
     List<ProductEntity> findByStatus(Integer status);
+
+    /** Cộng số lượng đã bán (khi đơn hoàn thành). */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE products p SET p.soldCount = COALESCE(p.soldCount, 0) + :qty WHERE p.id = :id")
+    int incrementSoldCount(@Param("id") Long id, @Param("qty") long qty);
+
+    /** Trừ số lượng đã bán (khi đơn được hoàn tiền), không cho âm. */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE products p SET p.soldCount = CASE WHEN COALESCE(p.soldCount, 0) >= :qty "
+            + "THEN COALESCE(p.soldCount, 0) - :qty ELSE 0 END WHERE p.id = :id")
+    int decrementSoldCount(@Param("id") Long id, @Param("qty") long qty);
 }

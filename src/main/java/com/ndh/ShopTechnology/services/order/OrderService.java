@@ -53,5 +53,5 @@ public interface OrderService {
 
     OrderResponse adminUpdateOrderStatus(Long orderId, Integer newStatus, String cancelNote);
 
-    OrderResponse adminUpdateReturnStatus(Long orderId, Integer newReturnStatus, String note);
+    OrderResponse adminUpdateReturnStatus(Long orderId, Integer newReturnStatus, String note, boolean restockToSellable);
 }

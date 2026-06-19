@@ -106,6 +106,7 @@ public class OrderServiceImpl implements OrderService {
     private final ApplicationEventPublisher eventPublisher;
     private final ProductImageAttachService productImageAttachService;
     private final com.ndh.ShopTechnology.services.notification.NotificationService notificationService;
+    private final com.ndh.ShopTechnology.services.inventory.InventoryService inventoryService;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
@@ -125,7 +126,8 @@ public class OrderServiceImpl implements OrderService {
             com.ndh.ShopTechnology.repository.OrderHistoryRepository orderHistoryRepository,
             ApplicationEventPublisher eventPublisher,
             ProductImageAttachService productImageAttachService,
-            com.ndh.ShopTechnology.services.notification.NotificationService notificationService) {
+            com.ndh.ShopTechnology.services.notification.NotificationService notificationService,
+            com.ndh.ShopTechnology.services.inventory.InventoryService inventoryService) {
         this.orderRepository = orderRepository;
         this.orderDetailRepository = orderDetailRepository;
         this.productRepository = productRepository;
@@ -144,6 +146,7 @@ public class OrderServiceImpl implements OrderService {
         this.eventPublisher = eventPublisher;
         this.productImageAttachService = productImageAttachService;
         this.notificationService = notificationService;
+        this.inventoryService = inventoryService;
     }
 
     @Override
@@ -215,6 +218,8 @@ public class OrderServiceImpl implements OrderService {
         }
 
         if (OrderConstants.PM_CODE_VNPAY.equalsIgnoreCase(pmCode)) {
+            // Kiểm tra tồn trước khi cho khách sang VNPAY (best-effort; chưa giữ chỗ, sẽ giữ khi thanh toán OK).
+            validateDraftAvailability(draft.detailsToSave());
             String json;
             try {
                 json = objectMapper.writeValueAsString(request);
@@ -881,6 +886,26 @@ public class OrderServiceImpl implements OrderService {
         return persistOrderFromDraft(draft, currentUser, markPaid, paidAt, null, null, null);
     }
 
+    /** Kiểm tra còn đủ hàng bán (available) cho các dòng trong draft. Ném CONFLICT nếu thiếu. */
+    private void validateDraftAvailability(List<OrderDetailEntity> details) {
+        if (details == null) return;
+        for (OrderDetailEntity d : details) {
+            int qty = d.getQuantity() != null ? d.getQuantity() : 0;
+            if (qty <= 0 || d.getProductVariant() == null || d.getProductVariant().getId() == null) continue;
+            ProductVariantEntity v = productVariantRepository
+                    .findById(d.getProductVariant().getId())
+                    .orElse(null);
+            if (v == null) continue;
+            if (v.getAvailable() < qty) {
+                String name = v.getProduct() != null && v.getProduct().getProductName() != null
+                        ? v.getProduct().getProductName() : ("#" + v.getId());
+                throw new CustomApiException(HttpStatus.CONFLICT,
+                        "Không đủ hàng trong kho cho sản phẩm '" + name + "'. Cần " + qty
+                                + ", còn lại " + v.getAvailable() + ".");
+            }
+        }
+    }
+
     private OrderEntity persistOrderFromDraft(
             OrderPlaceDraft draft,
             UserEntity currentUser,
@@ -951,6 +976,11 @@ public class OrderServiceImpl implements OrderService {
                     .quantity(qty)
                     .build());
         }
+
+        // Đồng bộ kho: GIỮ hàng cho đơn vừa tạo.
+        // - COD (chưa thanh toán): không đủ tồn → ném CONFLICT, rollback việc tạo đơn (chống bán âm).
+        // - VNPAY (đã thanh toán): giữ chỗ best-effort, cho phép oversell, không từ chối đơn đã trả tiền.
+        inventoryService.reserveForOrder(detailsToSave, !markPaid);
 
         return order;
     }
@@ -1339,6 +1369,8 @@ public class OrderServiceImpl implements OrderService {
         eventPublisher.publishEvent(new OrderCancelledEvent(this, order.getId()));
 
         List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(order.getId());
+        // Đồng bộ kho: nhả hàng đã giữ khi khách hủy đơn.
+        inventoryService.releaseForOrder(details);
         return buildOrderResponse(order, mapDetailResponses(details));
     }
 
@@ -1447,12 +1479,31 @@ public class OrderServiceImpl implements OrderService {
         }
 
         List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(orderId);
+        // Đồng bộ kho theo trạng thái mới.
+        if (newStatus == OrderConstants.STATUS_COMPLETED) {
+            // Xuất kho thật + cộng soldCount khi đơn hoàn thành.
+            increaseSoldCount(details);
+            inventoryService.commitSaleForOrder(details);
+        } else if (newStatus == OrderConstants.STATUS_CANCELLED) {
+            // Nhả hàng đã giữ khi admin hủy đơn.
+            inventoryService.releaseForOrder(details);
+        }
         return buildOrderResponse(order, mapDetailResponses(details));
+    }
+
+    /** Cộng soldCount cho từng sản phẩm khi đơn hoàn thành (atomic, idempotency dựa trên việc gọi 1 lần ở COMPLETED). */
+    private void increaseSoldCount(List<OrderDetailEntity> details) {
+        if (details == null) return;
+        for (OrderDetailEntity d : details) {
+            int qty = d.getQuantity() != null ? d.getQuantity() : 0;
+            if (qty <= 0 || d.getProduct() == null || d.getProduct().getId() == null) continue;
+            productRepository.incrementSoldCount(d.getProduct().getId(), qty);
+        }
     }
 
     @Override
     @Transactional
-    public OrderResponse adminUpdateReturnStatus(Long orderId, Integer newReturnStatus, String note) {
+    public OrderResponse adminUpdateReturnStatus(Long orderId, Integer newReturnStatus, String note, boolean restockToSellable) {
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new NotFoundEntityException("Không tìm thấy đơn hàng id=" + orderId));
 
@@ -1496,7 +1547,22 @@ public class OrderServiceImpl implements OrderService {
                 order.getId());
 
         List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(orderId);
+        // Đồng bộ kho: khi đã HOÀN TIỀN → nhập lại kho (nếu hàng tốt) và trừ soldCount.
+        if (newReturnStatus == OrderConstants.RETURN_STATUS_REFUNDED) {
+            inventoryService.restockForOrder(details, restockToSellable);
+            decreaseSoldCount(details);
+        }
         return buildOrderResponse(order, mapDetailResponses(details));
+    }
+
+    /** Trừ soldCount khi đơn được hoàn tiền (đảo lại lượng bán). */
+    private void decreaseSoldCount(List<OrderDetailEntity> details) {
+        if (details == null) return;
+        for (OrderDetailEntity d : details) {
+            int qty = d.getQuantity() != null ? d.getQuantity() : 0;
+            if (qty <= 0 || d.getProduct() == null || d.getProduct().getId() == null) continue;
+            productRepository.decrementSoldCount(d.getProduct().getId(), qty);
+        }
     }
 
     private static boolean isValidAdminTransition(int from, int to) {

@@ -24,6 +24,8 @@ public class ProductVariantEntity extends BaseEntity {
     public static final String COL_OPTION_VALUES = "option_values";
     public static final String COL_ACTIVE = "active";
     public static final String COL_SORT_ORDER = "sort_order";
+    public static final String COL_ON_HAND = "on_hand";
+    public static final String COL_RESERVED = "reserved";
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = COL_PRODUCT_ID, nullable = false)
@@ -44,6 +46,24 @@ public class ProductVariantEntity extends BaseEntity {
     @Column(name = COL_SORT_ORDER, nullable = false)
     @Builder.Default
     private Integer sortOrder = 0;
+
+    /** Số lượng tồn kho thực tế (đã nhập, chưa trừ khi bán). */
+    @Column(name = COL_ON_HAND, nullable = false)
+    @Builder.Default
+    private Integer onHand = 0;
+
+    /** Số lượng đang được giữ cho các đơn chưa hoàn thành (chưa xuất kho). */
+    @Column(name = COL_RESERVED, nullable = false)
+    @Builder.Default
+    private Integer reserved = 0;
+
+    /** Số lượng còn bán được = onHand - reserved. */
+    @Transient
+    public int getAvailable() {
+        int oh = onHand != null ? onHand : 0;
+        int rs = reserved != null ? reserved : 0;
+        return oh - rs;
+    }
 
     @OneToMany(mappedBy = "variant", cascade = CascadeType.ALL, orphanRemoval = true)
     @BatchSize(size = 32)
