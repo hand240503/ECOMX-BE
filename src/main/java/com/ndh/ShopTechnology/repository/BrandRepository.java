@@ -7,11 +7,16 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface BrandRepository extends JpaRepository<BrandEntity, Long> {
 
     List<BrandEntity> findAllByOrderByIdAsc();
+
+    Optional<BrandEntity> findFirstByCodeIgnoreCase(String code);
+
+    Optional<BrandEntity> findFirstByNameIgnoreCase(String name);
 
     boolean existsByCodeIgnoreCase(String code);
 

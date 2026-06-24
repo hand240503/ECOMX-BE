@@ -4,13 +4,18 @@ import com.ndh.ShopTechnology.constants.PermissionCode;
 import com.ndh.ShopTechnology.dto.request.unit.CreateUnitRequest;
 import com.ndh.ShopTechnology.dto.request.unit.UpdateUnitRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
+import com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse;
 import com.ndh.ShopTechnology.dto.response.unit.UnitResponse;
+import com.ndh.ShopTechnology.services.unit.UnitImportService;
 import com.ndh.ShopTechnology.services.unit.UnitService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -18,10 +23,15 @@ import java.util.List;
 @RequestMapping("${api.prefix}/admin/units")
 public class AdminUnitController {
 
-    private final UnitService unitService;
+    private static final String XLSX_MIME =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-    public AdminUnitController(UnitService unitService) {
+    private final UnitService unitService;
+    private final UnitImportService unitImportService;
+
+    public AdminUnitController(UnitService unitService, UnitImportService unitImportService) {
         this.unitService = unitService;
+        this.unitImportService = unitImportService;
     }
 
     @GetMapping
@@ -57,5 +67,27 @@ public class AdminUnitController {
     public ResponseEntity<APIResponse<Void>> delete(@PathVariable long id) {
         unitService.delete(id);
         return ResponseEntity.ok(APIResponse.of(true, "Deleted", null, null, null));
+    }
+
+    /** Import / upsert đơn vị tính từ file Excel/CSV/TXT (multipart 'file'). */
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
+    public ResponseEntity<APIResponse<CatalogImportResponse>> importUnits(
+            @RequestParam("file") MultipartFile file) {
+        CatalogImportResponse result = unitImportService.importUnits(file);
+        String msg = String.format("Thêm %d, cập nhật %d, bỏ qua %d, lỗi %d",
+                result.getCreatedCount(), result.getUpdatedCount(),
+                result.getSkippedCount(), result.getFailureCount());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
+    }
+
+    /** Tải file Excel mẫu import đơn vị tính. */
+    @GetMapping("/import/template")
+    @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
+    public ResponseEntity<byte[]> unitTemplate() {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"mau_import_don_vi_tinh.xlsx\"")
+                .contentType(MediaType.parseMediaType(XLSX_MIME))
+                .body(unitImportService.buildTemplateXlsx());
     }
 }

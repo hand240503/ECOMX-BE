@@ -10,6 +10,8 @@ import com.ndh.ShopTechnology.dto.response.order.OrderTimelineResponse;
 import com.ndh.ShopTechnology.dto.response.order.VnpayPendingTransactionResponse;
 import com.ndh.ShopTechnology.dto.response.order.VnpayTransactionStatusResponse;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import java.util.List;
 
 public interface OrderService {
@@ -31,7 +33,7 @@ public interface OrderService {
      */
     OrderTimelineResponse getMyOrderTimeline(Long orderId);
 
-    OrderResponse requestReturn(Long orderId, OrderReturnRequest request);
+    OrderResponse requestReturn(Long orderId, OrderReturnRequest request, List<MultipartFile> mediaFiles);
 
     OrderResponse cancelMyOrder(Long orderId, String cancelReason);
 
@@ -54,4 +56,6 @@ public interface OrderService {
     OrderResponse adminUpdateOrderStatus(Long orderId, Integer newStatus, String cancelNote);
 
     OrderResponse adminUpdateReturnStatus(Long orderId, Integer newReturnStatus, String note, boolean restockToSellable);
+
+    OrderResponse adminDeleteReturnMedia(Long orderId, Long mediaId);
 }

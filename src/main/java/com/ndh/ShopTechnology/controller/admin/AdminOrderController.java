@@ -76,4 +76,18 @@ public class AdminOrderController {
                 null,
                 null));
     }
+
+    @DeleteMapping("/{id}/return-media/{mediaId}")
+    @PreAuthorize("@perm.check(" + PermissionCode.UPDATE_ORDER + ")")
+    public ResponseEntity<APIResponse<OrderResponse>> deleteReturnMedia(
+            @PathVariable Long id,
+            @PathVariable Long mediaId) {
+        OrderResponse order = orderService.adminDeleteReturnMedia(id, mediaId);
+        return ResponseEntity.ok(APIResponse.of(
+                true,
+                "Đã xoá ảnh / video bằng chứng",
+                order,
+                null,
+                null));
+    }
 }

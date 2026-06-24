@@ -7,9 +7,13 @@ import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.PaginationMetadata;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
+import com.ndh.ShopTechnology.dto.response.product.ProductImportResponse;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
+import com.ndh.ShopTechnology.services.product.ProductExportService;
+import com.ndh.ShopTechnology.services.product.ProductImportService;
 import com.ndh.ShopTechnology.services.product.ProductService;
+import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -29,9 +33,21 @@ import org.springframework.web.multipart.MultipartFile;
 public class AdminProductController {
 
     private final ProductService productService;
+    private final ProductImportService productImportService;
+    private final ProductExportService productExportService;
+    private final com.ndh.ShopTechnology.services.product.ProductFlagImportService productFlagImportService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
-    public AdminProductController(ProductService productService) {
+    public AdminProductController(ProductService productService,
+                                  ProductImportService productImportService,
+                                  ProductExportService productExportService,
+                                  com.ndh.ShopTechnology.services.product.ProductFlagImportService productFlagImportService,
+                                  com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
         this.productService = productService;
+        this.productImportService = productImportService;
+        this.productExportService = productExportService;
+        this.productFlagImportService = productFlagImportService;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping("/by-ids")
@@ -136,6 +152,133 @@ public class AdminProductController {
                     null);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
+    }
+
+    /**
+     * Xem trước import (dry-run): KHÔNG ghi CSDL. Trả về từng sản phẩm kèm hành động mặc định
+     * (CẬP NHẬT nếu đã tồn tại theo SKU/tên, ngược lại THÊM MỚI) + khóa để FE chỉnh chọn.
+     */
+    @PostMapping(value = "/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(100001)")
+    public ResponseEntity<APIResponse<ProductImportResponse>> previewImport(
+            @RequestParam("file") MultipartFile file) {
+        ProductImportResponse result = productImportService.previewProducts(file);
+        String msg = String.format("Sẽ thêm mới %d, cập nhật %d, lỗi %d",
+                result.getCreatedCount(), result.getUpdatedCount(), result.getFailureCount());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
+    }
+
+    /**
+     * Import sản phẩm hàng loạt từ file Excel (.xlsx) hoặc CSV/TXT.
+     * Phần `file` là multipart; `actions` (tùy chọn) là JSON {"<key>":"CREATE|UPDATE"} chọn theo từng SP.
+     * Mỗi sản phẩm lưu transaction riêng; dòng lỗi được báo cáo lại.
+     */
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(100001)")
+    public ResponseEntity<APIResponse<ProductImportResponse>> importProducts(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "actions", required = false) String actionsJson) {
+        java.util.Map<String, String> actions = null;
+        if (actionsJson != null && !actionsJson.isBlank()) {
+            try {
+                actions = objectMapper.readValue(actionsJson,
+                        new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, String>>() {});
+            } catch (Exception e) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST, "Tham số 'actions' không hợp lệ (JSON)");
+            }
+        }
+        ProductImportResponse result = productImportService.importProducts(file, actions);
+        String msg = String.format("Đã thêm mới %d, cập nhật %d, lỗi %d (%d biến thể)",
+                result.getCreatedCount(), result.getUpdatedCount(), result.getFailureCount(),
+                result.getCreatedVariantCount());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
+    }
+
+    /** Tải file Excel mẫu để điền dữ liệu import. */
+    @GetMapping(value = "/import/template")
+    @PreAuthorize("@perm.check(100001)")
+    public ResponseEntity<byte[]> downloadImportTemplate() {
+        byte[] bytes = productImportService.buildTemplateXlsx();
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"mau_import_san_pham.xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    // ── Đánh dấu Nổi bật / Hot-sale bằng Excel ───────────────────────────────
+
+    private static final String XLSX_MIME =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    /** Import đánh dấu sản phẩm NỔI BẬT từ file (multipart 'file'). */
+    @PostMapping(value = "/featured/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(100001)")
+    public ResponseEntity<APIResponse<com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse>> importFeatured(
+            @RequestParam("file") MultipartFile file) {
+        var result = productFlagImportService.importFeatured(file);
+        String msg = String.format("Đã đánh dấu nổi bật %d, bỏ qua %d, lỗi %d",
+                result.getCreatedCount(), result.getSkippedCount(), result.getFailureCount());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
+    }
+
+    /** Import đánh dấu sản phẩm HOT-SALE từ file (multipart 'file'). */
+    @PostMapping(value = "/hot-sale/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(100001)")
+    public ResponseEntity<APIResponse<com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse>> importHotSale(
+            @RequestParam("file") MultipartFile file) {
+        var result = productFlagImportService.importHotSale(file);
+        String msg = String.format("Đã đánh dấu hot-sale %d, bỏ qua %d, lỗi %d",
+                result.getCreatedCount(), result.getSkippedCount(), result.getFailureCount());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
+    }
+
+    /** File Excel mẫu cho import nổi bật / hot-sale (cột sku + product_id). */
+    @GetMapping(value = {"/featured/import/template", "/hot-sale/import/template"})
+    @PreAuthorize("@perm.check(100001)")
+    public ResponseEntity<byte[]> downloadFlagTemplate() {
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"mau_import_noi_bat_hot_sale.xlsx\"")
+                .contentType(MediaType.parseMediaType(XLSX_MIME))
+                .body(productFlagImportService.buildTemplateXlsx());
+    }
+
+    /**
+     * Xuất toàn bộ sản phẩm (danh mục, thương hiệu, biến thể, giá, đơn vị) ra Excel,
+     * tiêu đề theo tên cột CSDL.
+     */
+    @GetMapping(value = "/export")
+    @PreAuthorize("@perm.check(100002)")
+    public ResponseEntity<byte[]> exportProducts() {
+        byte[] bytes = productExportService.exportProductsXlsx();
+        String fileName = "san_pham_export_"
+                + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date()) + ".xlsx";
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + fileName + "\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    /**
+     * Xuất các sản phẩm CHƯA HOÀN THIỆN ra Excel: chưa có biến thể, hoặc có biến thể nhưng
+     * chưa có giá (cột giá/đơn vị để trống để rà soát & bổ sung). Quyền 100002.
+     */
+    @GetMapping(value = "/export/incomplete")
+    @PreAuthorize("@perm.check(100002)")
+    public ResponseEntity<byte[]> exportIncompleteProducts() {
+        byte[] bytes = productExportService.exportIncompleteProductsXlsx();
+        String fileName = "san_pham_chua_hoan_thien_"
+                + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date()) + ".xlsx";
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + fileName + "\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
     }
 
     @GetMapping

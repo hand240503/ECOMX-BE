@@ -35,6 +35,8 @@ public class OrderResponse {
     private Date completedAt;
     private PaymentMethodSummaryResponse paymentMethod;
     private List<OrderDetailResponse> orderDetails;
+    /** Ảnh / video bằng chứng khách hàng gửi kèm yêu cầu trả hàng (rỗng nếu không có). */
+    private List<OrderReturnMediaResponse> returnMedia;
     private Date createdDate;
     private Date modifiedDate;
 }

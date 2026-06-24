@@ -14,7 +14,9 @@ import com.ndh.ShopTechnology.dto.response.order.VnpayTransactionStatusResponse;
 import com.ndh.ShopTechnology.services.order.OrderService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -137,12 +139,26 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @PostMapping("/{id}/return-request")
+    /**
+     * Yêu cầu trả hàng / hoàn tiền. Nhận multipart để kèm ảnh / video bằng chứng.
+     * Các field text đều tuỳ chọn; `files` là danh sách ảnh / video (có thể rỗng).
+     */
+    @PostMapping(value = "/{id}/return-request", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<APIResponse<OrderResponse>> requestReturn(
             @PathVariable Long id,
-            @Valid @RequestBody(required = false) OrderReturnRequest request) {
-        OrderReturnRequest body = request != null ? request : new OrderReturnRequest();
-        OrderResponse data = orderService.requestReturn(id, body);
+            @RequestParam(value = "reason", required = false) String reason,
+            @RequestParam(value = "refundMethod", required = false) String refundMethod,
+            @RequestParam(value = "bankAccountNumber", required = false) String bankAccountNumber,
+            @RequestParam(value = "bankName", required = false) String bankName,
+            @RequestParam(value = "bankEmail", required = false) String bankEmail,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files) {
+        OrderReturnRequest body = new OrderReturnRequest();
+        body.setReason(reason);
+        body.setRefundMethod(refundMethod);
+        body.setBankAccountNumber(bankAccountNumber);
+        body.setBankName(bankName);
+        body.setBankEmail(bankEmail);
+        OrderResponse data = orderService.requestReturn(id, body, files);
         return ResponseEntity.ok(APIResponse.of(true, "Return request submitted", data, null, null));
     }
 

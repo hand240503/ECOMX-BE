@@ -19,6 +19,8 @@ public class UnitResponse {
 
     private Long id;
 
+    private String code;
+
     @JsonProperty("name_unit")
     private String nameUnit;
 
@@ -33,6 +35,7 @@ public class UnitResponse {
         }
         return UnitResponse.builder()
                 .id(e.getId())
+                .code(e.getCode())
                 .nameUnit(e.getNameUnit())
                 .ratio(e.getRatio())
                 .status(e.getStatus())

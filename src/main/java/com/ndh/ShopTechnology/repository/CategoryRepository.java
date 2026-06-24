@@ -23,4 +23,12 @@ public interface CategoryRepository extends JpaRepository<CategoryEntity, Long> 
   boolean existsByCode(String code);
 
   Optional<CategoryEntity> findByCode(String code);
+
+  Optional<CategoryEntity> findFirstByCodeIgnoreCase(String code);
+
+  Optional<CategoryEntity> findFirstByNameIgnoreCase(String name);
+
+  boolean existsByCodeIgnoreCase(String code);
+
+  boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
 }

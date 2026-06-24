@@ -6,14 +6,19 @@ import com.ndh.ShopTechnology.dto.request.user.AdminModUserInfoRequest;
 import com.ndh.ShopTechnology.dto.request.user.CreateUserRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.PaginationMetadata;
+import com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse;
 import com.ndh.ShopTechnology.dto.response.user.UserResponse;
 import com.ndh.ShopTechnology.services.permission.PermissionService;
+import com.ndh.ShopTechnology.services.user.StaffImportService;
 import com.ndh.ShopTechnology.services.user.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -23,8 +28,12 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AdminStaffController {
 
+    private static final String XLSX_MIME =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
     private final UserService userService;
     private final PermissionService permissionService;
+    private final StaffImportService staffImportService;
 
     @GetMapping("")
     public ResponseEntity<APIResponse<List<UserResponse>>> getStaffUsers(
@@ -116,5 +125,30 @@ public class AdminStaffController {
         UserResponse userResponse = userService.resetStaffPassword(id);
         return ResponseEntity.ok(
                 APIResponse.of(true, "Password reset; share temporary password with staff", userResponse, null, null));
+    }
+
+    /** Import / upsert nhân viên nội bộ từ file Excel/CSV/TXT (multipart 'file'). */
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<APIResponse<CatalogImportResponse>> importStaff(
+            @RequestParam("file") MultipartFile file) {
+        permissionService.requireAnyPermission(
+                PermissionCode.CREATE_USER,
+                PermissionCode.CREATE_ALL);
+        CatalogImportResponse result = staffImportService.importStaff(file);
+        String msg = String.format("Thêm %d, cập nhật %d, lỗi %d",
+                result.getCreatedCount(), result.getUpdatedCount(), result.getFailureCount());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
+    }
+
+    /** Tải file Excel mẫu import nhân viên. */
+    @GetMapping("/import/template")
+    public ResponseEntity<byte[]> staffTemplate() {
+        permissionService.requireAnyPermission(
+                PermissionCode.CREATE_USER,
+                PermissionCode.CREATE_ALL);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"mau_import_nhan_vien.xlsx\"")
+                .contentType(MediaType.parseMediaType(XLSX_MIME))
+                .body(staffImportService.buildTemplateXlsx());
     }
 }

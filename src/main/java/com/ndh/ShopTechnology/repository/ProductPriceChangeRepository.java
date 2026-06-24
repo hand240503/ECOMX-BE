@@ -17,6 +17,22 @@ public interface ProductPriceChangeRepository extends JpaRepository<ProductPrice
 
     List<ProductPriceChangeEntity> findByProductVariant_IdOrderByStartAtDesc(Long variantId);
 
+    /**
+     * Tìm chương trình đổi giá theo KHÓA NGHIỆP VỤ (biến thể + khung thời gian) để upsert khi import.
+     * Xử lý cả trường hợp endAt = null (chương trình vô thời hạn).
+     */
+    @Query("""
+            SELECT pc FROM ProductPriceChangeEntity pc
+            WHERE pc.productVariant.id = :variantId
+              AND pc.startAt = :startAt
+              AND ((:endAt IS NULL AND pc.endAt IS NULL) OR pc.endAt = :endAt)
+            ORDER BY pc.id ASC
+            """)
+    List<ProductPriceChangeEntity> findByVariantAndWindow(
+            @Param("variantId") Long variantId,
+            @Param("startAt") Date startAt,
+            @Param("endAt") Date endAt);
+
     @Query("""
             SELECT pc FROM ProductPriceChangeEntity pc
             WHERE pc.enabled = true

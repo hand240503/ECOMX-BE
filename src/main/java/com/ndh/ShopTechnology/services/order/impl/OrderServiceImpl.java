@@ -107,6 +107,8 @@ public class OrderServiceImpl implements OrderService {
     private final ProductImageAttachService productImageAttachService;
     private final com.ndh.ShopTechnology.services.notification.NotificationService notificationService;
     private final com.ndh.ShopTechnology.services.inventory.InventoryService inventoryService;
+    private final com.ndh.ShopTechnology.repository.DocumentRepository documentRepository;
+    private final com.ndh.ShopTechnology.services.storage.CloudinaryService cloudinaryService;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
@@ -127,7 +129,9 @@ public class OrderServiceImpl implements OrderService {
             ApplicationEventPublisher eventPublisher,
             ProductImageAttachService productImageAttachService,
             com.ndh.ShopTechnology.services.notification.NotificationService notificationService,
-            com.ndh.ShopTechnology.services.inventory.InventoryService inventoryService) {
+            com.ndh.ShopTechnology.services.inventory.InventoryService inventoryService,
+            com.ndh.ShopTechnology.repository.DocumentRepository documentRepository,
+            com.ndh.ShopTechnology.services.storage.CloudinaryService cloudinaryService) {
         this.orderRepository = orderRepository;
         this.orderDetailRepository = orderDetailRepository;
         this.productRepository = productRepository;
@@ -147,6 +151,8 @@ public class OrderServiceImpl implements OrderService {
         this.productImageAttachService = productImageAttachService;
         this.notificationService = notificationService;
         this.inventoryService = inventoryService;
+        this.documentRepository = documentRepository;
+        this.cloudinaryService = cloudinaryService;
     }
 
     @Override
@@ -1290,7 +1296,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse requestReturn(Long orderId, OrderReturnRequest request) {
+    public OrderResponse requestReturn(Long orderId, OrderReturnRequest request,
+                                       List<org.springframework.web.multipart.MultipartFile> mediaFiles) {
         UserEntity currentUser = userService.getCurrentUser();
         OrderEntity order = orderRepository.findByIdAndUser_Id(orderId, currentUser.getId())
                 .orElseThrow(() -> new NotFoundEntityException("Order not found with id: " + orderId));
@@ -1320,6 +1327,9 @@ public class OrderServiceImpl implements OrderService {
         order.setReturnRefundStatus(OrderConstants.RETURN_STATUS_REQUESTED);
         order.setReturnRefundNote(note);
         order = orderRepository.save(order);
+
+        // Upload ảnh / video bằng chứng (nếu có) lên Cloudinary và lưu media records.
+        saveReturnMedia(order, mediaFiles);
 
         orderHistoryService.logReturnRefundStatusChange(
                 order, oldReturnRefundStatus, OrderConstants.RETURN_STATUS_REQUESTED,
@@ -1447,6 +1457,11 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(newStatus);
         if (newStatus == OrderConstants.STATUS_COMPLETED) {
             order.setCompletedAt(new Date());
+            // Đơn hoàn thành => coi như đã thu tiền (đặc biệt COD). Không ghi đè nếu đã thanh toán trước đó (VNPAY).
+            if (!Boolean.TRUE.equals(order.getPaid())) {
+                order.setPaid(true);
+                order.setPaidAt(new Date());
+            }
         }
         if (newStatus == OrderConstants.STATUS_CANCELLED) {
             order.setCancelledBy("ADMIN");
@@ -1525,9 +1540,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setReturnRefundStatus(newReturnStatus);
-        if (note != null && !note.isBlank()) {
-            order.setReturnRefundNote(note);
-        }
+        // KHÔNG ghi đè returnRefundNote (lý do gốc của khách). Ghi chú admin chỉ lưu vào lịch sử bên dưới.
         order = orderRepository.save(order);
         log.info("Admin updated return status: orderId={}, {} -> {}", orderId, currentReturnStatus, newReturnStatus);
 
@@ -1700,9 +1713,73 @@ public class OrderServiceImpl implements OrderService {
                         .code(pm.getCode())
                         .build())
                 .orderDetails(orderDetails)
+                .returnMedia(loadReturnMedia(order.getId()))
                 .createdDate(order.getCreatedDate())
                 .modifiedDate(order.getModifiedDate())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse adminDeleteReturnMedia(Long orderId, Long mediaId) {
+        OrderEntity order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundEntityException("Không tìm thấy đơn hàng id=" + orderId));
+        com.ndh.ShopTechnology.entities.doc.DocumentEntity doc =
+                documentRepository.findById(mediaId)
+                        .orElseThrow(() -> new NotFoundEntityException("Không tìm thấy media id=" + mediaId));
+        boolean belongs = doc.getEntityId() != null
+                && orderId.equals(doc.getEntityId())
+                && doc.getEntityType() != null
+                && doc.getEntityType() == com.ndh.ShopTechnology.constants.DocumentEntityType.ID_DOCUMENT_ENTITY_ORDER;
+        if (!belongs) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Media không thuộc đơn hàng này");
+        }
+        // Xoá asset trên Cloudinary (resource_type theo loại media) rồi xoá bản ghi document.
+        String resourceType = doc.getType() == com.ndh.ShopTechnology.constants.DocumentKind.VIDEO ? "video" : "image";
+        cloudinaryService.deleteByPublicId(doc.getCloudinaryPublicId(), resourceType);
+        documentRepository.delete(doc);
+
+        List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(orderId);
+        return buildOrderResponse(order, mapDetailResponses(details));
+    }
+
+    /** Upload và lưu ảnh / video bằng chứng trả hàng. Bỏ qua file rỗng / null. */
+    private void saveReturnMedia(OrderEntity order,
+                                 List<org.springframework.web.multipart.MultipartFile> mediaFiles) {
+        if (mediaFiles == null || mediaFiles.isEmpty()) return;
+        for (org.springframework.web.multipart.MultipartFile file : mediaFiles) {
+            if (file == null || file.isEmpty()) continue;
+            com.ndh.ShopTechnology.services.storage.CloudinaryService.ReturnMediaUploadResult up =
+                    cloudinaryService.uploadReturnMedia(file, order.getId());
+            int kind = com.ndh.ShopTechnology.constants.DocumentKind.resolve(file);
+            com.ndh.ShopTechnology.entities.doc.DocumentEntity doc =
+                    com.ndh.ShopTechnology.entities.doc.DocumentEntity.builder()
+                            .fileName(file.getOriginalFilename())
+                            .fileSize(String.valueOf(file.getSize()))
+                            .filePath(up.url())
+                            .cloudinaryPublicId(up.publicId())
+                            .type(kind)
+                            .main(false)
+                            .entityId(order.getId())
+                            .entityType(com.ndh.ShopTechnology.constants.DocumentEntityType.ID_DOCUMENT_ENTITY_ORDER)
+                            .build();
+            documentRepository.save(doc);
+        }
+    }
+
+    /** Lấy danh sách media trả hàng của đơn; trả null nếu không có (JsonInclude.NON_NULL sẽ ẩn field). */
+    private List<com.ndh.ShopTechnology.dto.response.order.OrderReturnMediaResponse> loadReturnMedia(Long orderId) {
+        List<com.ndh.ShopTechnology.entities.doc.DocumentEntity> rows =
+                documentRepository.findAllByEntityIdAndEntityType(
+                        orderId, com.ndh.ShopTechnology.constants.DocumentEntityType.ID_DOCUMENT_ENTITY_ORDER);
+        if (rows == null || rows.isEmpty()) return null;
+        return rows.stream()
+                .map(d -> com.ndh.ShopTechnology.dto.response.order.OrderReturnMediaResponse.builder()
+                        .id(d.getId())
+                        .url(d.getFilePath())
+                        .type(d.getType() == com.ndh.ShopTechnology.constants.DocumentKind.VIDEO ? "VIDEO" : "IMAGE")
+                        .build())
+                .toList();
     }
 
     private List<OrderDetailResponse> mapDetailResponses(List<OrderDetailEntity> details) {

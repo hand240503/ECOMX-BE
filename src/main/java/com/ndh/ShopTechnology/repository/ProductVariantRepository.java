@@ -136,4 +136,13 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariantEn
             ORDER BY p.id ASC, v.sortOrder ASC, v.id ASC
             """)
     List<ProductVariantEntity> searchForStock(@Param("q") String q);
+
+    /** Tra biến thể theo mã SKU biến thể (sku_code), không phân biệt hoa thường — dùng cho import. */
+    @Query("""
+            SELECT v FROM ProductVariant v
+            JOIN FETCH v.product p
+            WHERE LOWER(v.skuCode) = LOWER(:skuCode)
+            ORDER BY v.id ASC
+            """)
+    List<ProductVariantEntity> findBySkuCodeIgnoreCaseFetchProduct(@Param("skuCode") String skuCode);
 }

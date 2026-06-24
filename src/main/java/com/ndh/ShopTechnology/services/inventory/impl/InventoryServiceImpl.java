@@ -144,7 +144,7 @@ public class InventoryServiceImpl implements InventoryService {
             if (restockToSellable) {
                 variantRepository.addOnHand(variant.getId(), qty);
                 writeLedger(variant, d, InventoryMovementType.RETURN_IN, qty,
-                        "Nhập lại kho do hoàn hàng (hàng còn tốt)");
+                        "Nhập lại kho do hoàn hàng");
             } else {
                 // Hàng lỗi: không cộng vào tồn bán được, chỉ ghi sổ kho loại.
                 writeLedger(variant, d, InventoryMovementType.RETURN_SCRAP, 0,

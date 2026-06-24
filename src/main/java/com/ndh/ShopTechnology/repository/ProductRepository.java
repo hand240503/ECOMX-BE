@@ -103,6 +103,12 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>, J
 
     Optional<ProductEntity> findByProductName(String productName);
 
+    /** Tra sản phẩm theo SKU (khóa nghiệp vụ) — dùng để phát hiện upsert khi import. */
+    Optional<ProductEntity> findFirstBySku(Long sku);
+
+    /** Tra sản phẩm theo tên không phân biệt hoa thường — dùng khi không có SKU. */
+    Optional<ProductEntity> findFirstByProductNameIgnoreCase(String productName);
+
     List<ProductEntity> findByStatus(Integer status);
 
     /** Cộng số lượng đã bán (khi đơn hoàn thành). */

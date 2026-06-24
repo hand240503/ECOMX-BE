@@ -13,9 +13,14 @@ import lombok.*;
 @Entity(name = "unit")
 public class UnitEntity extends BaseEntity {
 
+    public static final String COL_CODE           = "code";
     public static final String COL_NAME_UNIT      = "name_unit";
     public static final String COL_RATIO          = "ratio";
     public static final String COL_STATUS         = "status";
+
+    /** Mã định danh duy nhất của đơn vị tính — dùng làm khóa khi import/upsert. */
+    @Column(name = COL_CODE, unique = true)
+    private String code;
 
     @Column(name = COL_NAME_UNIT, nullable = true)
     private String nameUnit;

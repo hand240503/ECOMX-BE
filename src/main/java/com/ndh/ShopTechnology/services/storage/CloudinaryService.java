@@ -65,6 +65,36 @@ public class CloudinaryService {
         }
     }
 
+    /**
+     * Upload ảnh / video bằng chứng trả hàng — resource_type="auto" để hỗ trợ cả video.
+     * Trả thêm resourceType ("image" / "video" / "raw") để FE/BE phân loại media.
+     */
+    public ReturnMediaUploadResult uploadReturnMedia(MultipartFile file, Long orderId) {
+        requireNonEmptyFile(file, "File bằng chứng trả hàng không hợp lệ");
+        String folder = "ecomx/return-media/" + orderId;
+        try {
+            Map<?, ?> res = cloudinary.uploader().upload(
+                    file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", folder,
+                            "resource_type", "auto",
+                            "use_filename", true,
+                            "unique_filename", true
+                    )
+            );
+            String url          = (String) res.get("secure_url");
+            String publicId     = (String) res.get("public_id");
+            String resourceType = (String) res.get("resource_type");
+            if (url == null || publicId == null) {
+                throw new CustomApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Upload bằng chứng trả hàng thất bại");
+            }
+            return new ReturnMediaUploadResult(url, publicId, resourceType);
+        } catch (IOException e) {
+            log.error("Failed to upload return media for order {}", orderId, e);
+            throw new CustomApiException(HttpStatus.INTERNAL_SERVER_ERROR, "Không thể upload bằng chứng trả hàng");
+        }
+    }
+
     private static void requireNonEmptyFile(MultipartFile file, String message) {
         if (file == null || file.isEmpty()) {
             throw new CustomApiException(HttpStatus.BAD_REQUEST, message);
@@ -101,16 +131,26 @@ public class CloudinaryService {
     }
 
     public void deleteByPublicId(String publicId) {
+        deleteByPublicId(publicId, "image");
+    }
+
+    /** Xoá asset Cloudinary theo resource_type ("image" / "video" / "raw"). */
+    public void deleteByPublicId(String publicId, String resourceType) {
         if (publicId == null || publicId.isBlank()) {
             return;
         }
+        String rt = (resourceType == null || resourceType.isBlank()) ? "image" : resourceType;
         try {
-            cloudinary.uploader().destroy(publicId, ObjectUtils.asMap("resource_type", "image"));
+            cloudinary.uploader().destroy(publicId, ObjectUtils.asMap("resource_type", rt));
         } catch (Exception e) {
-            log.warn("Failed to delete Cloudinary asset: {}", publicId, e);
+            log.warn("Failed to delete Cloudinary asset: {} (resource_type={})", publicId, rt, e);
         }
     }
 
     public record UploadResult(String url, String publicId) {
+    }
+
+    /** Kết quả upload media trả hàng, kèm resourceType từ Cloudinary ("image" / "video" / "raw"). */
+    public record ReturnMediaUploadResult(String url, String publicId, String resourceType) {
     }
 }
