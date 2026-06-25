@@ -41,8 +41,10 @@ public class ProductEntity extends BaseEntity {
     @Column(name = COL_L_DESCRIPTION, nullable = true, columnDefinition = "TEXT")
     private String lDescription;
 
+    // Cho phép NULL: sản phẩm có thể được tạo trước (chỉ thông tin sản phẩm),
+    // danh mục/thương hiệu gán sau bằng chức năng "gán danh mục/thương hiệu hàng loạt".
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = COL_CATEGORY_ID, nullable = false)
+    @JoinColumn(name = COL_CATEGORY_ID, nullable = true)
     private CategoryEntity category;
 
     @ManyToOne(fetch = FetchType.LAZY)

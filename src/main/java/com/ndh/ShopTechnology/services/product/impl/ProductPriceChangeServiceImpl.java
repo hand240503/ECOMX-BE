@@ -12,6 +12,8 @@ import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.ProductPriceChangeRepository;
 import com.ndh.ShopTechnology.repository.ProductPriceChangeUsageRepository;
 import com.ndh.ShopTechnology.repository.ProductVariantRepository;
+import com.ndh.ShopTechnology.dto.response.inventory.InventoryStockResponse;
+import com.ndh.ShopTechnology.services.inventory.InventoryService;
 import com.ndh.ShopTechnology.services.log.PriceEventHistoryService;
 import com.ndh.ShopTechnology.services.product.ProductPriceChangeService;
 import org.springframework.http.HttpStatus;
@@ -29,16 +31,19 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
     private final ProductPriceChangeRepository priceChangeRepository;
     private final ProductPriceChangeUsageRepository usageRepository;
     private final PriceEventHistoryService priceEventHistoryService;
+    private final InventoryService inventoryService;
 
     public ProductPriceChangeServiceImpl(
             ProductVariantRepository variantRepository,
             ProductPriceChangeRepository priceChangeRepository,
             ProductPriceChangeUsageRepository usageRepository,
-            PriceEventHistoryService priceEventHistoryService) {
+            PriceEventHistoryService priceEventHistoryService,
+            InventoryService inventoryService) {
         this.variantRepository = variantRepository;
         this.priceChangeRepository = priceChangeRepository;
         this.usageRepository = usageRepository;
         this.priceEventHistoryService = priceEventHistoryService;
+        this.inventoryService = inventoryService;
     }
 
     @Override
@@ -46,6 +51,14 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
     public List<ProductPriceChangeResponse> list(Long productId, Long variantId) {
         ProductVariantEntity v = ensureVariant(productId, variantId);
         return priceChangeRepository.findByProductVariant_IdOrderByStartAtDesc(v.getId()).stream()
+                .map(ProductPriceChangeServiceImpl::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductPriceChangeResponse> listAll() {
+        return priceChangeRepository.findAllForOverview().stream()
                 .map(ProductPriceChangeServiceImpl::toResponse)
                 .collect(Collectors.toList());
     }
@@ -60,6 +73,7 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
     public ProductPriceChangeResponse create(Long productId, Long variantId, UpsertPriceChangeRequest request) {
         ProductVariantEntity v = ensureVariant(productId, variantId);
         validateWindow(request.getStartAt(), request.getEndAt());
+        validateQuantityLimitAgainstStock(v, request.getQuantityLimit());
         ProductPriceChangeEntity e = ProductPriceChangeEntity.builder()
                 .productVariant(v)
                 .productId(productId)
@@ -87,7 +101,7 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
     )
     public ProductPriceChangeResponse update(Long productId, Long variantId, long priceChangeId,
             UpsertPriceChangeRequest request) {
-        ensureVariant(productId, variantId);
+        ProductVariantEntity v = ensureVariant(productId, variantId);
         ProductPriceChangeEntity e = priceChangeRepository.findById(priceChangeId)
                 .orElseThrow(() -> new NotFoundEntityException("PriceChange not found: " + priceChangeId));
         if (e.getProductVariant() == null || !e.getProductVariant().getId().equals(variantId)) {
@@ -95,6 +109,9 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
                     "PriceChange not found for variant: " + variantId);
         }
         validateWindow(request.getStartAt(), request.getEndAt());
+        if (request.getQuantityLimit() != null) {
+            validateQuantityLimitAgainstStock(v, request.getQuantityLimit());
+        }
         // Snapshot before
         ProductPriceChangeEntity before = ProductPriceChangeEntity.builder()
                 .basePrice(e.getBasePrice())
@@ -176,6 +193,23 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
         }
     }
 
+    /**
+     * quantity_limit (tổng suất khuyến mãi) không được vượt quá số lượng tồn kho khả dụng
+     * (available = onHand - reserved) của biến thể tại thời điểm tạo/cập nhật chương trình.
+     */
+    private void validateQuantityLimitAgainstStock(ProductVariantEntity v, Integer quantityLimit) {
+        if (quantityLimit == null) return;
+        InventoryStockResponse stock = inventoryService.getStock(v.getId());
+        Integer availableObj = stock != null ? stock.getAvailable() : null;
+        int available = availableObj != null ? availableObj : 0;
+        if (quantityLimit > available) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "quantity_limit (" + quantityLimit + ") vượt quá số lượng tồn kho khả dụng ("
+                            + available + ") của biến thể SKU " + v.getSkuCode()
+                            + ". Vui lòng nhập số lượng giới hạn nhỏ hơn hoặc bằng tồn kho.");
+        }
+    }
+
     private static void validateWindow(Date startAt, Date endAt) {
         if (startAt == null) throw new CustomApiException(HttpStatus.BAD_REQUEST, "startAt is required");
         if (endAt != null && endAt.before(startAt))
@@ -194,6 +228,7 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
         Integer remaining = ql != null ? Math.max(0, ql - sq) : null;
         return ProductPriceChangeResponse.builder()
                 .id(e.getId())
+                .productId(e.getProductId())
                 .productVariantId(e.getProductVariant() != null ? e.getProductVariant().getId() : null)
                 .basePrice(e.getBasePrice())
                 .salePrice(e.getSalePrice())

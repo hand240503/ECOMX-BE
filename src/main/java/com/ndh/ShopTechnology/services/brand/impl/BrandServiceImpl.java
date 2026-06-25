@@ -140,13 +140,49 @@ public class BrandServiceImpl implements BrandService {
         captureSnapshotBefore = true
     )
     public void delete(long id) {
-        BrandEntity e = brandRepository.findById(id)
+        brandRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Brand not found with id: " + id));
-        if (productRepository.countByBrand_Id(id) > 0) {
-            throw new CustomApiException(HttpStatus.CONFLICT,
-                    "Cannot delete brand: still referenced by products (brand id " + id + ")");
+        // Gỡ thương hiệu khỏi sản phẩm (set null) trước khi xóa.
+        productRepository.clearBrandForBrandIds(List.of(id));
+        // EntityManager đã được clear (clearAutomatically) -> nạp lại để xóa an toàn.
+        brandRepository.findById(id).ifPresent(brandRepository::delete);
+    }
+
+    @Override
+    @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_BRAND,
+        action     = AdminActivityLogEntity.ACTION_DELETE,
+        idArgIndex = -1
+    )
+    public com.ndh.ShopTechnology.dto.response.brand.BrandBulkDeleteResponse deleteBrands(List<Long> ids) {
+        List<Long> requested = (ids == null) ? List.of() : ids.stream()
+                .filter(java.util.Objects::nonNull).distinct().collect(Collectors.toList());
+        if (requested.isEmpty()) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "Danh sách thương hiệu cần xóa đang trống");
         }
-        brandRepository.delete(e);
+
+        List<BrandEntity> found = brandRepository.findAllById(requested);
+        List<Long> foundIds = found.stream().map(BrandEntity::getId).collect(Collectors.toList());
+        List<Long> notFound = requested.stream()
+                .filter(rid -> !foundIds.contains(rid)).collect(Collectors.toList());
+
+        int productsDetached = 0, deleted = 0;
+        if (!foundIds.isEmpty()) {
+            // Gỡ sản phẩm (brand=null) cho toàn bộ thương hiệu cần xóa.
+            productsDetached = productRepository.clearBrandForBrandIds(foundIds);
+            // EntityManager đã clear -> nạp lại bản sạch rồi xóa.
+            List<BrandEntity> fresh = brandRepository.findAllById(foundIds);
+            brandRepository.deleteAll(fresh);
+            deleted = fresh.size();
+        }
+
+        return com.ndh.ShopTechnology.dto.response.brand.BrandBulkDeleteResponse.builder()
+                .requested(requested.size())
+                .deleted(deleted)
+                .productsDetached(productsDetached)
+                .notFoundIds(notFound)
+                .build();
     }
 
     private static String normalizeCode(String raw) {

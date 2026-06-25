@@ -87,7 +87,7 @@ public class CatalogUpsertPersister {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Outcome upsertCategory(Long id, String code, String name, Integer status,
-                                  Long parentId, String parentName) {
+                                  Long parentId, String parentCode, String parentName) {
         if (isBlank(name)) throw new CatalogRowException("Thiếu tên (name)");
 
         CategoryEntity existing = null;
@@ -96,7 +96,7 @@ public class CatalogUpsertPersister {
             existing = categoryRepository.findFirstByCodeIgnoreCase(code.trim()).orElse(null);
         }
 
-        CategoryEntity parent = resolveParent(parentId, parentName);
+        CategoryEntity parent = resolveParent(parentId, parentCode, parentName);
 
         if (existing != null) {
             if (parent != null && parent.getId() != null && parent.getId().equals(existing.getId())) {
@@ -105,8 +105,8 @@ public class CatalogUpsertPersister {
             String newCode = isBlank(code) ? existing.getCode() : code.trim().toUpperCase();
             String newName = name.trim();
             Integer newStatus = status != null ? status : existing.getStatus();
-            // parent chỉ đổi khi file chỉ định (parentId/parentName); nếu không chỉ định -> giữ nguyên.
-            boolean parentSpecified = parentId != null || !isBlank(parentName);
+            // parent chỉ đổi khi file chỉ định (parentId/parentCode/parentName); nếu không -> giữ nguyên.
+            boolean parentSpecified = parentId != null || !isBlank(parentCode) || !isBlank(parentName);
             CategoryEntity newParent = parentSpecified ? parent : existing.getParent();
             Long curParentId = existing.getParent() != null ? existing.getParent().getId() : null;
             Long newParentId = newParent != null ? newParent.getId() : null;
@@ -147,10 +147,14 @@ public class CatalogUpsertPersister {
         return new Outcome("CREATED", created.getId());
     }
 
-    private CategoryEntity resolveParent(Long parentId, String parentName) {
+    private CategoryEntity resolveParent(Long parentId, String parentCode, String parentName) {
         if (parentId != null) {
             return categoryRepository.findById(parentId)
                     .orElseThrow(() -> new CatalogRowException("Không tìm thấy danh mục cha id=" + parentId));
+        }
+        if (!isBlank(parentCode)) {
+            return categoryRepository.findFirstByCodeIgnoreCase(parentCode.trim())
+                    .orElseThrow(() -> new CatalogRowException("Không tìm thấy danh mục cha code=" + parentCode));
         }
         if (!isBlank(parentName)) {
             return categoryRepository.findFirstByNameIgnoreCase(parentName.trim()).orElse(null);

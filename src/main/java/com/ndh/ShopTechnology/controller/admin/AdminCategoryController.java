@@ -1,9 +1,11 @@
 package com.ndh.ShopTechnology.controller.admin;
 
 import com.ndh.ShopTechnology.constants.PermissionCode;
+import com.ndh.ShopTechnology.dto.request.category.BulkDeleteCategoryRequest;
 import com.ndh.ShopTechnology.dto.request.category.CreateCategoryRequest;
 import com.ndh.ShopTechnology.dto.request.category.UpdateCategoryRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
+import com.ndh.ShopTechnology.dto.response.category.CategoryBulkDeleteResponse;
 import com.ndh.ShopTechnology.dto.response.category.CategoryResponse;
 import com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse;
 import com.ndh.ShopTechnology.services.category.CategoryService;
@@ -106,5 +108,19 @@ public class AdminCategoryController {
     public ResponseEntity<APIResponse<Void>> delete(@PathVariable long id) {
         categoryService.deleteCategory(id);
         return ResponseEntity.ok(APIResponse.of(true, "Deleted", null, null, null));
+    }
+
+    /**
+     * Xóa danh mục hàng loạt. Sản phẩm thuộc danh mục bị xóa sẽ được gỡ danh mục (set null),
+     * danh mục con được đưa lên gốc (parent set null).
+     */
+    @PostMapping("/bulk-delete")
+    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRODUCT + ")")
+    public ResponseEntity<APIResponse<CategoryBulkDeleteResponse>> bulkDelete(
+            @Valid @RequestBody BulkDeleteCategoryRequest request) {
+        CategoryBulkDeleteResponse result = categoryService.deleteCategories(request.getIds());
+        String msg = String.format("Đã xóa %d danh mục (gỡ %d sản phẩm, %d danh mục con lên gốc)",
+                result.getDeleted(), result.getProductsDetached(), result.getChildrenDetached());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
     }
 }

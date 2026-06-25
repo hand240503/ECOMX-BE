@@ -6,6 +6,7 @@ import com.ndh.ShopTechnology.aspect.SnapshotFetcherRegistry;
 import com.ndh.ShopTechnology.constants.DocumentEntityType;
 import com.ndh.ShopTechnology.dto.request.category.CreateCategoryRequest;
 import com.ndh.ShopTechnology.dto.request.category.UpdateCategoryRequest;
+import com.ndh.ShopTechnology.dto.response.category.CategoryBulkDeleteResponse;
 import com.ndh.ShopTechnology.dto.response.category.CategoryResponse;
 import com.ndh.ShopTechnology.dto.response.product.BrandSummaryResponse;
 import com.ndh.ShopTechnology.entities.log.AdminActivityLogEntity;
@@ -33,6 +34,7 @@ public class CategoryServiceImpl implements CategoryService {
     private final CategoryRepository categoryRepository;
     private final DocumentRepository documentRepository;
     private final BrandRepository brandRepository;
+    private final com.ndh.ShopTechnology.repository.ProductRepository productRepository;
     private final UserService userService;
     private final SnapshotFetcherRegistry snapshotFetcherRegistry;
     private final ObjectMapper objectMapper;
@@ -40,12 +42,14 @@ public class CategoryServiceImpl implements CategoryService {
     public CategoryServiceImpl(CategoryRepository categoryRepository,
                                DocumentRepository documentRepository,
                                BrandRepository brandRepository,
+                               com.ndh.ShopTechnology.repository.ProductRepository productRepository,
                                UserService userService,
                                SnapshotFetcherRegistry snapshotFetcherRegistry,
                                ObjectMapper objectMapper) {
         this.categoryRepository = categoryRepository;
         this.documentRepository = documentRepository;
         this.brandRepository = brandRepository;
+        this.productRepository = productRepository;
         this.userService = userService;
         this.snapshotFetcherRegistry = snapshotFetcherRegistry;
         this.objectMapper = objectMapper;
@@ -210,13 +214,50 @@ public class CategoryServiceImpl implements CategoryService {
         CategoryEntity category = categoryRepository.findById(id)
                 .orElseThrow(() -> new NotFoundEntityException("Category not found with id: " + id));
 
-        if (category.getChildren() != null && !category.getChildren().isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Cannot delete category with children. Please delete or move children first.");
+        List<Long> ids = List.of(id);
+        // Gỡ danh mục khỏi sản phẩm (set null) và đưa danh mục con lên gốc (parent null) trước khi xóa.
+        productRepository.clearCategoryForCategoryIds(ids);
+        categoryRepository.detachChildrenOfParents(ids);
+        // EntityManager đã được clear (clearAutomatically) -> nạp lại để xóa an toàn (children đã rỗng).
+        categoryRepository.findById(id).ifPresent(categoryRepository::delete);
+    }
+
+    @Override
+    @Transactional
+    @AdminAudit(
+        entityType = AdminActivityLogEntity.ENTITY_CATEGORY,
+        action     = AdminActivityLogEntity.ACTION_DELETE,
+        idArgIndex = -1
+    )
+    public CategoryBulkDeleteResponse deleteCategories(List<Long> ids) {
+        List<Long> requested = (ids == null) ? List.of() : ids.stream()
+                .filter(java.util.Objects::nonNull).distinct().collect(Collectors.toList());
+        if (requested.isEmpty()) {
+            throw new IllegalArgumentException("Danh sách danh mục cần xóa đang trống");
         }
-        if (category.getProducts() != null && !category.getProducts().isEmpty()) {
-            throw new IllegalArgumentException("Cannot delete category with products. Please remove products first.");
+
+        List<CategoryEntity> found = categoryRepository.findAllById(requested);
+        List<Long> foundIds = found.stream().map(CategoryEntity::getId).collect(Collectors.toList());
+        List<Long> notFound = requested.stream()
+                .filter(rid -> !foundIds.contains(rid)).collect(Collectors.toList());
+
+        int productsDetached = 0, childrenDetached = 0, deleted = 0;
+        if (!foundIds.isEmpty()) {
+            // Gỡ sản phẩm (category=null) và đưa danh mục con lên gốc (parent=null) cho toàn bộ danh mục cần xóa.
+            productsDetached = productRepository.clearCategoryForCategoryIds(foundIds);
+            childrenDetached = categoryRepository.detachChildrenOfParents(foundIds);
+            // EntityManager đã clear -> nạp lại bản sạch rồi xóa (children đã rỗng nên không cascade nhầm).
+            List<CategoryEntity> fresh = categoryRepository.findAllById(foundIds);
+            categoryRepository.deleteAll(fresh);
+            deleted = fresh.size();
         }
-        categoryRepository.delete(category);
+
+        return CategoryBulkDeleteResponse.builder()
+                .requested(requested.size())
+                .deleted(deleted)
+                .productsDetached(productsDetached)
+                .childrenDetached(childrenDetached)
+                .notFoundIds(notFound)
+                .build();
     }
 }

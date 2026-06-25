@@ -1,0 +1,6 @@
+﻿product_name,category_id,brand_id,sku,status,is_featured,hot_sale,description,sku_code,option_values,on_hand,unit_id,current_value,old_value,sort_order
+Laptop Dell XPS 13,Laptop,Dell,100023,1,TRUE,FALSE,Laptop cao cấp mỏng nhẹ,DELL-XPS13-I7,CPU=i7;RAM=16GB;SSD=512GB,50,Cái,32990000,35990000,0
+Laptop Dell XPS 13,Laptop,Dell,100023,1,TRUE,FALSE,Laptop cao cấp mỏng nhẹ,DELL-XPS13-I5,CPU=i5;RAM=8GB;SSD=256GB,30,Cái,25990000,28990000,1
+Chuột không dây Logitech,Phụ kiện,Logitech,100050,1,FALSE,TRUE,Chuột không dây bền bỉ,CHUOT-LOGI-M1,Màu=Đen,100,Cái,290000,350000,0
+Chuột không dây Logitech,Phụ kiện,Logitech,100050,1,FALSE,TRUE,Chuột không dây bền bỉ,CHUOT-LOGI-M1-TRANG,Màu=Trắng,80,Cái,290000,350000,1
+Bàn phím cơ Keychron K2,Phụ kiện,Keychron,100051,1,TRUE,FALSE,Bàn phím cơ không dây,KEY-K2-BROWN,Switch=Brown,40,Cái,1990000,2290000,0

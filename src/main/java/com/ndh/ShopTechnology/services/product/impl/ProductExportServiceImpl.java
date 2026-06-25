@@ -49,14 +49,14 @@ public class ProductExportServiceImpl implements ProductExportService {
         this.categoryRepository = categoryRepository;
     }
 
-    // Tiêu đề = tên cột CSDL (gộp các bảng products / category / brands / product_variant / price / unit)
+    // Tiêu đề báo cáo — ẨN MỌI CỘT *_id. Tham chiếu bằng code/sku/sku_code/tên đơn vị.
     private static final String[] HEADERS = {
-            "product_id", "product_name", "category_id", "category_code", "category_name",
-            "brand_id", "brand_code", "brand_name", "sku", "status", "is_featured", "hot_sale",
+            "product_name", "category_code", "category_name",
+            "brand_code", "brand_name", "sku", "status", "is_featured", "hot_sale",
             "sold_count", "tag", "description", "l_description",
-            "variant_id", "sku_code", "option_values", "active", "sort_order",
+            "sku_code", "option_values", "active", "sort_order",
             "on_hand", "reserved", "available",
-            "price_id", "unit_id", "unit_name", "unit_ratio", "current_value", "old_value", "display_name"
+            "unit_name", "unit_ratio", "current_value", "old_value", "display_name"
     };
 
     @Override
@@ -132,10 +132,11 @@ public class ProductExportServiceImpl implements ProductExportService {
     }
 
     // Tiêu đề cho file "sản phẩm chưa hoàn thiện" — gồm thông tin SP + cột biến thể/giá để trống điền thêm.
+    // Ẩn mọi cột *_id. Sản phẩm nhận diện bằng sku, biến thể bằng sku_code.
     private static final String[] INCOMPLETE_HEADERS = {
-            "product_id", "product_name", "category_code", "category_name", "brand_code", "brand_name",
+            "product_name", "category_code", "category_name", "brand_code", "brand_name",
             "sku", "status", "is_featured", "hot_sale", "description", "missing",
-            "sku_code", "option_values", "unit_id", "current_value", "old_value", "sort_order"
+            "sku_code", "option_values", "current_value", "old_value", "sort_order"
     };
 
     @Override
@@ -191,7 +192,6 @@ public class ProductExportServiceImpl implements ProductExportService {
     private Object[] incompleteRow(ProductEntity p, CategoryEntity cat, BrandEntity brand,
                                    String missing, ProductVariantEntity v) {
         return new Object[]{
-                p.getId(),
                 p.getProductName(),
                 cat != null ? cat.getCode() : null,
                 cat != null ? cat.getName() : null,
@@ -205,8 +205,7 @@ public class ProductExportServiceImpl implements ProductExportService {
                 missing,
                 v != null ? v.getSkuCode() : null,
                 v != null ? formatOptions(v.getOptionValues()) : null,
-                null, // unit_id  (để trống điền)
-                null, // current_value
+                null, // current_value (để trống — nhập ở chức năng giá)
                 null, // old_value
                 v != null ? v.getSortOrder() : null
         };
@@ -220,12 +219,13 @@ public class ProductExportServiceImpl implements ProductExportService {
                 .collect(Collectors.joining(";"));
     }
 
+    // Ẩn id — thương hiệu/danh mục nhận diện bằng code khi import lại.
     private static final String[] BRAND_HEADERS = {
-            "id", "code", "name", "status"
+            "code", "name", "status"
     };
 
     private static final String[] CATEGORY_HEADERS = {
-            "id", "code", "name", "status", "parent_id", "parent_name"
+            "code", "name", "status", "parent_code"
     };
 
     @Override
@@ -233,7 +233,7 @@ public class ProductExportServiceImpl implements ProductExportService {
     public byte[] exportBrandsXlsx() {
         List<Object[]> rows = new ArrayList<>();
         for (BrandEntity b : brandRepository.findAll(Sort.by(Sort.Direction.ASC, "id"))) {
-            rows.add(new Object[]{ b.getId(), b.getCode(), b.getName(), b.getStatus() });
+            rows.add(new Object[]{ b.getCode(), b.getName(), b.getStatus() });
         }
         return buildSheet("Brands", BRAND_HEADERS, rows);
     }
@@ -245,9 +245,8 @@ public class ProductExportServiceImpl implements ProductExportService {
         for (CategoryEntity cat : categoryRepository.findAll(Sort.by(Sort.Direction.ASC, "id"))) {
             CategoryEntity parent = cat.getParent();
             rows.add(new Object[]{
-                    cat.getId(), cat.getCode(), cat.getName(), cat.getStatus(),
-                    parent != null ? parent.getId() : null,
-                    parent != null ? parent.getName() : null
+                    cat.getCode(), cat.getName(), cat.getStatus(),
+                    parent != null ? parent.getCode() : null
             });
         }
         return buildSheet("Categories", CATEGORY_HEADERS, rows);
@@ -300,13 +299,10 @@ public class ProductExportServiceImpl implements ProductExportService {
                          ProductVariantEntity v, PriceEntity pr) {
         Row row = sheet.createRow(rowIdx);
         int c = 0;
-        // products
-        setNum(row, c++, p.getId());
+        // products (không xuất product_id)
         setStr(row, c++, p.getProductName());
-        setNum(row, c++, cat != null ? cat.getId() : null);
         setStr(row, c++, cat != null ? cat.getCode() : null);
         setStr(row, c++, cat != null ? cat.getName() : null);
-        setNum(row, c++, brand != null ? brand.getId() : null);
         setStr(row, c++, brand != null ? brand.getCode() : null);
         setStr(row, c++, brand != null ? brand.getName() : null);
         setNum(row, c++, p.getSku());
@@ -317,8 +313,7 @@ public class ProductExportServiceImpl implements ProductExportService {
         setStr(row, c++, p.getTag());
         setStr(row, c++, p.getDescription());
         setStr(row, c++, p.getLDescription());
-        // variant
-        setNum(row, c++, v != null ? v.getId() : null);
+        // variant (không xuất variant_id)
         setStr(row, c++, v != null ? v.getSkuCode() : null);
         setStr(row, c++, v != null ? optionsToString(v.getOptionValues()) : null);
         setBool(row, c++, v != null ? v.getActive() : null);
@@ -326,10 +321,8 @@ public class ProductExportServiceImpl implements ProductExportService {
         setNum(row, c++, v != null ? v.getOnHand() : null);
         setNum(row, c++, v != null ? v.getReserved() : null);
         setNum(row, c++, v != null ? (Integer) v.getAvailable() : null);
-        // price + unit
+        // price + unit (không xuất price_id / unit_id)
         UnitEntity unit = pr != null ? pr.getUnit() : null;
-        setNum(row, c++, pr != null ? pr.getId() : null);
-        setNum(row, c++, unit != null ? unit.getId() : null);
         setStr(row, c++, unit != null ? unit.getNameUnit() : null);
         setNum(row, c++, unit != null ? unit.getRatio() : null);
         setNum(row, c++, pr != null ? pr.getCurrentValue() : null);

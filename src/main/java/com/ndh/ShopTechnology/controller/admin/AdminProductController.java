@@ -1,32 +1,41 @@
 package com.ndh.ShopTechnology.controller.admin;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ndh.ShopTechnology.dto.request.product.CreateProductRequest;
 import com.ndh.ShopTechnology.dto.request.product.GetProductsByIdsRequest;
 import com.ndh.ShopTechnology.dto.request.product.UpdateProductRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.ErrorResponse;
 import com.ndh.ShopTechnology.dto.response.PaginationMetadata;
+import com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductFullResponse;
 import com.ndh.ShopTechnology.dto.response.product.ProductImportResponse;
+import com.ndh.ShopTechnology.dto.response.product.VariantImportResponse;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
+import com.ndh.ShopTechnology.services.product.ProductCatalogAssignService;
 import com.ndh.ShopTechnology.services.product.ProductExportService;
+import com.ndh.ShopTechnology.services.product.ProductFlagImportService;
 import com.ndh.ShopTechnology.services.product.ProductImportService;
 import com.ndh.ShopTechnology.services.product.ProductService;
-import org.springframework.web.bind.annotation.RequestParam;
+import com.ndh.ShopTechnology.services.product.ProductVariantImportService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-
 import org.springframework.web.multipart.MultipartFile;
+
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("${api.prefix}/admin/products")
@@ -35,18 +44,24 @@ public class AdminProductController {
     private final ProductService productService;
     private final ProductImportService productImportService;
     private final ProductExportService productExportService;
-    private final com.ndh.ShopTechnology.services.product.ProductFlagImportService productFlagImportService;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final ProductFlagImportService productFlagImportService;
+    private final ProductCatalogAssignService productCatalogAssignService;
+    private final ProductVariantImportService productVariantImportService;
+    private final ObjectMapper objectMapper;
 
     public AdminProductController(ProductService productService,
                                   ProductImportService productImportService,
                                   ProductExportService productExportService,
-                                  com.ndh.ShopTechnology.services.product.ProductFlagImportService productFlagImportService,
-                                  com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+                                  ProductFlagImportService productFlagImportService,
+                                  ProductCatalogAssignService productCatalogAssignService,
+                                  ProductVariantImportService productVariantImportService,
+                                  ObjectMapper objectMapper) {
         this.productService = productService;
         this.productImportService = productImportService;
         this.productExportService = productExportService;
         this.productFlagImportService = productFlagImportService;
+        this.productCatalogAssignService = productCatalogAssignService;
+        this.productVariantImportService = productVariantImportService;
         this.objectMapper = objectMapper;
     }
 
@@ -178,11 +193,11 @@ public class AdminProductController {
     public ResponseEntity<APIResponse<ProductImportResponse>> importProducts(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "actions", required = false) String actionsJson) {
-        java.util.Map<String, String> actions = null;
+        Map<String, String> actions = null;
         if (actionsJson != null && !actionsJson.isBlank()) {
             try {
                 actions = objectMapper.readValue(actionsJson,
-                        new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, String>>() {});
+                        new TypeReference<Map<String, String>>() {});
             } catch (Exception e) {
                 throw new CustomApiException(HttpStatus.BAD_REQUEST, "Tham số 'actions' không hợp lệ (JSON)");
             }
@@ -200,8 +215,57 @@ public class AdminProductController {
     public ResponseEntity<byte[]> downloadImportTemplate() {
         byte[] bytes = productImportService.buildTemplateXlsx();
         return ResponseEntity.ok()
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"mau_import_san_pham.xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    // ── Import BIẾN THỂ (phân loại) cho MỘT sản phẩm (trang chi tiết) ─────────
+
+    /** Xem trước import biến thể của một sản phẩm (dry-run): KHÔNG ghi CSDL. */
+    @PostMapping(value = "/{productId}/variants/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(100003)")
+    public ResponseEntity<APIResponse<VariantImportResponse>> previewVariantImport(
+            @PathVariable Long productId,
+            @RequestParam("file") MultipartFile file) {
+        var result = productVariantImportService.previewVariants(productId, file);
+        String msg = String.format("Sẽ thêm mới %d, cập nhật %d, lỗi %d",
+                result.getCreatedCount(), result.getUpdatedCount(), result.getFailureCount());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
+    }
+
+    /** Import biến thể cho một sản phẩm từ file Excel/CSV/TXT (multipart 'file', tùy chọn 'actions'). */
+    @PostMapping(value = "/{productId}/variants/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(100003)")
+    public ResponseEntity<APIResponse<VariantImportResponse>> importVariants(
+            @PathVariable Long productId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "actions", required = false) String actionsJson) {
+        Map<String, String> actions = null;
+        if (actionsJson != null && !actionsJson.isBlank()) {
+            try {
+                actions = objectMapper.readValue(actionsJson,
+                        new TypeReference<Map<String, String>>() {});
+            } catch (Exception e) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST, "Tham số 'actions' không hợp lệ (JSON)");
+            }
+        }
+        var result = productVariantImportService.importVariants(productId, file, actions);
+        String msg = String.format("Đã thêm mới %d, cập nhật %d, lỗi %d",
+                result.getCreatedCount(), result.getUpdatedCount(), result.getFailureCount());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
+    }
+
+    /** Tải file Excel mẫu để điền dữ liệu import biến thể. */
+    @GetMapping(value = "/{productId}/variants/import/template")
+    @PreAuthorize("@perm.check(100003)")
+    public ResponseEntity<byte[]> downloadVariantImportTemplate(@PathVariable Long productId) {
+        byte[] bytes = productVariantImportService.buildTemplateXlsx();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"mau_import_bien_the.xlsx\"")
                 .contentType(MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(bytes);
@@ -215,34 +279,58 @@ public class AdminProductController {
     /** Import đánh dấu sản phẩm NỔI BẬT từ file (multipart 'file'). */
     @PostMapping(value = "/featured/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@perm.check(100001)")
-    public ResponseEntity<APIResponse<com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse>> importFeatured(
+    public ResponseEntity<APIResponse<CatalogImportResponse>> importFeatured(
             @RequestParam("file") MultipartFile file) {
         var result = productFlagImportService.importFeatured(file);
-        String msg = String.format("Đã đánh dấu nổi bật %d, bỏ qua %d, lỗi %d",
-                result.getCreatedCount(), result.getSkippedCount(), result.getFailureCount());
+        String msg = String.format("Bật nổi bật %d, gỡ %d, bỏ qua %d, lỗi %d",
+                result.getCreatedCount(), result.getUpdatedCount(), result.getSkippedCount(), result.getFailureCount());
         return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
     }
 
     /** Import đánh dấu sản phẩm HOT-SALE từ file (multipart 'file'). */
     @PostMapping(value = "/hot-sale/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@perm.check(100001)")
-    public ResponseEntity<APIResponse<com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse>> importHotSale(
+    public ResponseEntity<APIResponse<CatalogImportResponse>> importHotSale(
             @RequestParam("file") MultipartFile file) {
         var result = productFlagImportService.importHotSale(file);
-        String msg = String.format("Đã đánh dấu hot-sale %d, bỏ qua %d, lỗi %d",
-                result.getCreatedCount(), result.getSkippedCount(), result.getFailureCount());
+        String msg = String.format("Bật hot-sale %d, gỡ %d, bỏ qua %d, lỗi %d",
+                result.getCreatedCount(), result.getUpdatedCount(), result.getSkippedCount(), result.getFailureCount());
         return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
     }
 
-    /** File Excel mẫu cho import nổi bật / hot-sale (cột sku + product_id). */
+    /** File Excel mẫu cho import nổi bật / hot-sale (cột sku + product_id + value bật/tắt). */
     @GetMapping(value = {"/featured/import/template", "/hot-sale/import/template"})
     @PreAuthorize("@perm.check(100001)")
     public ResponseEntity<byte[]> downloadFlagTemplate() {
         return ResponseEntity.ok()
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"mau_import_noi_bat_hot_sale.xlsx\"")
                 .contentType(MediaType.parseMediaType(XLSX_MIME))
                 .body(productFlagImportService.buildTemplateXlsx());
+    }
+
+    // ── Gán danh mục / thương hiệu hàng loạt (theo sku + code) ───────────────
+
+    /** Gán danh mục/thương hiệu cho sản phẩm hàng loạt từ file (cột sku + brand_code + category_code). */
+    @PostMapping(value = "/assign-catalog/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@perm.check(100001)")
+    public ResponseEntity<APIResponse<CatalogImportResponse>> importAssignCatalog(
+            @RequestParam("file") MultipartFile file) {
+        var result = productCatalogAssignService.importAssign(file);
+        String msg = String.format("Đã cập nhật %d, bỏ qua %d, lỗi %d",
+                result.getUpdatedCount(), result.getSkippedCount(), result.getFailureCount());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
+    }
+
+    /** File Excel mẫu cho gán danh mục/thương hiệu hàng loạt. */
+    @GetMapping(value = "/assign-catalog/import/template")
+    @PreAuthorize("@perm.check(100001)")
+    public ResponseEntity<byte[]> downloadAssignCatalogTemplate() {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"mau_gan_danh_muc_thuong_hieu.xlsx\"")
+                .contentType(MediaType.parseMediaType(XLSX_MIME))
+                .body(productCatalogAssignService.buildTemplateXlsx());
     }
 
     /**
@@ -254,9 +342,9 @@ public class AdminProductController {
     public ResponseEntity<byte[]> exportProducts() {
         byte[] bytes = productExportService.exportProductsXlsx();
         String fileName = "san_pham_export_"
-                + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date()) + ".xlsx";
+                + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) + ".xlsx";
         return ResponseEntity.ok()
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + fileName + "\"")
                 .contentType(MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
@@ -272,9 +360,9 @@ public class AdminProductController {
     public ResponseEntity<byte[]> exportIncompleteProducts() {
         byte[] bytes = productExportService.exportIncompleteProductsXlsx();
         String fileName = "san_pham_chua_hoan_thien_"
-                + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date()) + ".xlsx";
+                + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) + ".xlsx";
         return ResponseEntity.ok()
-                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + fileName + "\"")
                 .contentType(MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))

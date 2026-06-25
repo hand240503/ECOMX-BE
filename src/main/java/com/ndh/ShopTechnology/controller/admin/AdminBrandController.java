@@ -1,9 +1,11 @@
 package com.ndh.ShopTechnology.controller.admin;
 
 import com.ndh.ShopTechnology.constants.PermissionCode;
+import com.ndh.ShopTechnology.dto.request.brand.BulkDeleteBrandRequest;
 import com.ndh.ShopTechnology.dto.request.brand.CreateBrandRequest;
 import com.ndh.ShopTechnology.dto.request.brand.UpdateBrandRequest;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
+import com.ndh.ShopTechnology.dto.response.brand.BrandBulkDeleteResponse;
 import com.ndh.ShopTechnology.dto.response.brand.BrandResponse;
 import com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse;
 import com.ndh.ShopTechnology.services.brand.BrandService;
@@ -106,5 +108,18 @@ public class AdminBrandController {
     public ResponseEntity<APIResponse<Void>> delete(@PathVariable long id) {
         brandService.delete(id);
         return ResponseEntity.ok(APIResponse.of(true, "Deleted", null, null, null));
+    }
+
+    /**
+     * Xóa thương hiệu hàng loạt. Sản phẩm thuộc thương hiệu bị xóa sẽ được gỡ thương hiệu (set null).
+     */
+    @PostMapping("/bulk-delete")
+    @PreAuthorize("@perm.check(" + PermissionCode.DELETE_PRODUCT + ")")
+    public ResponseEntity<APIResponse<BrandBulkDeleteResponse>> bulkDelete(
+            @Valid @RequestBody BulkDeleteBrandRequest request) {
+        BrandBulkDeleteResponse result = brandService.deleteBrands(request.getIds());
+        String msg = String.format("Đã xóa %d thương hiệu (gỡ %d sản phẩm)",
+                result.getDeleted(), result.getProductsDetached());
+        return ResponseEntity.ok(APIResponse.of(true, msg, result, null, null));
     }
 }

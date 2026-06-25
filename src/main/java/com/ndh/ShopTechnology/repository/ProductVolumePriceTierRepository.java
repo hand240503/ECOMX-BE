@@ -31,4 +31,23 @@ public interface ProductVolumePriceTierRepository extends JpaRepository<ProductV
             WHERE t.enabled = true
             """)
     List<Long> findDistinctProductIdsWithEnabledTiers();
+
+    /** Tất cả bậc giá (mọi sản phẩm/biến thể) — dùng cho trang tổng quan. */
+    @Query("""
+            SELECT t FROM ProductVolumePriceTierEntity t
+            JOIN FETCH t.productVariant pv
+            JOIN FETCH pv.product p
+            ORDER BY p.id ASC, pv.id ASC, t.minQuantity ASC
+            """)
+    List<ProductVolumePriceTierEntity> findAllForOverview();
+
+    /** Tất cả bậc giá của mọi biến thể thuộc một sản phẩm. */
+    @Query("""
+            SELECT t FROM ProductVolumePriceTierEntity t
+            JOIN FETCH t.productVariant pv
+            JOIN FETCH pv.product p
+            WHERE p.id = :productId
+            ORDER BY pv.id ASC, t.minQuantity ASC
+            """)
+    List<ProductVolumePriceTierEntity> findByProductIdForAdmin(@Param("productId") Long productId);
 }

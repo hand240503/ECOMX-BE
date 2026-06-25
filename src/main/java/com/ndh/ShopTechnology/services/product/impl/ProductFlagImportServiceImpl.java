@@ -29,7 +29,7 @@ public class ProductFlagImportServiceImpl implements ProductFlagImportService {
         this.persister = persister;
     }
 
-    private static final String C_SKU = "sku", C_ID = "productId";
+    private static final String C_SKU = "sku", C_ID = "productId", C_VALUE = "value";
 
     private static final Map<String, String> ALIASES = buildAliases();
 
@@ -37,10 +37,12 @@ public class ProductFlagImportServiceImpl implements ProductFlagImportService {
         Map<String, String> m = new HashMap<>();
         for (String a : new String[]{"sku", "masku", "masanpham", "masp", "mahang", "productsku", "skusanpham"}) m.put(a, C_SKU);
         for (String a : new String[]{"productid", "id", "idsanpham", "masanphamid"}) m.put(a, C_ID);
+        for (String a : new String[]{"value", "giatri", "bat", "battat", "isfeatured", "hotsale", "noibat", "trangthai", "on", "enable"}) m.put(a, C_VALUE);
         return m;
     }
 
-    private static final String[] TEMPLATE_HEADERS = {"sku", "product_id"};
+    // sku/product_id để xác định sản phẩm; value = TRUE (bật) / FALSE (tắt), trống mặc định bật.
+    private static final String[] TEMPLATE_HEADERS = {"sku", "product_id", "value"};
 
     @Override
     public CatalogImportResponse importFeatured(MultipartFile file) {
@@ -75,17 +77,25 @@ public class ProductFlagImportServiceImpl implements ProductFlagImportService {
                 if (sku == null && id == null) {
                     throw new CustomApiException(HttpStatus.BAD_REQUEST, "Thiếu sku và product_id");
                 }
-                ProductFlagPersister.Outcome o = persister.setFlag(id, sku, flag);
+                // value: trống -> mặc định bật (true). TRUE/1/Có -> bật; FALSE/0/Không -> tắt.
+                Boolean parsed = support.parseBool(support.get(row, col, C_VALUE));
+                boolean desired = parsed == null || parsed;
+                ProductFlagPersister.Outcome o = persister.setFlag(id, sku, flag, desired);
                 resp.setTotalRows(resp.getTotalRows() + 1);
                 if ("SKIPPED".equals(o.action)) {
                     resp.setSkippedCount(resp.getSkippedCount() + 1);
                     resp.getResults().add(CatalogImportRowResult.builder()
                             .rowNumber(excelRow).key(key).action("SKIPPED").success(true).id(o.id)
-                            .message("Đã là " + label + " từ trước").build());
+                            .message("Đã đúng trạng thái " + label + " — bỏ qua").build());
+                } else if ("UNSET".equals(o.action)) {
+                    resp.setUpdatedCount(resp.getUpdatedCount() + 1);
+                    resp.getResults().add(CatalogImportRowResult.builder()
+                            .rowNumber(excelRow).key(key).action("UNSET").success(true).id(o.id)
+                            .message("Đã gỡ " + label).build());
                 } else {
                     resp.setCreatedCount(resp.getCreatedCount() + 1);
                     resp.getResults().add(CatalogImportRowResult.builder()
-                            .rowNumber(excelRow).key(key).action("CREATED").success(true).id(o.id)
+                            .rowNumber(excelRow).key(key).action("SET").success(true).id(o.id)
                             .message("Đã đánh dấu " + label).build());
                 }
             } catch (Exception e) {
@@ -102,18 +112,19 @@ public class ProductFlagImportServiceImpl implements ProductFlagImportService {
     @Override
     public byte[] buildTemplateXlsx() {
         String[][] examples = {
-                {"1024", ""},
-                {"1090", ""},
-                {"", "55"},
+                {"1024", "", "TRUE"},
+                {"1090", "", "TRUE"},
+                {"1055", "", "FALSE"},
+                {"", "55", "TRUE"},
         };
         String[] guide = {
                 "HƯỚNG DẪN IMPORT ĐÁNH DẤU NỔI BẬT / HOT-SALE",
                 "",
-                "1. Mỗi DÒNG = một sản phẩm cần BẬT cờ (nổi bật hoặc hot-sale tùy nút bạn bấm).",
+                "1. Mỗi DÒNG = một sản phẩm cần đặt cờ (nổi bật hoặc hot-sale tùy nút bạn bấm).",
                 "2. Xác định sản phẩm bằng MỘT trong hai: sku (mã SP dạng số) HOẶC product_id.",
                 "   Nếu điền cả hai, hệ thống ưu tiên sku.",
-                "3. File CHỈ để THÊM (bật cờ = true). Sản phẩm đã bật sẵn sẽ được BỎ QUA.",
-                "4. Để GỠ cờ, dùng giao diện chỉnh sửa sản phẩm (import này không tắt cờ).",
+                "3. Cột value: TRUE/1/Có = BẬT cờ; FALSE/0/Không = TẮT cờ. Để TRỐNG = mặc định BẬT.",
+                "4. Sản phẩm đã đúng trạng thái sẽ được BỎ QUA (không ghi lại).",
         };
         return ImportSupport.buildTemplate("Noi bat - Hot sale", TEMPLATE_HEADERS, examples, guide);
     }

@@ -21,6 +21,19 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long>, J
 
     long countByBrand_Id(Long brandId);
 
+    /** Số sản phẩm đang thuộc các danh mục này (để cảnh báo trước khi xóa danh mục). */
+    long countByCategory_IdIn(Collection<Long> categoryIds);
+
+    /** Gỡ danh mục khỏi mọi sản phẩm thuộc các danh mục này (set category = null) — dùng khi xóa danh mục. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE products p SET p.category = null WHERE p.category.id IN :categoryIds")
+    int clearCategoryForCategoryIds(@Param("categoryIds") Collection<Long> categoryIds);
+
+    /** Gỡ thương hiệu khỏi mọi sản phẩm thuộc các thương hiệu này (set brand = null) — dùng khi xóa thương hiệu. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE products p SET p.brand = null WHERE p.brand.id IN :brandIds")
+    int clearBrandForBrandIds(@Param("brandIds") Collection<Long> brandIds);
+
     @EntityGraph(attributePaths = { "category", "category.parent", "brand" })
     @Query("SELECT p FROM products p")
     Page<ProductEntity> findPageWithListRelations(Pageable pageable);

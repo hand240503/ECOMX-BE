@@ -48,6 +48,22 @@ public class ProductVolumePriceTierServiceImpl implements ProductVolumePriceTier
                 .collect(Collectors.toList());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<VolumePriceTierResponse> listByProduct(Long productId) {
+        return tierRepository.findByProductIdForAdmin(productId).stream()
+                .map(ProductVolumePriceTierServiceImpl::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VolumePriceTierResponse> listAll() {
+        return tierRepository.findAllForOverview().stream()
+                .map(ProductVolumePriceTierServiceImpl::toResponse)
+                .collect(Collectors.toList());
+    }
+
     /**
      * replaceTiers là thao tác bulk UPDATE – ghi log là UPDATE trên VOLUME_TIER,
      * idArgIndex=1 (variantId là đủ để identify).

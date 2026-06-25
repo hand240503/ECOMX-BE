@@ -9,6 +9,9 @@ public interface ProductPriceChangeService {
 
     List<ProductPriceChangeResponse> list(Long productId, Long variantId);
 
+    /** Tất cả chương trình đổi giá (mọi sản phẩm/biến thể) cho trang tổng quan. */
+    List<ProductPriceChangeResponse> listAll();
+
     ProductPriceChangeResponse create(Long productId, Long variantId, UpsertPriceChangeRequest request);
 
     ProductPriceChangeResponse update(Long productId, Long variantId, long priceChangeId,

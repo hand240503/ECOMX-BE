@@ -34,7 +34,7 @@ public class CatalogImportServiceImpl implements CatalogImportService {
     }
 
     private static final String C_ID = "id", C_CODE = "code", C_NAME = "name", C_STATUS = "status",
-            C_PARENT_ID = "parentId", C_PARENT_NAME = "parentName";
+            C_PARENT_ID = "parentId", C_PARENT_NAME = "parentName", C_PARENT_CODE = "parentCode";
 
     private static final Map<String, String> ALIASES = buildAliases();
 
@@ -44,6 +44,7 @@ public class CatalogImportServiceImpl implements CatalogImportService {
         for (String a : new String[]{"code", "ma", "macode"}) m.put(a, C_CODE);
         for (String a : new String[]{"name", "ten", "tendanhmuc", "tenhang", "tenthuonghieu", "tennhom"}) m.put(a, C_NAME);
         for (String a : new String[]{"status", "trangthai"}) m.put(a, C_STATUS);
+        for (String a : new String[]{"parentcode", "macha", "codecha", "madanhmuccha", "machadm"}) m.put(a, C_PARENT_CODE);
         for (String a : new String[]{"parentid", "danhmucchaid", "parent", "idcha"}) m.put(a, C_PARENT_ID);
         for (String a : new String[]{"parentname", "danhmuccha", "tendanhmuccha", "tencha"}) m.put(a, C_PARENT_NAME);
         return m;
@@ -87,6 +88,7 @@ public class CatalogImportServiceImpl implements CatalogImportService {
                         parseLong(get(row, ctx.col, C_ID)), code, name,
                         parseInt(get(row, ctx.col, C_STATUS)),
                         parseLong(get(row, ctx.col, C_PARENT_ID)),
+                        get(row, ctx.col, C_PARENT_CODE),
                         get(row, ctx.col, C_PARENT_NAME));
                 record(resp, excelRow, key, o);
             } catch (Exception e) {
@@ -144,6 +146,12 @@ public class CatalogImportServiceImpl implements CatalogImportService {
             Long parentId = parseLong(get(row, ctx.col, C_PARENT_ID));
             if (parentId != null && !categoryRepository.existsById(parentId)) {
                 recordPreviewFail(resp, excelRow, key, "Không tìm thấy danh mục cha id=" + parentId);
+                continue;
+            }
+            String parentCode = get(row, ctx.col, C_PARENT_CODE);
+            if (parentId == null && !isBlank(parentCode)
+                    && categoryRepository.findFirstByCodeIgnoreCase(parentCode.trim()).isEmpty()) {
+                recordPreviewFail(resp, excelRow, key, "Không tìm thấy danh mục cha code=" + parentCode);
                 continue;
             }
             Long id = parseLong(get(row, ctx.col, C_ID));

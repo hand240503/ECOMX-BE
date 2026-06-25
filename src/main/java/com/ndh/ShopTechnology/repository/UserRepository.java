@@ -9,12 +9,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<UserEntity, Long> {
 
     Optional<UserEntity> findOneByUsername(String username);
+
+    /** Tất cả tài khoản theo mã role (kèm password) — dùng để xác thực mật khẩu super admin. */
+    @EntityGraph(attributePaths = {"role"})
+    List<UserEntity> findByRole_Code(String roleCode);
 
     Optional<UserEntity> findOneByEmail(String email);
 

@@ -16,6 +16,7 @@ import java.util.Date;
 public class ProductPriceChangeResponse {
 
     private Long id;
+    private Long productId;
     private Long productVariantId;
     private Double basePrice;
     private Double salePrice;

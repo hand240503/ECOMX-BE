@@ -9,5 +9,11 @@ public interface ProductVolumePriceTierService {
 
     List<VolumePriceTierResponse> listByVariant(Long productId, Long variantId);
 
+    /** Tất cả bậc giá của mọi biến thể thuộc một sản phẩm. */
+    List<VolumePriceTierResponse> listByProduct(Long productId);
+
+    /** Tất cả bậc giá (mọi sản phẩm/biến thể) cho trang tổng quan. */
+    List<VolumePriceTierResponse> listAll();
+
     List<VolumePriceTierResponse> replaceTiers(Long productId, Long variantId, List<VolumePriceTierItemRequest> tiers);
 }

@@ -1,0 +1,127 @@
+============================================================
+CHỨC NĂNG IMPORT SẢN PHẨM HÀNG LOẠT
+============================================================
+
+Tải lên file Excel/CSV/TXT để tạo nhiều sản phẩm + biến thể + giá + tồn kho
+cùng lúc, thay vì thêm thủ công từng sản phẩm.
+
+
+------------------------------------------------------------
+1. LUỒNG SỬ DỤNG (ADMIN)
+------------------------------------------------------------
+1) Vào trang "Sản phẩm" -> bấm nút "Tải sản phẩm lên".
+2) Bấm "Tải file mẫu (.xlsx)" để lấy template, hoặc dùng file
+   docs/mau_import_san_pham.xlsx.
+3) Điền dữ liệu, kéo-thả file vào hộp thoại -> bấm "Bắt đầu import".
+4) Xem bảng kết quả: từng sản phẩm báo Thành công / Lỗi kèm lý do.
+   Dòng hợp lệ vẫn được tạo; chỉ dòng lỗi bị bỏ qua (không chặn cả file).
+
+
+------------------------------------------------------------
+2. ĐỊNH DẠNG FILE
+------------------------------------------------------------
+Dòng đầu là tiêu đề, dùng đúng TÊN CỘT trong CSDL. Không phân biệt hoa thường,
+có/không dấu; vẫn chấp nhận tên tiếng Việt (product_name hay "Tên sản phẩm" đều được).
+
+Cột (DB)       | Nhãn VN       | Bắt buộc          | Ý nghĩa
+---------------+---------------+-------------------+--------------------------------------
+product_name   | Tên sản phẩm  | Có (dòng đầu SP)  | Lặp lại hoặc để trống ở dòng biến thể sau
+category_id    | Danh mục      | Có                | Tên / code / id. Chưa có -> tự tạo mới
+brand_id       | Thương hiệu   | Không             | Tên / code / id. Chưa có -> tự tạo mới
+sku            | SKU           | Không             | Mã SKU sản phẩm (số)
+status         | Trạng thái    | Không             | 1 = hiển thị, 0 = ẩn (mặc định 1)
+is_featured    | Nổi bật       | Không             | TRUE/FALSE, 1/0, Có/Không
+hot_sale       | Hot sale      | Không             | TRUE/FALSE, 1/0, Có/Không
+description    | Mô tả         | Không             | Mô tả ngắn
+sku_code       | SKU biến thể  | Khuyến nghị       | Duy nhất toàn hệ thống
+option_values  | Thuộc tính    | Khuyến nghị       | Khóa=Giá trị, ngăn bởi ";". VD: CPU=i7;RAM=16GB
+unit_id        | Đơn vị        | Có nếu có giá     | Tên / id đơn vị. Chưa có -> tự tạo (ratio=1)
+current_value  | Giá bán       | Có nếu có đơn vị  | Giá hiện tại. Nhận 32.990.000 hoặc 32990000
+old_value      | Giá cũ        | Không             | Giá gạch ngang
+sort_order     | Thứ tự        | Không             | Thứ tự hiển thị biến thể
+
+LƯU Ý: Import sản phẩm CHỈ tạo product + biến thể + giá. KHÔNG còn cột on_hand.
+Số lượng tồn kho được nhập riêng ở chức năng "Quản lý kho" (xem IMPORT_TON_KHO_VA_KM.md).
+Biến thể mới luôn bắt đầu với tồn kho = 0 cho tới khi nhập kho.
+
+QUY TẮC GOM DÒNG:
+- Dòng có "Tên sản phẩm" -> bắt đầu sản phẩm mới (đồng thời là biến thể thứ nhất).
+- Dòng TRỐNG tên nhưng có "SKU biến thể" hoặc "Thuộc tính" -> biến thể bổ sung
+  của sản phẩm phía trên.
+- Dòng trống cả tên/SKU biến thể/thuộc tính, chỉ có "Đơn vị + Giá" -> thêm dòng
+  giá (đơn vị khác) cho biến thể hiện tại.
+
+
+------------------------------------------------------------
+3. API (BACKEND)
+------------------------------------------------------------
+- POST /api/v1/admin/products/import/preview
+  multipart, part "file". Quyền 100001. XEM TRƯỚC (dry-run, KHÔNG ghi CSDL).
+  Mỗi sản phẩm trả về: key, action (CREATE/UPDATE), exists, productId, variantCount.
+  Mặc định: SP đã tồn tại (khớp 'sku' rồi tới tên) -> UPDATE; ngược lại -> CREATE.
+
+- POST /api/v1/admin/products/import
+  multipart, part "file"; thêm part "actions" (tùy chọn) = JSON {"<key>":"CREATE|UPDATE"}
+  để chọn theo từng sản phẩm (lấy key từ bước preview). Không truyền 'actions' thì dùng mặc định.
+  Quyền 100001. CẬP NHẬT gộp theo sku_code biến thể & đơn vị giá (không xóa cái cũ vắng mặt),
+  KHÔNG đụng tồn kho. Trả về ProductImportResponse (createdCount, updatedCount, failureCount...).
+
+- GET /api/v1/admin/products/import/template
+  Tải file Excel mẫu. Quyền 100001.
+
+- GET /api/v1/admin/products/export
+  Xuất TOÀN BỘ sản phẩm ra Excel (kèm danh mục, thương hiệu, biến thể, giá, đơn vị).
+  Quyền 100002. Mỗi dòng là một dòng giá (biến thể x đơn vị). Tiêu đề theo tên cột CSDL:
+  product_id, product_name, category_id, category_code, category_name, brand_id,
+  brand_code, brand_name, sku, status, is_featured, hot_sale, sold_count, tag,
+  description, l_description, variant_id, sku_code, option_values, active, sort_order,
+  on_hand, reserved, available, price_id, unit_id, unit_name, unit_ratio,
+  current_value, old_value, display_name.
+  (Trên giao diện: trang Sản phẩm -> nút "Xuất Excel".)
+  (Không xuất created_date / modified_date / created_by / modified_by.)
+
+- GET /api/v1/admin/brands/export      -> Xuất toàn bộ thương hiệu. Quyền 100002.
+  Cột: id, code, name, status.
+  (Trên giao diện: trang Hãng/Thương hiệu -> nút "Xuất Excel".)
+
+- GET /api/v1/admin/categories/export  -> Xuất toàn bộ danh mục. Quyền 100002.
+  Cột: id, code, name, status, parent_id, parent_name.
+  (Trên giao diện: trang Danh mục -> nút "Xuất Excel".)
+
+- POST /api/v1/admin/brands/import     -> Nhập/upsert thương hiệu (multipart 'file'). Quyền 100001.
+- POST /api/v1/admin/categories/import -> Nhập/upsert danh mục (multipart 'file'). Quyền 100001.
+  Quy tắc upsert: khớp 'id' (hoặc 'code') -> CẬP NHẬT ghi đè; chưa có -> THÊM MỚI.
+  category: parent qua cột 'parent_id' (hoặc 'parent_name'). Mỗi dòng 1 transaction riêng.
+  (Trên giao diện: trang Brand/Danh mục -> nút "Nhập Excel".)
+
+Mỗi sản phẩm lưu trong transaction riêng (REQUIRES_NEW): sản phẩm lỗi rollback
+độc lập, không ảnh hưởng các sản phẩm hợp lệ.
+
+
+------------------------------------------------------------
+4. CÁC FILE ĐÃ THÊM / SỬA
+------------------------------------------------------------
+BACKEND (ecomx-be):
+- pom.xml — thêm org.apache.poi:poi-ooxml:5.3.0
+- repository/CategoryRepository, BrandRepository, UnitRepository — finder theo tên/code
+- dto/response/product/ProductImportResponse.java, ProductImportRowResult.java
+- services/product/ProductImportService.java
+- services/product/impl/ProductImportServiceImpl.java
+- services/product/impl/ProductImportPersister.java
+- services/product/impl/ProductImportDraft.java
+- services/product/ProductExportService.java + impl/ProductExportServiceImpl.java  (XUẤT Excel)
+- controller/admin/AdminProductController.java — endpoint import, import/template, export
+
+FRONTEND ADMIN (ecomx-fe admin):
+- api/config/apiEndpoints.ts — PRODUCTS_IMPORT, PRODUCTS_IMPORT_TEMPLATE
+- api/types/product.types.ts — ProductImportResponse, ProductImportRowResult
+- api/services/adminProductService.ts — importProducts(), downloadImportTemplate(), exportProducts()
+- admin/components/AdminProductImportModal.tsx — hộp thoại upload + bảng kết quả
+- admin/pages/AdminProductsPage.tsx — nút "Xuất Excel" + "Tải sản phẩm lên" + render modal
+
+
+------------------------------------------------------------
+5. LƯU Ý BUILD
+------------------------------------------------------------
+- Backend cần mvn tải dependency POI lần đầu: ./mvnw clean compile (hoặc mvn).
+- Frontend: dependency có sẵn (axios/react-query), chạy như bình thường.

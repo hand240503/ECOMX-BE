@@ -45,11 +45,11 @@ public class ProductImportServiceImpl implements ProductImportService {
         this.productRepository = productRepository;
     }
 
-    // Khóa cột nội bộ
-    private static final String C_NAME = "name", C_CATEGORY = "category", C_BRAND = "brand",
+    // Khóa cột nội bộ — CHỈ thông tin bảng product + product_variant.
+    // (Danh mục/thương hiệu/đơn vị/giá KHÔNG nhập ở chức năng này — có chức năng riêng.)
+    private static final String C_NAME = "name",
             C_SKU = "sku", C_STATUS = "status", C_FEATURED = "featured", C_HOTSALE = "hotsale",
             C_DESC = "desc", C_LDESC = "ldesc", C_VSKU = "vsku", C_OPTIONS = "options",
-            C_UNIT = "unit", C_PRICE = "price", C_OLDPRICE = "oldprice",
             C_SORT = "sort";
 
     private static final Map<String, String> HEADER_ALIASES = buildAliases();
@@ -57,8 +57,6 @@ public class ProductImportServiceImpl implements ProductImportService {
     private static Map<String, String> buildAliases() {
         Map<String, String> m = new HashMap<>();
         for (String a : new String[]{"tensanpham", "productname", "ten", "name", "tenhang", "tensp"}) m.put(a, C_NAME);
-        for (String a : new String[]{"danhmuc", "category", "categoryid", "loai", "nhom", "categoryname", "categorycode", "nganhhang"}) m.put(a, C_CATEGORY);
-        for (String a : new String[]{"thuonghieu", "brand", "brandid", "nhasanxuat", "hang", "nhanhieu"}) m.put(a, C_BRAND);
         for (String a : new String[]{"sku", "masku", "masanpham", "masp", "mahang"}) m.put(a, C_SKU);
         for (String a : new String[]{"trangthai", "status"}) m.put(a, C_STATUS);
         for (String a : new String[]{"noibat", "isfeatured", "featured", "spnoibat"}) m.put(a, C_FEATURED);
@@ -67,17 +65,14 @@ public class ProductImportServiceImpl implements ProductImportService {
         for (String a : new String[]{"motachitiet", "motadai", "ldescription", "longdescription", "chitiet"}) m.put(a, C_LDESC);
         for (String a : new String[]{"skubienthe", "mabienthe", "variantsku", "skucode", "mavariant", "bienthesku"}) m.put(a, C_VSKU);
         for (String a : new String[]{"thuoctinh", "phanloai", "options", "optionvalues", "tuychon", "bienthe", "thuoctinhbienthe"}) m.put(a, C_OPTIONS);
-        for (String a : new String[]{"donvi", "unit", "unitid", "donvitinh", "dvt"}) m.put(a, C_UNIT);
-        for (String a : new String[]{"giaban", "gia", "price", "currentvalue", "giahientai", "dongia"}) m.put(a, C_PRICE);
-        for (String a : new String[]{"giacu", "oldvalue", "oldprice", "giagoc", "gianiemyet"}) m.put(a, C_OLDPRICE);
         for (String a : new String[]{"thutu", "sortorder", "sapxep"}) m.put(a, C_SORT);
         return m;
     }
 
-    // Tiêu đề chuẩn cho file mẫu (đúng thứ tự)
+    // Tiêu đề chuẩn cho file mẫu (đúng thứ tự) — CHỈ thông tin sản phẩm.
+    // (Biến thể nhập riêng ở trang chi tiết sản phẩm bằng chức năng "Import biến thể".)
     private static final String[] TEMPLATE_HEADERS = {
-            "product_name", "category_id", "brand_id", "sku", "status", "is_featured", "hot_sale",
-            "description", "sku_code", "option_values", "unit_id", "current_value", "old_value", "sort_order"
+            "product_name", "sku", "status", "is_featured", "hot_sale", "description"
     };
 
     // ── Public API ───────────────────────────────────────────────────────────
@@ -123,62 +118,38 @@ public class ProductImportServiceImpl implements ProductImportService {
         List<ProductImportDraft> drafts = new ArrayList<>();
         ProductImportDraft current = null;
 
+        // CHỈ nhập SẢN PHẨM: mỗi dòng có tên = một sản phẩm. KHÔNG tạo biến thể ở đây.
+        // (Biến thể nhập riêng tại trang chi tiết sản phẩm.)
         for (int i = 1; i < rows.size(); i++) {
             String[] row = rows.get(i);
             int excelRow = i + 1; // 1-based, kể cả tiêu đề
             if (isRowEmpty(row)) continue;
 
             String pname = get(row, colMap, C_NAME);
-            if (!isBlank(pname)) {
-                Long rowSku = parseLong(get(row, colMap, C_SKU));
-                // Lặp lại tên sản phẩm ở dòng kế tiếp = cùng sản phẩm (thêm biến thể),
-                // không tạo sản phẩm trùng. Nếu khác tên (hoặc khác SKU) thì là sản phẩm mới.
-                boolean sameAsCurrent = current != null
-                        && current.productName.equalsIgnoreCase(pname.trim())
-                        && sameSku(current.sku, rowSku);
-                if (sameAsCurrent) {
-                    ProductImportDraft.VariantDraft v = buildVariant(row, colMap, excelRow);
-                    current.variants.add(v);
-                    addPrice(v, row, colMap, excelRow);
-                    continue;
-                }
-                current = new ProductImportDraft();
-                current.rowNumber = excelRow;
-                current.productName = pname.trim();
-                current.categoryRef = get(row, colMap, C_CATEGORY);
-                current.brandRef = get(row, colMap, C_BRAND);
-                current.sku = rowSku;
-                current.status = parseInt(get(row, colMap, C_STATUS));
-                current.isFeatured = parseBool(get(row, colMap, C_FEATURED));
-                current.hotSale = parseBool(get(row, colMap, C_HOTSALE));
-                current.description = nullIfBlank(get(row, colMap, C_DESC));
-                current.longDescription = nullIfBlank(get(row, colMap, C_LDESC));
-                drafts.add(current);
-                ProductImportDraft.VariantDraft v = buildVariant(row, colMap, excelRow);
-                current.variants.add(v);
-                addPrice(v, row, colMap, excelRow);
-            } else {
-                if (current == null) {
-                    results.add(ProductImportRowResult.builder()
-                            .rowNumber(excelRow).success(false)
-                            .message("Dòng thiếu tên sản phẩm và không thuộc sản phẩm nào phía trên")
-                            .build());
-                    continue;
-                }
-                String vsku = get(row, colMap, C_VSKU);
-                String opts = get(row, colMap, C_OPTIONS);
-                boolean newVariant = !isBlank(vsku) || !isBlank(opts);
-                if (newVariant) {
-                    ProductImportDraft.VariantDraft v = buildVariant(row, colMap, excelRow);
-                    current.variants.add(v);
-                    addPrice(v, row, colMap, excelRow);
-                } else {
-                    // Dòng chỉ thêm giá (đơn vị khác) cho biến thể hiện tại
-                    ProductImportDraft.VariantDraft last =
-                            current.variants.get(current.variants.size() - 1);
-                    addPrice(last, row, colMap, excelRow);
-                }
+            if (isBlank(pname)) {
+                results.add(ProductImportRowResult.builder()
+                        .rowNumber(excelRow).success(false)
+                        .message("Dòng thiếu tên sản phẩm")
+                        .build());
+                continue;
             }
+            Long rowSku = parseLong(get(row, colMap, C_SKU));
+            // Dòng lặp lại cùng tên + SKU với sản phẩm ngay trên = trùng -> bỏ qua, không tạo lại.
+            boolean sameAsCurrent = current != null
+                    && current.productName.equalsIgnoreCase(pname.trim())
+                    && sameSku(current.sku, rowSku);
+            if (sameAsCurrent) continue;
+
+            current = new ProductImportDraft();
+            current.rowNumber = excelRow;
+            current.productName = pname.trim();
+            current.sku = rowSku;
+            current.status = parseInt(get(row, colMap, C_STATUS));
+            current.isFeatured = parseBool(get(row, colMap, C_FEATURED));
+            current.hotSale = parseBool(get(row, colMap, C_HOTSALE));
+            current.description = nullIfBlank(get(row, colMap, C_DESC));
+            current.longDescription = nullIfBlank(get(row, colMap, C_LDESC));
+            drafts.add(current);
         }
 
         ParseResult parsed = new ParseResult();
@@ -327,18 +298,8 @@ public class ProductImportServiceImpl implements ProductImportService {
             }
 
             String[][] examples = {
-                    {"Laptop Dell XPS 13", "Laptop", "Dell", "100023", "1", "TRUE", "FALSE",
-                            "Laptop cao cấp mỏng nhẹ", "DELL-XPS13-I7", "CPU=i7;RAM=16GB;SSD=512GB",
-                            "Cái", "32990000", "35990000", "0"},
-                    {"Laptop Dell XPS 13", "Laptop", "Dell", "100023", "1", "TRUE", "FALSE",
-                            "Laptop cao cấp mỏng nhẹ", "DELL-XPS13-I5", "CPU=i5;RAM=8GB;SSD=256GB",
-                            "Cái", "25990000", "28990000", "1"},
-                    {"Chuột không dây Logitech", "Phụ kiện", "Logitech", "100050", "1", "FALSE", "TRUE",
-                            "Chuột không dây bền bỉ", "CHUOT-LOGI-M1", "Màu=Đen",
-                            "Cái", "290000", "350000", "0"},
-                    {"Chuột không dây Logitech", "Phụ kiện", "Logitech", "100050", "1", "FALSE", "TRUE",
-                            "Chuột không dây bền bỉ", "CHUOT-LOGI-M1-TRANG", "Màu=Trắng",
-                            "Cái", "290000", "350000", "1"},
+                    {"Laptop Dell XPS 13", "100023", "1", "TRUE", "FALSE", "Laptop cao cấp mỏng nhẹ"},
+                    {"Chuột không dây Logitech", "100050", "1", "FALSE", "TRUE", "Chuột không dây bền bỉ"},
             };
             int r = 1;
             for (String[] ex : examples) {
@@ -351,19 +312,17 @@ public class ProductImportServiceImpl implements ProductImportService {
             String[] lines = {
                     "HƯỚNG DẪN ĐIỀN FILE IMPORT SẢN PHẨM",
                     "",
-                    "1. Mỗi DÒNG = một biến thể. Nhiều dòng liên tiếp = nhiều biến thể của CÙNG một sản phẩm.",
-                    "2. Các dòng biến thể của cùng một sản phẩm: LẶP LẠI cùng 'Tên sản phẩm' (và SKU) ở mỗi dòng,",
-                    "   hoặc để TRỐNG cột 'Tên sản phẩm' ở các dòng sau — cả hai cách đều gom về một sản phẩm.",
-                    "3. Tiêu đề cột dùng đúng TÊN CỘT trong CSDL: product_name, category_id, brand_id, sku, status,",
-                    "   is_featured, hot_sale, description, sku_code, option_values, unit_id, current_value,",
-                    "   old_value, sort_order.",
-                    "4. category_id / brand_id / unit_id: điền TÊN hoặc code (hoặc id). Chưa có thì hệ thống tự tạo mới.",
-                    "5. option_values (Thuộc tính): dạng 'Khóa=Giá trị', nhiều cặp ngăn bởi ';'. Ví dụ: CPU=i7;RAM=16GB",
-                    "6. current_value (Giá bán) bắt buộc nếu có unit_id. old_value (Giá cũ) để trống nếu không khuyến mãi.",
-                    "7. is_featured / hot_sale: TRUE/FALSE (hoặc 1/0, Có/Không).",
-                    "8. status: 1 = hiển thị, 0 = ẩn (để trống mặc định 1).",
-                    "9. Cùng biến thể nhiều đơn vị giá: thêm dòng để trống product_name, sku_code, option_values, chỉ điền unit_id + current_value.",
-                    "10. TỒN KHO không nhập ở file này. Sau khi tạo sản phẩm, nhập số lượng tại chức năng 'Quản lý kho' (import tồn kho).",
+                    "FILE NÀY CHỈ NHẬP THÔNG TIN SẢN PHẨM. KHÔNG nhập biến thể, danh mục, thương hiệu, đơn vị, giá.",
+                    "",
+                    "1. Mỗi DÒNG = một sản phẩm.",
+                    "2. Tiêu đề cột dùng đúng TÊN CỘT: product_name, sku, status, is_featured, hot_sale, description.",
+                    "3. is_featured / hot_sale: TRUE/FALSE (hoặc 1/0, Có/Không).",
+                    "4. status: 1 = hiển thị, 0 = ẩn (để trống mặc định 1).",
+                    "5. BIẾN THỂ (phân loại): thêm SAU khi đã tạo sản phẩm — vào trang CHI TIẾT sản phẩm,",
+                    "   chọn 'Import biến thể', tải file Excel biến thể và nạp dữ liệu.",
+                    "6. DANH MỤC & THƯƠNG HIỆU: gán sau bằng chức năng 'Gán danh mục/thương hiệu hàng loạt' (theo sku).",
+                    "7. GIÁ & ĐƠN VỊ: nhập bằng chức năng quản lý giá riêng.",
+                    "8. TỒN KHO: nhập tại chức năng 'Quản lý kho' (import tồn kho).",
             };
             for (int i = 0; i < lines.length; i++) {
                 guide.createRow(i).createCell(0).setCellValue(lines[i]);
@@ -385,25 +344,10 @@ public class ProductImportServiceImpl implements ProductImportService {
         v.rowNumber = excelRow;
         v.skuCode = nullIfBlank(get(row, col, C_VSKU));
         v.options.putAll(parseOptions(get(row, col, C_OPTIONS)));
-        // Tồn kho KHÔNG nhập ở đây: import sản phẩm chỉ tạo product + biến thể + giá.
-        // Số lượng tồn được nhập riêng ở chức năng "Quản lý kho" (import tồn kho).
-        v.onHand = null;
+        // Tồn kho & giá KHÔNG nhập ở đây: chức năng này chỉ tạo product + biến thể.
         v.sortOrder = parseInt(get(row, col, C_SORT));
         v.active = null; // mặc định true ở tầng lưu
         return v;
-    }
-
-    private void addPrice(ProductImportDraft.VariantDraft v, String[] row, Map<Integer, String> col, int excelRow) {
-        String unit = get(row, col, C_UNIT);
-        String price = get(row, col, C_PRICE);
-        String oldPrice = get(row, col, C_OLDPRICE);
-        if (isBlank(unit) && isBlank(price) && isBlank(oldPrice)) return;
-        ProductImportDraft.PriceDraft p = new ProductImportDraft.PriceDraft();
-        p.rowNumber = excelRow;
-        p.unitRef = nullIfBlank(unit);
-        p.currentValue = parseNumber(price);
-        p.oldValue = parseNumber(oldPrice);
-        v.prices.add(p);
     }
 
     private Map<String, String> parseOptions(String raw) {

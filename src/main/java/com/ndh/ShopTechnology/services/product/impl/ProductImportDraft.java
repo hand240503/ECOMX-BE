@@ -6,8 +6,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Cấu trúc trung gian khi phân tích file import: 1 sản phẩm = N biến thể = N dòng giá.
- * Package-private, chỉ dùng nội bộ cho luồng import.
+ * Cấu trúc trung gian khi phân tích file import sản phẩm: 1 sản phẩm = N biến thể.
+ *
+ * <p>CHỈ chứa thông tin thuộc bảng product + product_variant. KHÔNG mang theo
+ * danh mục / thương hiệu / đơn vị / giá — các bảng đó do chức năng riêng quản lý
+ * (gán danh mục/thương hiệu hàng loạt, import giá). Package-private, dùng nội bộ.
  */
 class ProductImportDraft {
 
@@ -15,8 +18,6 @@ class ProductImportDraft {
     int rowNumber;
 
     String productName;
-    String categoryRef;   // tên hoặc code danh mục
-    String brandRef;      // tên hoặc code thương hiệu (có thể null)
     Long sku;
     Integer status;
     Boolean isFeatured;
@@ -30,16 +31,7 @@ class ProductImportDraft {
         int rowNumber;
         String skuCode;
         final Map<String, String> options = new LinkedHashMap<>();
-        Integer onHand;
         Integer sortOrder;
         Boolean active;
-        final List<PriceDraft> prices = new ArrayList<>();
-    }
-
-    static class PriceDraft {
-        int rowNumber;
-        String unitRef;       // tên đơn vị tính
-        Double currentValue;  // giá bán hiện tại
-        Double oldValue;      // giá cũ (nullable)
     }
 }
