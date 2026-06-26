@@ -7,6 +7,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Date;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -22,4 +24,8 @@ public class VolumePriceTierItemRequest {
     private Double unitPrice;
 
     private Boolean enabled;
+
+    /** Khung thời gian áp dụng (null = không giới hạn). Với import: chọn sau khi review. */
+    private Date startAt;
+    private Date endAt;
 }

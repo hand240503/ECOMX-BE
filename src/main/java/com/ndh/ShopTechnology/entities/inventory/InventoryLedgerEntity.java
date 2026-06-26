@@ -3,6 +3,7 @@ package com.ndh.ShopTechnology.entities.inventory;
 import com.ndh.ShopTechnology.entities.BaseEntity;
 import com.ndh.ShopTechnology.entities.order.OrderDetailEntity;
 import com.ndh.ShopTechnology.entities.product.ProductVariantEntity;
+import com.ndh.ShopTechnology.entities.store.StoreEntity;
 import com.ndh.ShopTechnology.enums.inventory.InventoryMovementType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -25,12 +26,14 @@ import lombok.*;
         name = "inventory_ledger",
         indexes = {
                 @Index(name = "idx_inv_ledger_variant", columnList = "variant_id"),
+                @Index(name = "idx_inv_ledger_store", columnList = "store_id"),
                 @Index(name = "idx_inv_ledger_order_detail", columnList = "order_detail_id"),
                 @Index(name = "idx_inv_ledger_type", columnList = "movement_type")
         })
 public class InventoryLedgerEntity extends BaseEntity {
 
     public static final String COL_VARIANT_ID       = "variant_id";
+    public static final String COL_STORE_ID         = "store_id";
     public static final String COL_ORDER_DETAIL_ID  = "order_detail_id";
     public static final String COL_MOVEMENT_TYPE    = "movement_type";
     public static final String COL_QUANTITY         = "quantity";
@@ -42,6 +45,11 @@ public class InventoryLedgerEntity extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = COL_VARIANT_ID, nullable = false)
     private ProductVariantEntity variant;
+
+    /** Kho phát sinh biến động (null với bút toán cũ trước khi có tính năng đa kho). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = COL_STORE_ID, nullable = true)
+    private StoreEntity store;
 
     /** Dòng đơn hàng nguồn (null nếu là nhập kho / điều chỉnh thủ công). */
     @ManyToOne(fetch = FetchType.LAZY)

@@ -1,6 +1,7 @@
 package com.ndh.ShopTechnology.entities.order;
 
 import com.ndh.ShopTechnology.entities.BaseEntity;
+import com.ndh.ShopTechnology.entities.store.StoreEntity;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -24,6 +25,7 @@ public class OrderEntity extends BaseEntity {
     public static final String COL_DELIVERY_DISTANCE_METERS = "delivery_distance_meters";
     public static final String COL_SHIPPING_FEE_VND = "shipping_fee_vnd";
     public static final String COL_PAYMENT_METHOD_ID = "payment_method_id";
+    public static final String COL_STORE_ID = "store_id";
     public static final String COL_RETURN_REFUND_STATUS = "return_refund_status";
     public static final String COL_RETURN_REFUND_NOTE  = "return_refund_note";
     public static final String COL_PAID = "is_paid";
@@ -88,6 +90,11 @@ public class OrderEntity extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = COL_USER_ID, nullable = false)
     private UserEntity user;
+
+    /** Kho (store) khách chọn — nơi tính phí ship và trừ tồn cho đơn này. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = COL_STORE_ID, nullable = true)
+    private StoreEntity store;
 
     @Column(name = COL_CHECKOUT_SESSION_PUBLIC_ID, length = 128, unique = true)
     private String checkoutSessionPublicId;

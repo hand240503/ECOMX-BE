@@ -12,6 +12,8 @@ package com.ndh.ShopTechnology.enums.inventory;
  *   <li>{@link #SALE_OUT} : -onHand và -reserved — xuất kho khi đơn hoàn thành.</li>
  *   <li>{@link #RETURN_IN}: +onHand   — nhập lại kho khi hoàn hàng (hàng còn tốt).</li>
  *   <li>{@link #RETURN_SCRAP}: 0 onHand bán được — hàng hoàn bị lỗi, đưa vào kho loại.</li>
+ *   <li>{@link #TRANSFER_OUT}: -onHand — xuất chuyển sang kho khác.</li>
+ *   <li>{@link #TRANSFER_IN} : +onHand — nhập do chuyển từ kho khác sang.</li>
  * </ul>
  */
 public enum InventoryMovementType {
@@ -21,5 +23,7 @@ public enum InventoryMovementType {
     RELEASE,
     SALE_OUT,
     RETURN_IN,
-    RETURN_SCRAP
+    RETURN_SCRAP,
+    TRANSFER_OUT,
+    TRANSFER_IN
 }

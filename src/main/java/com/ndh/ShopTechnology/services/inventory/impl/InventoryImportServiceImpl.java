@@ -50,7 +50,10 @@ public class InventoryImportServiceImpl implements InventoryImportService {
     private static final String[] TEMPLATE_HEADERS = {"variant_id", "sku_code", "quantity", "mode", "note"};
 
     @Override
-    public CatalogImportResponse importStock(MultipartFile file) {
+    public CatalogImportResponse importStock(Long storeId, MultipartFile file) {
+        if (storeId == null) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST, "storeId là bắt buộc khi import tồn kho");
+        }
         List<String[]> rows = support.readRows(file);
         Map<Integer, String> col = support.mapHeader(rows.get(0), ALIASES);
         if (!col.containsValue(C_VARIANT_ID) && !col.containsValue(C_SKU)) {
@@ -83,11 +86,11 @@ public class InventoryImportServiceImpl implements InventoryImportService {
                 String action;
                 if (setMode) {
                     if (qty < 0) throw new CustomApiException(HttpStatus.BAD_REQUEST, "Tồn kho đặt không được âm");
-                    inventoryService.adjustOnHand(v.getId(), qty, note != null ? note : "Import kiểm kê");
+                    inventoryService.adjustOnHand(storeId, v.getId(), qty, note != null ? note : "Import kiểm kê");
                     action = "UPDATED";
                 } else {
                     if (qty <= 0) throw new CustomApiException(HttpStatus.BAD_REQUEST, "Số lượng nhập phải > 0");
-                    inventoryService.importStock(v.getId(), qty, note != null ? note : "Import nhập kho");
+                    inventoryService.importStock(storeId, v.getId(), qty, note != null ? note : "Import nhập kho");
                     action = "CREATED";
                 }
                 resp.setTotalRows(resp.getTotalRows() + 1);

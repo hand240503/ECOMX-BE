@@ -11,6 +11,8 @@ import java.util.Optional;
 @Repository
 public interface OrderRepository extends JpaRepository<OrderEntity, Long> {
 
+    boolean existsByStore_Id(Long storeId);
+
     @EntityGraph(attributePaths = "paymentMethod")
     List<OrderEntity> findByUser_IdOrderByIdDesc(Long userId);
 

@@ -109,6 +109,7 @@ public class OrderServiceImpl implements OrderService {
     private final com.ndh.ShopTechnology.services.inventory.InventoryService inventoryService;
     private final com.ndh.ShopTechnology.repository.DocumentRepository documentRepository;
     private final com.ndh.ShopTechnology.services.storage.CloudinaryService cloudinaryService;
+    private final com.ndh.ShopTechnology.services.store.StoreService storeService;
 
     public OrderServiceImpl(
             OrderRepository orderRepository,
@@ -131,7 +132,8 @@ public class OrderServiceImpl implements OrderService {
             com.ndh.ShopTechnology.services.notification.NotificationService notificationService,
             com.ndh.ShopTechnology.services.inventory.InventoryService inventoryService,
             com.ndh.ShopTechnology.repository.DocumentRepository documentRepository,
-            com.ndh.ShopTechnology.services.storage.CloudinaryService cloudinaryService) {
+            com.ndh.ShopTechnology.services.storage.CloudinaryService cloudinaryService,
+            com.ndh.ShopTechnology.services.store.StoreService storeService) {
         this.orderRepository = orderRepository;
         this.orderDetailRepository = orderDetailRepository;
         this.productRepository = productRepository;
@@ -153,6 +155,7 @@ public class OrderServiceImpl implements OrderService {
         this.inventoryService = inventoryService;
         this.documentRepository = documentRepository;
         this.cloudinaryService = cloudinaryService;
+        this.storeService = storeService;
     }
 
     @Override
@@ -929,8 +932,12 @@ public class OrderServiceImpl implements OrderService {
         CheckoutShipping ship = resolveCheckoutShipping(header, currentUser.getId(), vnpaySessionOrNull);
         double grandTotal = grandOrderTotalVnd(draft.orderTotal(), ship.shippingFeeVnd());
 
+        // Kho (store) khách chọn: dùng để trừ tồn. Null storeId → kho mặc định.
+        com.ndh.ShopTechnology.entities.store.StoreEntity store = resolveOrderStore(header);
+
         OrderEntity order = OrderEntity.builder()
                 .user(currentUser)
+                .store(store)
                 .status(OrderConstants.STATUS_AWAITING_CONFIRM)
                 .description(orderDescription)
                 .total(grandTotal)
@@ -986,7 +993,7 @@ public class OrderServiceImpl implements OrderService {
         // Đồng bộ kho: GIỮ hàng cho đơn vừa tạo.
         // - COD (chưa thanh toán): không đủ tồn → ném CONFLICT, rollback việc tạo đơn (chống bán âm).
         // - VNPAY (đã thanh toán): giữ chỗ best-effort, cho phép oversell, không từ chối đơn đã trả tiền.
-        inventoryService.reserveForOrder(detailsToSave, !markPaid);
+        inventoryService.reserveForOrder(store, detailsToSave, !markPaid);
 
         return order;
     }
@@ -1053,6 +1060,27 @@ public class OrderServiceImpl implements OrderService {
         return t;
     }
 
+    /**
+     * Xác định kho (store) cho đơn: ưu tiên storeId khách chọn; nếu null dùng kho mặc định.
+     * Ném lỗi nếu storeId không hợp lệ / kho ngừng hoạt động, hoặc hệ thống chưa có kho nào.
+     */
+    private com.ndh.ShopTechnology.entities.store.StoreEntity resolveOrderStore(CreateOrderHeaderRequest header) {
+        if (header.getStoreId() != null) {
+            com.ndh.ShopTechnology.entities.store.StoreEntity s = storeService.getEntityOrThrow(header.getStoreId());
+            if (!Boolean.TRUE.equals(s.getActive())) {
+                throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                        "Kho đã chọn hiện ngừng hoạt động. Vui lòng chọn kho khác.");
+            }
+            return s;
+        }
+        com.ndh.ShopTechnology.entities.store.StoreEntity def = storeService.getDefaultStoreOrNull();
+        if (def == null) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "Chưa có kho (store) nào được cấu hình. Vui lòng liên hệ quản trị để tạo kho trước khi đặt đơn.");
+        }
+        return def;
+    }
+
     private CheckoutShipping resolveCheckoutShipping(
             CreateOrderHeaderRequest header,
             long userId,
@@ -1076,7 +1104,12 @@ public class OrderServiceImpl implements OrderService {
                             "User address not found with id: " + header.getUserAddressId()));
             Double dist = addr.getDistanceToWarehouseMeters();
             Long fee = addr.getShippingFeeVnd();
-            if (dist == null && header.getDeliveryDistanceMeters() != null) {
+            // Khách chọn store → dùng khoảng cách store→địa chỉ do client gửi (ưu tiên hơn
+            // khoảng cách tới kho mặc định đã lưu trên địa chỉ, vốn chỉ tính cho 1 kho).
+            if (header.getStoreId() != null && header.getDeliveryDistanceMeters() != null) {
+                dist = header.getDeliveryDistanceMeters();
+                fee = ShippingFeeCalculator.fromDistanceMeters(dist);
+            } else if (dist == null && header.getDeliveryDistanceMeters() != null) {
                 dist = header.getDeliveryDistanceMeters();
                 fee = ShippingFeeCalculator.fromDistanceMeters(dist);
             } else if (dist != null) {
@@ -1380,7 +1413,7 @@ public class OrderServiceImpl implements OrderService {
 
         List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(order.getId());
         // Đồng bộ kho: nhả hàng đã giữ khi khách hủy đơn.
-        inventoryService.releaseForOrder(details);
+        inventoryService.releaseForOrder(order.getStore(), details);
         return buildOrderResponse(order, mapDetailResponses(details));
     }
 
@@ -1498,10 +1531,10 @@ public class OrderServiceImpl implements OrderService {
         if (newStatus == OrderConstants.STATUS_COMPLETED) {
             // Xuất kho thật + cộng soldCount khi đơn hoàn thành.
             increaseSoldCount(details);
-            inventoryService.commitSaleForOrder(details);
+            inventoryService.commitSaleForOrder(order.getStore(), details);
         } else if (newStatus == OrderConstants.STATUS_CANCELLED) {
             // Nhả hàng đã giữ khi admin hủy đơn.
-            inventoryService.releaseForOrder(details);
+            inventoryService.releaseForOrder(order.getStore(), details);
         }
         return buildOrderResponse(order, mapDetailResponses(details));
     }
@@ -1562,7 +1595,7 @@ public class OrderServiceImpl implements OrderService {
         List<OrderDetailEntity> details = orderDetailRepository.findByOrder_IdOrderByIdAsc(orderId);
         // Đồng bộ kho: khi đã HOÀN TIỀN → nhập lại kho (nếu hàng tốt) và trừ soldCount.
         if (newReturnStatus == OrderConstants.RETURN_STATUS_REFUNDED) {
-            inventoryService.restockForOrder(details, restockToSellable);
+            inventoryService.restockForOrder(order.getStore(), details, restockToSellable);
             decreaseSoldCount(details);
         }
         return buildOrderResponse(order, mapDetailResponses(details));
@@ -1690,6 +1723,16 @@ public class OrderServiceImpl implements OrderService {
 
     private OrderResponse buildOrderResponse(OrderEntity order, List<OrderDetailResponse> orderDetails) {
         PaymentMethodEntity pm = order.getPaymentMethod();
+        Long storeId = null;
+        String storeName = null;
+        try {
+            if (order.getStore() != null) {
+                storeId = order.getStore().getId();
+                storeName = order.getStore().getName();
+            }
+        } catch (RuntimeException ignore) {
+            // store có thể LAZY/không khả dụng ngoài transaction — bỏ qua an toàn.
+        }
         return OrderResponse.builder()
                 .id(order.getId())
                 .orderCode(order.getOrderCode())
@@ -1704,6 +1747,8 @@ public class OrderServiceImpl implements OrderService {
                 .deliveryAddress(order.getDeliveryAddress())
                 .deliveryDistanceMeters(order.getDeliveryDistanceMeters())
                 .shippingFeeVnd(order.getShippingFeeVnd())
+                .storeId(storeId)
+                .storeName(storeName)
                 .paid(order.getPaid())
                 .paidAt(order.getPaidAt())
                 .completedAt(order.getCompletedAt())

@@ -17,5 +17,9 @@ public interface InventoryLedgerRepository extends JpaRepository<InventoryLedger
 
     List<InventoryLedgerEntity> findByVariant_IdOrderByIdDesc(Long variantId);
 
+    List<InventoryLedgerEntity> findByStore_IdAndVariant_IdOrderByIdDesc(Long storeId, Long variantId);
+
+    List<InventoryLedgerEntity> findByStore_IdOrderByIdDesc(Long storeId);
+
     List<InventoryLedgerEntity> findByOrderDetail_IdOrderByIdAsc(Long orderDetailId);
 }

@@ -21,6 +21,7 @@ public final class PermissionCode {
 
     public static final int MODULE_PRODUCT    = 100;
     public static final int MODULE_PRICE      = 150;
+    public static final int MODULE_STORE      = 250;
     public static final int MODULE_UNIT       = 160;
     public static final int MODULE_BRAND      = 170;
     public static final int MODULE_CATEGORY   = 200;
@@ -65,6 +66,12 @@ public final class PermissionCode {
     public static final int READ_CATEGORY   = 200002;
     public static final int UPDATE_CATEGORY = 200003;
     public static final int DELETE_CATEGORY = 200004;
+
+    /** Module quản lý kho / cửa hàng (250xxx). */
+    public static final int CREATE_STORE = 250001;
+    public static final int READ_STORE   = 250002;
+    public static final int UPDATE_STORE = 250003;
+    public static final int DELETE_STORE = 250004;
 
     public static final int CREATE_DOCUMENT = 300001;
     public static final int READ_DOCUMENT   = 300002;
@@ -181,7 +188,7 @@ public final class PermissionCode {
 
     public static List<Integer> catalogGrantableModuleSpecificCodesOrdered() {
         List<Integer> out = new ArrayList<>(20);
-        int[] modules = new int[]{MODULE_PRODUCT, MODULE_DOCUMENT, MODULE_ORDER, MODULE_REPORT, MODULE_USER};
+        int[] modules = new int[]{MODULE_PRODUCT, MODULE_STORE, MODULE_DOCUMENT, MODULE_ORDER, MODULE_REPORT, MODULE_USER};
         for (int module : modules) {
             for (int action = ACTION_CREATE; action <= ACTION_DELETE; action++) {
                 out.add(moduleAction(module, action));
@@ -203,6 +210,7 @@ public final class PermissionCode {
                 CREATE_UNIT, READ_UNIT, UPDATE_UNIT, DELETE_UNIT,
                 CREATE_BRAND, READ_BRAND, UPDATE_BRAND, DELETE_BRAND,
                 CREATE_CATEGORY, READ_CATEGORY, UPDATE_CATEGORY, DELETE_CATEGORY,
+                CREATE_STORE, READ_STORE, UPDATE_STORE, DELETE_STORE,
                 CREATE_DOCUMENT, READ_DOCUMENT, UPDATE_DOCUMENT, DELETE_DOCUMENT,
                 CREATE_EMPLOYEE, READ_EMPLOYEE, UPDATE_EMPLOYEE, DELETE_EMPLOYEE,
                 CREATE_ORDER, READ_ORDER, UPDATE_ORDER, DELETE_ORDER,

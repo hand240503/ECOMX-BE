@@ -122,6 +122,7 @@ public class RolePermissionController {
                                 "legacyBranchesStillHonor", Boolean.TRUE)),
                 "modules", Map.of(
                         "PRODUCT_FAMILY", PermissionCode.MODULE_PRODUCT,
+                        "STORE", PermissionCode.MODULE_STORE,
                         "DOCUMENT", PermissionCode.MODULE_DOCUMENT,
                         "ORDER", PermissionCode.MODULE_ORDER,
                         "REPORT", PermissionCode.MODULE_REPORT,
@@ -151,6 +152,7 @@ public class RolePermissionController {
         int action = PermissionCode.extractAction(code);
         String moduleName = switch (module) {
             case PermissionCode.MODULE_PRODUCT -> "PRODUCT";
+            case PermissionCode.MODULE_STORE -> "STORE";
             case PermissionCode.MODULE_DOCUMENT -> "DOCUMENT";
             case PermissionCode.MODULE_ORDER -> "ORDER";
             case PermissionCode.MODULE_REPORT -> "REPORT";

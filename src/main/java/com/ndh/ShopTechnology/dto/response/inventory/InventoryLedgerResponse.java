@@ -12,6 +12,8 @@ import java.util.Date;
 public class InventoryLedgerResponse {
     private Long id;
     private Long variantId;
+    private Long storeId;
+    private String storeName;
     private String movementType;
     private Integer quantity;
     private Integer sumBegin;

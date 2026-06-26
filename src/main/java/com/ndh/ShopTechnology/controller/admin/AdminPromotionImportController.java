@@ -4,12 +4,15 @@ import com.ndh.ShopTechnology.constants.PermissionCode;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse;
 import com.ndh.ShopTechnology.services.promotion.PromotionImportService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Date;
 
 /**
  * Import các chương trình giá/khuyến mãi bằng Excel/CSV/TXT:
@@ -33,8 +36,12 @@ public class AdminPromotionImportController {
     @PostMapping(value = "/price-changes/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<CatalogImportResponse>> importPriceChanges(
-            @RequestParam("file") MultipartFile file) {
-        return ok(promotionImportService.importPriceChanges(file));
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "startAt", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date startAt,
+            @RequestParam(value = "endAt", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date endAt) {
+        return ok(promotionImportService.importPriceChanges(file, startAt, endAt));
     }
 
     @GetMapping("/price-changes/import/template")
@@ -48,8 +55,12 @@ public class AdminPromotionImportController {
     @PostMapping(value = "/purchase-with-purchase/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<CatalogImportResponse>> importPwp(
-            @RequestParam("file") MultipartFile file) {
-        return ok(promotionImportService.importPurchaseWithPurchase(file));
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "startAt", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date startAt,
+            @RequestParam(value = "endAt", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date endAt) {
+        return ok(promotionImportService.importPurchaseWithPurchase(file, startAt, endAt));
     }
 
     @GetMapping("/purchase-with-purchase/import/template")
@@ -63,8 +74,12 @@ public class AdminPromotionImportController {
     @PostMapping(value = "/volume-price-tiers/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@perm.check(" + PermissionCode.CREATE_PRODUCT + ")")
     public ResponseEntity<APIResponse<CatalogImportResponse>> importVolumeTiers(
-            @RequestParam("file") MultipartFile file) {
-        return ok(promotionImportService.importVolumeTiers(file));
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "startAt", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date startAt,
+            @RequestParam(value = "endAt", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Date endAt) {
+        return ok(promotionImportService.importVolumeTiers(file, startAt, endAt));
     }
 
     @GetMapping("/volume-price-tiers/import/template")

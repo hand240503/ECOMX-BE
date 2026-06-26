@@ -145,6 +145,9 @@ public class WebSecurityConfig {
                             .requestMatchers(HttpMethod.GET, String.format("%s/payment-methods", base))
                             .permitAll()
 
+                            .requestMatchers(HttpMethod.GET, String.format("%s/stores/**", base))
+                            .permitAll()
+
                             .requestMatchers(HttpMethod.GET, String.format("%s/payment/vnpay/ipn", base))
                             .permitAll()
                             .requestMatchers(HttpMethod.GET, String.format("%s/payment/vnpay/return", base))

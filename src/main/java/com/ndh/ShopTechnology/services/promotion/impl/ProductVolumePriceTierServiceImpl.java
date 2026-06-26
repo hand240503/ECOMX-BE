@@ -99,6 +99,8 @@ public class ProductVolumePriceTierServiceImpl implements ProductVolumePriceTier
                     .minQuantity(t.getMinQuantity())
                     .unitPrice(t.getUnitPrice())
                     .enabled(t.getEnabled() != null ? t.getEnabled() : true)
+                    .startAt(t.getStartAt())
+                    .endAt(t.getEndAt())
                     .build();
             saved.add(tierRepository.save(e));
         }
@@ -141,6 +143,8 @@ public class ProductVolumePriceTierServiceImpl implements ProductVolumePriceTier
                 .minQuantity(e.getMinQuantity())
                 .unitPrice(e.getUnitPrice())
                 .enabled(e.getEnabled())
+                .startAt(e.getStartAt())
+                .endAt(e.getEndAt())
                 .build();
     }
 }

@@ -61,6 +61,11 @@ public final class PermissionDescriptions {
         m.put(PermissionCode.UPDATE_ORDER,      "Cập nhật trạng thái đơn hàng (xác nhận, giao, hoàn, ...)");
         m.put(PermissionCode.DELETE_ORDER,      "Xoá / huỷ đơn hàng (admin)");
 
+        m.put(PermissionCode.CREATE_STORE,      "Tạo kho / cửa hàng mới");
+        m.put(PermissionCode.READ_STORE,        "Xem danh sách kho, tồn kho theo kho và lịch sử biến động");
+        m.put(PermissionCode.UPDATE_STORE,      "Cập nhật kho, nhập/điều chỉnh tồn theo kho, chuyển kho giữa các kho");
+        m.put(PermissionCode.DELETE_STORE,      "Xoá / vô hiệu hoá kho");
+
         m.put(PermissionCode.CREATE_REPORT,     "Tạo báo cáo công việc");
         m.put(PermissionCode.READ_REPORT,       "Xem báo cáo");
         m.put(PermissionCode.UPDATE_REPORT,     "Cập nhật chi tiết báo cáo");

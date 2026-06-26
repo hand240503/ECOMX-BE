@@ -24,6 +24,9 @@ public class CreateOrderHeaderRequest {
 
     private Long userAddressId;
 
+    /** Kho (store) khách chọn — tính phí ship và trừ tồn tại kho này. Null = dùng kho mặc định. */
+    private Long storeId;
+
     @NotNull(message = "paymentMethodId is required")
     private Long paymentMethodId;
 

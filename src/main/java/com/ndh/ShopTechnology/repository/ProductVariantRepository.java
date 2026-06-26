@@ -126,6 +126,41 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariantEn
             """)
     int setOnHand(@Param("id") Long id, @Param("value") int value);
 
+    /**
+     * Cộng/trừ onHand vô điều kiện (delta có dấu) — dùng để giữ aggregate tồn
+     * trên variant đồng bộ với tổng tồn theo kho (store_stock).
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            UPDATE ProductVariant v
+               SET v.onHand = v.onHand + :delta
+             WHERE v.id = :id
+            """)
+    int bumpOnHand(@Param("id") Long id, @Param("delta") int delta);
+
+    /** Cộng/trừ reserved vô điều kiện (delta có dấu) — đồng bộ aggregate. */
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            UPDATE ProductVariant v
+               SET v.reserved = v.reserved + :delta
+             WHERE v.id = :id
+            """)
+    int bumpReserved(@Param("id") Long id, @Param("delta") int delta);
+
+    /**
+     * Đồng bộ tồn aggregate trên variant = TỔNG tồn theo tất cả các kho (store_stock).
+     * Gọi sau mỗi biến động kho để onHand/reserved trên product_variant luôn phản ánh
+     * đúng tổng tồn đa kho (dùng cho hiển thị danh sách / trang sản phẩm).
+     */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            UPDATE product_variant v
+               SET v.on_hand  = COALESCE((SELECT SUM(ss.on_hand)  FROM store_stock ss WHERE ss.variant_id = v.id), 0),
+                   v.reserved = COALESCE((SELECT SUM(ss.reserved) FROM store_stock ss WHERE ss.variant_id = v.id), 0)
+             WHERE v.id = :id
+            """, nativeQuery = true)
+    int recomputeAggregateFromStores(@Param("id") Long id);
+
     /** Danh sách biến thể kèm sản phẩm để hiển thị tồn kho; lọc theo tên SP hoặc SKU (q null = tất cả). */
     @Query("""
             SELECT v FROM ProductVariant v

@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Date;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -23,4 +25,8 @@ public class PurchaseWithPurchaseOfferResponse {
     private Integer companionPromoUnitsPerAnchor;
     private Integer maxCompanionPromoUnits;
     private Boolean enabled;
+
+    /** Khung thời gian áp dụng (null = không giới hạn). */
+    private Date startAt;
+    private Date endAt;
 }

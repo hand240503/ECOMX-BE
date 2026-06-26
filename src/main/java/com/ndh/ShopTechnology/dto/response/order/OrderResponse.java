@@ -30,6 +30,8 @@ public class OrderResponse {
     private String deliveryAddress;
     private Double deliveryDistanceMeters;
     private Long shippingFeeVnd;
+    private Long storeId;
+    private String storeName;
     private Boolean paid;
     private Date paidAt;
     private Date completedAt;

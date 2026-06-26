@@ -100,10 +100,14 @@ public class PromotionPricingServiceImpl implements PromotionPricingService {
 
         List<Long> variantIds = new ArrayList<>(qtyByVariant.keySet());
 
+        // Thời điểm định giá: lọc các chương trình theo khung thời gian áp dụng (start/end).
+        Date now = new Date();
+
         List<ProductVolumePriceTierEntity> allTiers = variantIds.isEmpty()
                 ? List.of()
                 : volumeTierRepository.findByProductVariant_IdInAndEnabledTrue(variantIds);
         Map<Long, List<ProductVolumePriceTierEntity>> tiersByVariantId = allTiers.stream()
+                .filter(t -> isWithinWindow(t.getStartAt(), t.getEndAt(), now))
                 .collect(Collectors.groupingBy(t -> t.getProductVariant().getId()));
 
         List<PurchaseWithPurchaseOfferEntity> pwpOfferRows = new ArrayList<>();
@@ -113,6 +117,7 @@ public class PromotionPricingServiceImpl implements PromotionPricingService {
         }
         Map<Long, PurchaseWithPurchaseOfferEntity> uniquePwpById = new LinkedHashMap<>();
         for (PurchaseWithPurchaseOfferEntity o : pwpOfferRows) {
+            if (!isWithinWindow(o.getStartAt(), o.getEndAt(), now)) continue;
             uniquePwpById.putIfAbsent(o.getId(), o);
         }
         List<PurchaseWithPurchaseOfferEntity> pwpOffers = new ArrayList<>(uniquePwpById.values());
@@ -125,7 +130,6 @@ public class PromotionPricingServiceImpl implements PromotionPricingService {
             if (promo > 0) promoPoolByOfferId.put(o.getId(), promo);
         }
 
-        Date now = new Date();
         long pricedAt = now.getTime();
         Map<Long, ProductPriceChangeEntity> pcByVariantId =
                 variantDisplayPriceResolver.effectiveActivePriceChangesByVariantId(variantIds, now);
@@ -256,8 +260,10 @@ public class PromotionPricingServiceImpl implements PromotionPricingService {
 
         if (anchorOffers.isEmpty()) return List.of();
 
+        Date suggestNow = new Date();
         List<PurchaseWithPurchaseOfferEntity> eligibleOffers = new ArrayList<>();
         for (PurchaseWithPurchaseOfferEntity offer : anchorOffers) {
+            if (!isWithinWindow(offer.getStartAt(), offer.getEndAt(), suggestNow)) continue;
             Long companionVarId = offer.getCompanionVariant() != null
                     ? offer.getCompanionVariant().getId() : null;
             if (companionVarId != null && variantIdsInCart.contains(companionVarId)) continue;
@@ -325,6 +331,13 @@ public class PromotionPricingServiceImpl implements PromotionPricingService {
     }
 
     private static Long epoch(Date d) { return d != null ? d.getTime() : null; }
+
+    /** Chương trình áp dụng tại thời điểm {@code now} nếu now ∈ [startAt, endAt]; null = không giới hạn đầu/cuối. */
+    private static boolean isWithinWindow(Date startAt, Date endAt, Date now) {
+        if (startAt != null && now.before(startAt)) return false;
+        if (endAt != null && now.after(endAt)) return false;
+        return true;
+    }
 
     private static int eligiblePromoUnits(PurchaseWithPurchaseOfferEntity offer,
                                            int anchorQty, int companionQty) {

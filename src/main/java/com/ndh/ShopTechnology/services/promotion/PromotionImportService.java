@@ -3,6 +3,8 @@ package com.ndh.ShopTechnology.services.promotion;
 import com.ndh.ShopTechnology.dto.response.catalog.CatalogImportResponse;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Date;
+
 /**
  * Import các chương trình giá/khuyến mãi từ file Excel/CSV/TXT:
  * <ul>
@@ -12,14 +14,18 @@ import org.springframework.web.multipart.MultipartFile;
  * </ul>
  * Biến thể tra theo variant_id hoặc sku_code. Mỗi dòng/biến thể xử lý độc lập;
  * dòng lỗi được báo cáo lại, không chặn cả file.
+ *
+ * <p>Khung thời gian (startAt/endAt) KHÔNG nằm trong file Excel — admin chọn sau khi
+ * tải lên & xem review, rồi áp cho TẤT CẢ dòng được nhập. endAt = null nghĩa là không
+ * giới hạn thời điểm kết thúc.</p>
  */
 public interface PromotionImportService {
 
-    CatalogImportResponse importPriceChanges(MultipartFile file);
+    CatalogImportResponse importPriceChanges(MultipartFile file, Date startAt, Date endAt);
 
-    CatalogImportResponse importPurchaseWithPurchase(MultipartFile file);
+    CatalogImportResponse importPurchaseWithPurchase(MultipartFile file, Date startAt, Date endAt);
 
-    CatalogImportResponse importVolumeTiers(MultipartFile file);
+    CatalogImportResponse importVolumeTiers(MultipartFile file, Date startAt, Date endAt);
 
     byte[] buildPriceChangeTemplate();
 

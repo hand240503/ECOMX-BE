@@ -199,9 +199,8 @@ public class ProductPriceChangeServiceImpl implements ProductPriceChangeService 
      */
     private void validateQuantityLimitAgainstStock(ProductVariantEntity v, Integer quantityLimit) {
         if (quantityLimit == null) return;
-        InventoryStockResponse stock = inventoryService.getStock(v.getId());
-        Integer availableObj = stock != null ? stock.getAvailable() : null;
-        int available = availableObj != null ? availableObj : 0;
+        // Tồn khả dụng tổng hợp trên toàn bộ kho (aggregate trên variant).
+        int available = v.getAvailable();
         if (quantityLimit > available) {
             throw new CustomApiException(HttpStatus.BAD_REQUEST,
                     "quantity_limit (" + quantityLimit + ") vượt quá số lượng tồn kho khả dụng ("

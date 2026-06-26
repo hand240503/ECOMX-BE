@@ -6,8 +6,11 @@ import com.ndh.ShopTechnology.config.DeliveryRoutingProperties;
 import com.ndh.ShopTechnology.dto.delivery.GeocodedAddress;
 import com.ndh.ShopTechnology.dto.delivery.RouteMetrics;
 import com.ndh.ShopTechnology.dto.response.delivery.ShippingDistanceResponse;
+import com.ndh.ShopTechnology.dto.response.delivery.ShippingStoreOptionResponse;
+import com.ndh.ShopTechnology.entities.store.StoreEntity;
 import com.ndh.ShopTechnology.entities.user.AddressType;
 import com.ndh.ShopTechnology.exception.CustomApiException;
+import com.ndh.ShopTechnology.repository.StoreRepository;
 import com.ndh.ShopTechnology.repository.UserAddressRepository;
 import com.ndh.ShopTechnology.utils.ShippingFeeCalculator;
 import org.apache.commons.lang3.StringUtils;
@@ -25,6 +28,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -34,16 +39,80 @@ public class DeliveryRoutingService {
     private final ObjectMapper objectMapper;
     private final DeliveryRoutingProperties properties;
     private final UserAddressRepository userAddressRepository;
+    private final StoreRepository storeRepository;
 
     public DeliveryRoutingService(
             RestTemplate restTemplate,
             ObjectMapper objectMapper,
             DeliveryRoutingProperties properties,
-            UserAddressRepository userAddressRepository) {
+            UserAddressRepository userAddressRepository,
+            StoreRepository storeRepository) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.userAddressRepository = userAddressRepository;
+        this.storeRepository = storeRepository;
+    }
+
+    /**
+     * Với một địa chỉ giao, trả về danh sách kho đang hoạt động kèm khoảng cách và
+     * phí ship từ từng kho tới địa chỉ đó (để khách chọn store khi checkout).
+     */
+    public List<ShippingStoreOptionResponse> storeShippingOptions(String address) {
+        GeocodedAddress origin = geocodeAddress(address);
+        List<StoreEntity> stores = storeRepository.findByActiveTrueOrderByIdAsc();
+        List<ShippingStoreOptionResponse> out = new ArrayList<>(stores.size());
+        for (StoreEntity s : stores) {
+            ShippingStoreOptionResponse.ShippingStoreOptionResponseBuilder b = ShippingStoreOptionResponse.builder()
+                    .storeId(s.getId())
+                    .code(s.getCode())
+                    .name(s.getName())
+                    .addressLine(s.getAddressLine())
+                    .city(s.getCity())
+                    .storeLatitude(s.getLatitude())
+                    .storeLongitude(s.getLongitude());
+            if (s.getLatitude() == null || s.getLongitude() == null) {
+                out.add(b.routable(false).build());
+                continue;
+            }
+            try {
+                RouteMetrics r = routeDriving(s.getLatitude(), s.getLongitude(),
+                        origin.latitude(), origin.longitude());
+                out.add(b.routable(true)
+                        .distanceMeters(r.distanceMeters())
+                        .distanceKilometers(Math.round(r.distanceMeters() / 10.0) / 100.0)
+                        .durationSeconds(r.durationSeconds())
+                        .shippingFeeVnd(ShippingFeeCalculator.fromDistanceMeters(r.distanceMeters()))
+                        .build());
+            } catch (CustomApiException ex) {
+                out.add(b.routable(false).build());
+            }
+        }
+        return out;
+    }
+
+    /** Khoảng cách & phí ship từ một kho cụ thể tới địa chỉ giao. */
+    public ShippingDistanceResponse distanceFromStoreToAddress(Long storeId, String address) {
+        StoreEntity store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new CustomApiException(HttpStatus.NOT_FOUND, "Không tìm thấy kho id=" + storeId));
+        if (store.getLatitude() == null || store.getLongitude() == null) {
+            throw new CustomApiException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Kho '" + store.getName() + "' chưa có toạ độ để tính phí ship.");
+        }
+        GeocodedAddress origin = geocodeAddress(address);
+        RouteMetrics r = routeDriving(store.getLatitude(), store.getLongitude(),
+                origin.latitude(), origin.longitude());
+        return ShippingDistanceResponse.builder()
+                .distanceMeters(r.distanceMeters())
+                .distanceKilometers(Math.round(r.distanceMeters() / 10.0) / 100.0)
+                .durationSeconds(r.durationSeconds())
+                .resolvedAddress(origin.displayName())
+                .originLatitude(origin.latitude())
+                .originLongitude(origin.longitude())
+                .warehouseLatitude(store.getLatitude())
+                .warehouseLongitude(store.getLongitude())
+                .shippingFeeVnd(ShippingFeeCalculator.fromDistanceMeters(r.distanceMeters()))
+                .build();
     }
 
     public double[] resolveWarehouseLatLon() {

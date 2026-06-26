@@ -10,6 +10,8 @@ import java.util.Map;
 @NoArgsConstructor
 @Builder
 public class InventoryStockResponse {
+    private Long storeId;
+    private String storeName;
     private Long variantId;
     private String skuCode;
     private Long productId;

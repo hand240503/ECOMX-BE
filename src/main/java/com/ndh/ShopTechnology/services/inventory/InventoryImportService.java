@@ -12,7 +12,8 @@ import org.springframework.web.multipart.MultipartFile;
  */
 public interface InventoryImportService {
 
-    CatalogImportResponse importStock(MultipartFile file);
+    /** Import tồn kho vào một kho (store) cụ thể. */
+    CatalogImportResponse importStock(Long storeId, MultipartFile file);
 
     /** Sinh file Excel mẫu để người dùng tải về điền. */
     byte[] buildTemplateXlsx();

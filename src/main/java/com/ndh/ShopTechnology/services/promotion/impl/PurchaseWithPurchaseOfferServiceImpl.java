@@ -69,6 +69,8 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
                         request.getCompanionPromoUnitsPerAnchor() != null ? request.getCompanionPromoUnitsPerAnchor() : 1)
                 .maxCompanionPromoUnits(request.getMaxCompanionPromoUnits())
                 .enabled(request.getEnabled() != null ? request.getEnabled() : true)
+                .startAt(request.getStartAt())
+                .endAt(request.getEndAt())
                 .build();
         e = pwpRepository.save(e);
         priceEventHistoryService.logPwpCreated(e);
@@ -100,6 +102,8 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
         if (request.getCompanionPromoUnitsPerAnchor() != null) e.setCompanionPromoUnitsPerAnchor(request.getCompanionPromoUnitsPerAnchor());
         e.setMaxCompanionPromoUnits(request.getMaxCompanionPromoUnits());
         if (request.getEnabled() != null) e.setEnabled(request.getEnabled());
+        e.setStartAt(request.getStartAt());
+        e.setEndAt(request.getEndAt());
         e = pwpRepository.save(e);
         priceEventHistoryService.logPwpUpdated(e);
         return toResponse(e);
@@ -160,6 +164,8 @@ public class PurchaseWithPurchaseOfferServiceImpl implements PurchaseWithPurchas
                 .companionPromoUnitsPerAnchor(e.getCompanionPromoUnitsPerAnchor())
                 .maxCompanionPromoUnits(e.getMaxCompanionPromoUnits())
                 .enabled(e.getEnabled())
+                .startAt(e.getStartAt())
+                .endAt(e.getEndAt())
                 .build();
     }
 }

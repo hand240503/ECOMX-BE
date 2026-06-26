@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -75,12 +76,14 @@ public class PromotionImportServiceImpl implements PromotionImportService {
     }
 
     private static final String[] PC_HEADERS = {
-            "variant_id", "sku_code", "base_price", "sale_price", "start_at", "end_at",
+            "variant_id", "sku_code", "base_price", "sale_price",
             "enabled", "quantity_limit", "max_per_customer", "required_payment_method_code"
     };
 
     @Override
-    public CatalogImportResponse importPriceChanges(MultipartFile file) {
+    public CatalogImportResponse importPriceChanges(MultipartFile file, Date startAt, Date endAt) {
+        requireStartAt(startAt);
+        validateWindow(startAt, endAt);
         List<String[]> rows = support.readRows(file);
         Map<Integer, String> col = support.mapHeader(rows.get(0), PC_ALIASES);
         requireVariantColumn(col, PC_VID, PC_SKU);
@@ -102,8 +105,9 @@ public class PromotionImportServiceImpl implements PromotionImportService {
                 UpsertPriceChangeRequest req = new UpsertPriceChangeRequest();
                 req.setBasePrice(base);
                 req.setSalePrice(support.parseNumber(support.get(row, col, PC_SALE)));
-                req.setStartAt(support.parseDate(support.get(row, col, PC_START)));
-                req.setEndAt(support.parseDate(support.get(row, col, PC_END)));
+                // Khung thời gian KHÔNG lấy từ file — dùng thời gian admin chọn sau review.
+                req.setStartAt(startAt);
+                req.setEndAt(endAt);
                 req.setEnabled(support.parseBool(support.get(row, col, PC_ENABLED)));
                 req.setQuantityLimit(support.parseInt(support.get(row, col, PC_QTY_LIMIT)));
                 req.setMaxPerCustomer(support.parseInt(support.get(row, col, PC_MAX_CUST)));
@@ -130,9 +134,8 @@ public class PromotionImportServiceImpl implements PromotionImportService {
     @Override
     public byte[] buildPriceChangeTemplate() {
         String[][] examples = {
-                {"", "DELL-XPS13-I7", "32990000", "29990000", "2026-07-01 00:00", "2026-07-31 23:59",
-                        "TRUE", "100", "2", ""},
-                {"1024", "", "290000", "249000", "2026-07-01", "", "TRUE", "", "", "VNPAY"},
+                {"", "DELL-XPS13-I7", "32990000", "29990000", "TRUE", "100", "2", ""},
+                {"1024", "", "290000", "249000", "TRUE", "", "", "VNPAY"},
         };
         String[] guide = {
                 "HƯỚNG DẪN IMPORT CHƯƠNG TRÌNH ĐỔI GIÁ (PC - PRICE CHANGE)",
@@ -140,14 +143,14 @@ public class PromotionImportServiceImpl implements PromotionImportService {
                 "1. Mỗi DÒNG = một chương trình đổi giá cho MỘT biến thể.",
                 "2. Xác định biến thể: variant_id HOẶC sku_code (ưu tiên variant_id nếu điền cả hai).",
                 "3. base_price (bắt buộc): giá gốc. sale_price: giá khuyến mãi (để trống nếu không có).",
-                "4. start_at (bắt buộc): thời điểm bắt đầu. end_at: thời điểm kết thúc (để trống = vô thời hạn).",
-                "   Định dạng ngày: yyyy-MM-dd HH:mm hoặc yyyy-MM-dd hoặc dd/MM/yyyy.",
+                "4. KHUNG THỜI GIAN (bắt đầu/kết thúc) KHÔNG nằm trong file. Sau khi tải lên và xem review,",
+                "   bạn chọn thời gian áp dụng — thời gian này áp cho TẤT CẢ dòng được chọn nhập.",
                 "5. enabled: TRUE/FALSE (mặc định TRUE).",
                 "6. quantity_limit: tổng số lượng giới hạn (để trống = không giới hạn).",
                 "7. max_per_customer: giới hạn mỗi khách (để trống = không giới hạn).",
                 "8. required_payment_method_code: mã phương thức thanh toán bắt buộc, ví dụ VNPAY (tùy chọn).",
-                "9. UPSERT: nếu đã có chương trình CÙNG biến thể + CÙNG start_at + end_at thì hệ thống CẬP NHẬT,",
-                "   không tạo trùng. Khác khung thời gian = chương trình mới.",
+                "9. UPSERT: nếu đã có chương trình CÙNG biến thể + CÙNG khung thời gian (bạn chọn) thì hệ thống",
+                "   CẬP NHẬT, không tạo trùng. Khác khung thời gian = chương trình mới.",
         };
         return ImportSupport.buildTemplate("Doi gia", PC_HEADERS, examples, guide);
     }
@@ -182,7 +185,9 @@ public class PromotionImportServiceImpl implements PromotionImportService {
     };
 
     @Override
-    public CatalogImportResponse importPurchaseWithPurchase(MultipartFile file) {
+    public CatalogImportResponse importPurchaseWithPurchase(MultipartFile file, Date startAt, Date endAt) {
+        requireStartAt(startAt);
+        validateWindow(startAt, endAt);
         List<String[]> rows = support.readRows(file);
         Map<Integer, String> col = support.mapHeader(rows.get(0), PWP_ALIASES);
         if (!col.containsValue(PWP_A_VID) && !col.containsValue(PWP_A_SKU)) {
@@ -216,6 +221,9 @@ public class PromotionImportServiceImpl implements PromotionImportService {
                 req.setCompanionPromoUnitsPerAnchor(support.parseInt(support.get(row, col, PWP_PER_ANCHOR)));
                 req.setMaxCompanionPromoUnits(support.parseInt(support.get(row, col, PWP_MAX)));
                 req.setEnabled(support.parseBool(support.get(row, col, PWP_ENABLED)));
+                // Khung thời gian do admin chọn sau review, áp cho tất cả dòng.
+                req.setStartAt(startAt);
+                req.setEndAt(endAt);
 
                 // UPSERT theo khóa nghiệp vụ: companion_variant_id (đã unique trong DB).
                 PurchaseWithPurchaseOfferEntity existing =
@@ -252,8 +260,10 @@ public class PromotionImportServiceImpl implements PromotionImportService {
                 "6. companion_promo_units_per_anchor: số sản phẩm kèm ưu đãi cho mỗi sản phẩm chính (mặc định 1).",
                 "7. max_companion_promo_units: tổng số sản phẩm kèm ưu đãi tối đa (để trống = không giới hạn).",
                 "8. enabled: TRUE/FALSE (mặc định TRUE). Lưu ý: mỗi biến thể kèm chỉ thuộc 1 chương trình PWP.",
-                "9. UPSERT: nếu biến thể KÈM (companion) đã có chương trình thì hệ thống CẬP NHẬT chương trình đó,",
-                "   không tạo trùng (vì companion là duy nhất).",
+                "9. KHUNG THỜI GIAN (bắt đầu/kết thúc) KHÔNG nằm trong file. Sau khi tải lên và xem review,",
+                "   bạn chọn thời gian áp dụng — áp cho TẤT CẢ dòng được chọn nhập.",
+                "10. UPSERT: nếu biến thể KÈM (companion) đã có chương trình thì hệ thống CẬP NHẬT chương trình đó,",
+                "    không tạo trùng (vì companion là duy nhất).",
         };
         return ImportSupport.buildTemplate("Mua kem", PWP_HEADERS, examples, guide);
     }
@@ -278,7 +288,9 @@ public class PromotionImportServiceImpl implements PromotionImportService {
     private static final String[] VT_HEADERS = {"variant_id", "sku_code", "min_quantity", "unit_price", "enabled"};
 
     @Override
-    public CatalogImportResponse importVolumeTiers(MultipartFile file) {
+    public CatalogImportResponse importVolumeTiers(MultipartFile file, Date startAt, Date endAt) {
+        requireStartAt(startAt);
+        validateWindow(startAt, endAt);
         List<String[]> rows = support.readRows(file);
         Map<Integer, String> col = support.mapHeader(rows.get(0), VT_ALIASES);
         requireVariantColumn(col, VT_VID, VT_SKU);
@@ -315,6 +327,9 @@ public class PromotionImportServiceImpl implements PromotionImportService {
                 item.setMinQuantity(minQty);
                 item.setUnitPrice(unitPrice);
                 item.setEnabled(support.parseBool(support.get(row, col, VT_ENABLED)));
+                // Khung thời gian do admin chọn sau review, áp cho mọi mốc trong file.
+                item.setStartAt(startAt);
+                item.setEndAt(endAt);
                 g.tiers.put(minQty, item); // dòng sau ghi đè dòng trước nếu trùng min_quantity
             } catch (Exception e) {
                 recordFail(resp, excelRow, key, e);
@@ -331,6 +346,8 @@ public class PromotionImportServiceImpl implements PromotionImportService {
                     it.setMinQuantity(existing.getMinQuantity());
                     it.setUnitPrice(existing.getUnitPrice());
                     it.setEnabled(existing.getEnabled());
+                    it.setStartAt(existing.getStartAt());
+                    it.setEndAt(existing.getEndAt());
                     merged.put(existing.getMinQuantity(), it);
                 }
                 merged.putAll(g.tiers); // mốc trong file ghi đè mốc cũ cùng min_quantity
@@ -360,7 +377,9 @@ public class PromotionImportServiceImpl implements PromotionImportService {
                 "3. min_quantity: số lượng tối thiểu để áp mốc giá này (số nguyên >= 1).",
                 "4. unit_price: đơn giá khi đạt mốc số lượng đó.",
                 "5. enabled: TRUE/FALSE (mặc định TRUE).",
-                "6. Import sẽ THÊM/CẬP NHẬT các mốc (gộp với mốc đang có; mốc cùng min_quantity sẽ bị ghi đè).",
+                "6. KHUNG THỜI GIAN (bắt đầu/kết thúc) KHÔNG nằm trong file. Sau khi tải lên và xem review,",
+                "   bạn chọn thời gian áp dụng — áp cho TẤT CẢ mốc được nhập.",
+                "7. Import sẽ THÊM/CẬP NHẬT các mốc (gộp với mốc đang có; mốc cùng min_quantity sẽ bị ghi đè).",
                 "   Không xóa mốc cũ qua import — để xóa hãy dùng giao diện quản lý Mix & Match.",
         };
         return ImportSupport.buildTemplate("Mix and Match", VT_HEADERS, examples, guide);
@@ -374,6 +393,22 @@ public class PromotionImportServiceImpl implements PromotionImportService {
         String key;
         int firstRow;
         final Map<Integer, VolumePriceTierItemRequest> tiers = new LinkedHashMap<>();
+    }
+
+    /** start_at là bắt buộc — admin phải chọn thời điểm bắt đầu sau khi review. */
+    private static void requireStartAt(Date startAt) {
+        if (startAt == null) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "Thiếu thời điểm bắt đầu. Hãy chọn thời gian áp dụng sau khi xem review.");
+        }
+    }
+
+    /** end_at (nếu có) phải >= start_at. */
+    private static void validateWindow(Date startAt, Date endAt) {
+        if (startAt != null && endAt != null && endAt.before(startAt)) {
+            throw new CustomApiException(HttpStatus.BAD_REQUEST,
+                    "Thời điểm kết thúc phải sau hoặc bằng thời điểm bắt đầu.");
+        }
     }
 
     private void requireVariantColumn(Map<Integer, String> col, String idKey, String skuKey) {

@@ -11,6 +11,9 @@ import lombok.*;
 @Builder
 public class InventoryImportRequest {
 
+    @NotNull(message = "storeId là bắt buộc")
+    private Long storeId;
+
     @NotNull(message = "variantId là bắt buộc")
     private Long variantId;
 
