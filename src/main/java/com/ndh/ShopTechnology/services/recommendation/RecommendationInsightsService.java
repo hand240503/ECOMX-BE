@@ -371,4 +371,33 @@ public class RecommendationInsightsService {
             return new ArrayList<>();
         }
     }
+
+    // ── Thống kê tương tác người dùng (collector_log) ──────────────────────────
+
+    /**
+     * Đếm số lượt theo từng loại sự kiện (event) trong collector_log.
+     * @param days số ngày gần đây để lọc; null hoặc &lt;= 0 = toàn bộ thời gian.
+     */
+    @Transactional(readOnly = true)
+    public List<com.ndh.ShopTechnology.dto.response.recommendation.insights.EventStatDto> getEventStats(Integer days) {
+        boolean filter = days != null && days > 0;
+        String sql = "SELECT event, COUNT(*) AS cnt FROM collector_log "
+                + (filter ? "WHERE timestamp >= :start " : "")
+                + "GROUP BY event ORDER BY cnt DESC";
+        Query q = em.createNativeQuery(sql);
+        if (filter) {
+            long ms = System.currentTimeMillis() - (long) days * 24L * 60L * 60L * 1000L;
+            q.setParameter("start", new java.util.Date(ms));
+        }
+        List<?> rows = q.getResultList();
+        List<com.ndh.ShopTechnology.dto.response.recommendation.insights.EventStatDto> out = new ArrayList<>(rows.size());
+        for (Object row : rows) {
+            Object[] r = (Object[]) row;
+            out.add(com.ndh.ShopTechnology.dto.response.recommendation.insights.EventStatDto.builder()
+                    .event(asStr(r[0]))
+                    .count(asLong(r[1]))
+                    .build());
+        }
+        return out;
+    }
 }

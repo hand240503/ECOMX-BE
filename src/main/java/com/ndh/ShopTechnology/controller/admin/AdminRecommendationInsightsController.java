@@ -3,6 +3,7 @@ package com.ndh.ShopTechnology.controller.admin;
 import com.ndh.ShopTechnology.constants.PermissionCode;
 import com.ndh.ShopTechnology.dto.response.APIResponse;
 import com.ndh.ShopTechnology.dto.response.recommendation.insights.CbRecommendationDto;
+import com.ndh.ShopTechnology.dto.response.recommendation.insights.EventStatDto;
 import com.ndh.ShopTechnology.dto.response.recommendation.insights.ImplicitRatingDto;
 import com.ndh.ShopTechnology.dto.response.recommendation.insights.InsightsPage;
 import com.ndh.ShopTechnology.dto.response.recommendation.insights.InsightsSummaryDto;
@@ -93,6 +94,15 @@ public class AdminRecommendationInsightsController {
         return ResponseEntity.ok(APIResponse.of(
                 true, "Lấy gợi ý theo profile thành công", p.getContent(), null,
                 pageMeta(p.getPage(), p.getSize(), p.getTotal(), p.getTotalPages())));
+    }
+
+    @GetMapping("/event-stats")
+    @PreAuthorize("@perm.check(" + PermissionCode.READ_PRODUCT + ")")
+    public ResponseEntity<APIResponse<java.util.List<EventStatDto>>> eventStats(
+            @RequestParam(defaultValue = "30") Integer days) {
+        java.util.List<EventStatDto> data = service.getEventStats(days);
+        return ResponseEntity.ok(APIResponse.of(
+                true, "Lấy thống kê tương tác thành công", data, null, Map.of("days", days)));
     }
 
     private Map<String, Object> pageMeta(int page, int size, long total, int totalPages) {
