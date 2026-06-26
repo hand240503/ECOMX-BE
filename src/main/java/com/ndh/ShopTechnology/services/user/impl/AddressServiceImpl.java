@@ -10,8 +10,10 @@ import com.ndh.ShopTechnology.entities.user.UserAddressEntity;
 import com.ndh.ShopTechnology.entities.user.UserEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
+import com.ndh.ShopTechnology.entities.store.StoreEntity;
 import com.ndh.ShopTechnology.repository.UserAddressRepository;
 import com.ndh.ShopTechnology.services.delivery.DeliveryRoutingService;
+import com.ndh.ShopTechnology.services.store.StoreService;
 import com.ndh.ShopTechnology.services.user.AddressService;
 import com.ndh.ShopTechnology.services.user.UserService;
 import com.ndh.ShopTechnology.utils.ShippingFeeCalculator;
@@ -30,14 +32,17 @@ public class AddressServiceImpl implements AddressService {
   private final UserAddressRepository addressRepository;
   private final UserService userService;
   private final DeliveryRoutingService deliveryRoutingService;
+  private final StoreService storeService;
 
   public AddressServiceImpl(
           UserAddressRepository addressRepository,
           UserService userService,
-          DeliveryRoutingService deliveryRoutingService) {
+          DeliveryRoutingService deliveryRoutingService,
+          StoreService storeService) {
     this.addressRepository = addressRepository;
     this.userService = userService;
     this.deliveryRoutingService = deliveryRoutingService;
+    this.storeService = storeService;
   }
 
   @Override
@@ -65,7 +70,7 @@ public class AddressServiceImpl implements AddressService {
         .isDefault(request.getIsDefault() != null ? request.getIsDefault() : false)
         .build();
 
-    enrichUserAddressGeo(address);
+    enrichUserAddressGeo(address, request.getStoreId());
     address = addressRepository.save(address);
     return UserAddressResponse.fromEntity(address);
   }
@@ -134,8 +139,9 @@ public class AddressServiceImpl implements AddressService {
       }
     }
 
-    if (geoRelevantChanged) {
-      enrichUserAddressGeo(address);
+    // Tính lại phí nếu địa chỉ đổi HOẶC User đổi kho đang chọn (gửi storeId).
+    if (geoRelevantChanged || request.getStoreId() != null) {
+      enrichUserAddressGeo(address, request.getStoreId());
     }
 
     address = addressRepository.save(address);
@@ -174,7 +180,7 @@ public class AddressServiceImpl implements AddressService {
     return UserAddressResponse.fromEntity(address);
   }
 
-  private void enrichUserAddressGeo(UserAddressEntity address) {
+  private void enrichUserAddressGeo(UserAddressEntity address, Long storeId) {
     if (address.getAddressType() != AddressType.USER) {
       return;
     }
@@ -182,10 +188,11 @@ public class AddressServiceImpl implements AddressService {
     GeocodedAddress geo = deliveryRoutingService.geocodeAddress(query);
     address.setLatitude(geo.latitude());
     address.setLongitude(geo.longitude());
-    double[] wh = deliveryRoutingService.resolveWarehouseLatLon();
+    // Điểm xuất phát tính phí ship = kho (store) User đang chọn; nếu không có → kho mặc định.
+    double[] origin = resolveShippingOrigin(storeId);
     try {
       RouteMetrics route = deliveryRoutingService.routeDriving(
-          geo.latitude(), geo.longitude(), wh[0], wh[1]);
+          geo.latitude(), geo.longitude(), origin[0], origin[1]);
       double meters = route.distanceMeters();
       address.setDistanceToWarehouseMeters(meters);
       address.setShippingFeeVnd(ShippingFeeCalculator.fromDistanceMeters(meters));
@@ -194,6 +201,25 @@ public class AddressServiceImpl implements AddressService {
       address.setDistanceToWarehouseMeters(null);
       address.setShippingFeeVnd(null);
     }
+  }
+
+  /**
+   * Toạ độ kho dùng làm điểm xuất phát tính phí ship cho địa chỉ.
+   * Ưu tiên kho do User chọn ({@code storeId}); nếu null hoặc kho thiếu toạ độ thì
+   * dùng kho mặc định; cuối cùng fallback về kho cấu hình hệ thống (legacy).
+   */
+  private double[] resolveShippingOrigin(Long storeId) {
+    StoreEntity store = null;
+    if (storeId != null) {
+      store = storeService.getEntityOrThrow(storeId);
+    }
+    if (store == null) {
+      store = storeService.getDefaultStoreOrNull();
+    }
+    if (store != null && store.getLatitude() != null && store.getLongitude() != null) {
+      return new double[] { store.getLatitude(), store.getLongitude() };
+    }
+    return deliveryRoutingService.resolveWarehouseLatLon();
   }
 
   private static String buildGeocodeQuery(UserAddressEntity e) {

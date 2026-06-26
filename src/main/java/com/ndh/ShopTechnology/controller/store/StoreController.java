@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -28,6 +29,19 @@ public class StoreController {
     @GetMapping
     public ResponseEntity<APIResponse<List<StoreResponse>>> listActive() {
         List<StoreResponse> data = storeService.listActive();
+        return ResponseEntity.ok(APIResponse.of(true, "OK", data, null, Map.of("count", data.size())));
+    }
+
+    /**
+     * Danh sách kho đang hoạt động mà CÓ ĐỦ tồn cho tất cả sản phẩm yêu cầu.
+     * Truyền {@code variantIds} (id biến thể) và/hoặc {@code productIds} (BE quy về biến thể mặc định).
+     * Không truyền gì → trả tất cả kho hoạt động.
+     */
+    @GetMapping("/stocking")
+    public ResponseEntity<APIResponse<List<StoreResponse>>> listStocking(
+            @RequestParam(value = "variantIds", required = false) List<Long> variantIds,
+            @RequestParam(value = "productIds", required = false) List<Long> productIds) {
+        List<StoreResponse> data = storeService.listStockingAll(variantIds, productIds);
         return ResponseEntity.ok(APIResponse.of(true, "OK", data, null, Map.of("count", data.size())));
     }
 

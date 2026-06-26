@@ -24,4 +24,7 @@ public class CreateAddressRequest {
     private String zipCode;
 
     private Boolean isDefault = false;
+
+    /** Kho (store) User đang chọn — tính phí ship từ kho này. Null = kho mặc định. */
+    private Long storeId;
 }

@@ -7,6 +7,7 @@ import com.ndh.ShopTechnology.entities.store.StoreEntity;
 import com.ndh.ShopTechnology.exception.CustomApiException;
 import com.ndh.ShopTechnology.exception.NotFoundEntityException;
 import com.ndh.ShopTechnology.repository.OrderRepository;
+import com.ndh.ShopTechnology.repository.ProductVariantRepository;
 import com.ndh.ShopTechnology.repository.StoreRepository;
 import com.ndh.ShopTechnology.repository.StoreStockRepository;
 import com.ndh.ShopTechnology.services.store.StoreService;
@@ -16,7 +17,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -26,6 +31,7 @@ public class StoreServiceImpl implements StoreService {
     private final StoreRepository storeRepository;
     private final StoreStockRepository storeStockRepository;
     private final OrderRepository orderRepository;
+    private final ProductVariantRepository variantRepository;
 
     @Override
     @Transactional
@@ -123,6 +129,39 @@ public class StoreServiceImpl implements StoreService {
     @Transactional(readOnly = true)
     public List<StoreResponse> listActive() {
         return storeRepository.findByActiveTrueOrderByIdAsc().stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StoreResponse> listStockingAll(List<Long> variantIds, List<Long> productIds) {
+        LinkedHashSet<Long> vids = new LinkedHashSet<>();
+        if (variantIds != null) {
+            for (Long v : variantIds) if (v != null) vids.add(v);
+        }
+        if (productIds != null) {
+            for (Long p : productIds) {
+                if (p == null) continue;
+                variantRepository.findFirstByProduct_IdAndActiveTrueOrderBySortOrderAscIdAsc(p)
+                        .ifPresent(v -> vids.add(v.getId()));
+            }
+        }
+        // Không có sản phẩm để lọc → trả tất cả kho hoạt động.
+        if (vids.isEmpty()) {
+            return listActive();
+        }
+        List<Long> vidList = new ArrayList<>(vids);
+        Map<Long, Long> availableCountByStore = new HashMap<>();
+        for (Object[] row : storeStockRepository.countAvailableVariantsPerStore(vidList)) {
+            availableCountByStore.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+        }
+        final int need = vidList.size();
+        return storeRepository.findByActiveTrueOrderByIdAsc().stream()
+                .filter(s -> {
+                    Long c = availableCountByStore.get(s.getId());
+                    return c != null && c.intValue() == need;
+                })
+                .map(this::toResponse)
+                .toList();
     }
 
     @Override

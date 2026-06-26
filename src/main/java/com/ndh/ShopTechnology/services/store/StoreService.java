@@ -24,6 +24,12 @@ public interface StoreService {
     /** Danh sách kho đang hoạt động (cho khách chọn). */
     List<StoreResponse> listActive();
 
+    /**
+     * Danh sách kho đang hoạt động mà CÓ ĐỦ tồn (available > 0) cho TẤT CẢ sản phẩm yêu cầu.
+     * {@code productIds} được quy về biến thể mặc định. Nếu không truyền gì → trả tất cả kho hoạt động.
+     */
+    List<StoreResponse> listStockingAll(List<Long> variantIds, List<Long> productIds);
+
     /** Lấy entity kho hoặc ném lỗi nếu không tồn tại. */
     StoreEntity getEntityOrThrow(Long id);
 

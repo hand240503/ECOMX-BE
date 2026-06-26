@@ -21,6 +21,19 @@ public interface StoreStockRepository extends JpaRepository<StoreStockEntity, Lo
 
     boolean existsByStore_IdAndOnHandGreaterThan(Long storeId, Integer threshold);
 
+    /**
+     * Với một tập biến thể, trả về (storeId, số biến thể CÒN BÁN ĐƯỢC tại kho đó).
+     * Kho chứa đủ tất cả biến thể nếu count == số biến thể yêu cầu.
+     */
+    @Query("""
+            SELECT ss.store.id AS storeId, COUNT(DISTINCT ss.variant.id) AS cnt
+            FROM store_stock ss
+            WHERE ss.variant.id IN :variantIds
+              AND (ss.onHand - ss.reserved) > 0
+            GROUP BY ss.store.id
+            """)
+    List<Object[]> countAvailableVariantsPerStore(@Param("variantIds") List<Long> variantIds);
+
     /** Tồn của tất cả biến thể trong một kho; lọc theo tên SP / SKU (q null = tất cả). */
     @Query("""
             SELECT ss FROM store_stock ss
